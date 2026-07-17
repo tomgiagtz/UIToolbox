@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson · Where does my app render?</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/quiz.js"></script>
+</head>
+<body>
+<article class="lesson">
+
+  <p class="eyebrow">Rendering · Lesson 1 · Where &amp; when</p>
+  <h1>Where does my app render?</h1>
+  <p class="lede">It felt weird to server-render an app that runs offline. That
+  instinct is correct — and dissolving it turns "SSR" from a scary word into two
+  plain questions you can answer for any route in UIToolbox.</p>
+
+  <hr class="rule">
+
+  <h2>Two questions hiding inside one word</h2>
+  <p>"Render on the server" sounds like a single choice. It isn't. Every route
+  answers <em>two</em> independent questions, and the confusion comes from
+  collapsing them:</p>
+
+  <p><strong>1. When is the HTML first built?</strong> — at <em>build</em> time,
+  <em>per request</em>, or in the <em>browser</em>.<br>
+  <strong>2. Where does the app run afterward?</strong> — on a live server, or in
+  the browser.</p>
+
+  <p>Three named strategies are just three pairs of answers.<a href="#src">¹</a>
+  Full definitions live in the <a href="../GLOSSARY.md">glossary</a> — keep it open.</p>
+
+  <table class="matrix">
+    <colgroup><col><col><col class="you"><col></colgroup>
+    <thead>
+      <tr>
+        <th></th>
+        <th>CSR</th>
+        <th class="you">Prerender (SSG)<span class="youtag">your app</span></th>
+        <th>SSR</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th>When HTML is built</th>
+        <td>In the browser</td>
+        <td class="you">Once, at build time</td>
+        <td>Per request</td>
+      </tr>
+      <tr>
+        <th>Server at runtime?</th>
+        <td>No</td>
+        <td class="you">No — static files</td>
+        <td>Yes, always</td>
+      </tr>
+      <tr>
+        <th>First paint</th>
+        <td>Blank until JS loads</td>
+        <td class="you">Instant HTML shell</td>
+        <td>Instant HTML shell</td>
+      </tr>
+      <tr>
+        <th>Good for</th>
+        <td>Pure client apps</td>
+        <td class="you">Static + offline tools</td>
+        <td>Personalised / fresh data</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout key">
+    <span class="tag">The one idea to keep</span>
+    <strong>Prerender renders on the server too</strong> — just at <em>build</em>
+    time, not per request. That is the whole trick. "SSR" should mean only the
+    <em>per-request</em> case; everything else people call "server rendering" for a
+    static site is really <strong>prerender</strong>.
+  </div>
+
+  <h2>Your app, placed on the map</h2>
+  <p>UIToolbox needs the highlighted column. Here is why, in your own terms:</p>
+
+  <div class="ledger">
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">next build (on your CI runner)</span><span class="gloss">The "server" that renders your HTML. It runs <strong>once</strong>, prerenders each route (<code>/</code>, <code>/tools/glyph-creator</code>), then goes away.</span></span></div>
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">the browser receives HTML</span><span class="gloss">Instant UI chrome — the heading, the "Coming soon" card — with no blank flash.</span></span></div>
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">React hydrates</span><span class="gloss">The static HTML becomes a live app in place. From here everything runs <strong>in the browser</strong>.</span></span></div>
+    <div class="row"><span class="mark gate">◆</span><span class="what"><span class="name">font upload · canvas glyphs · packing · export</span><span class="gloss">All local. No server sees the user's font — exactly what <code>CONTEXT.md</code> promises.</span></span></div>
+  </div>
+
+  <p>So you are <em>not</em> doing SSR. There is no per-request rendering anywhere.
+  The only machine that "renders on a server" is your CI runner — the same
+  <code>npm run build</code> gate you decoded in the
+  <a href="0001-reading-a-ci-run.html">CI lesson</a>, running once.</p>
+
+  <div class="callout watch">
+    <span class="tag">A subtlety worth holding</span>
+    Today your <code>next.config</code> is empty, so <code>npm run start</code>
+    serves those prerendered pages from a <em>Node server</em>. That still isn't
+    SSR — nothing is rendered per request; the server just hands over files built
+    earlier. Adding <a href="https://nextjs.org/docs/app/guides/static-exports"><code>output: 'export'</code></a>
+    would drop even that server and emit a pure <code>out/</code> folder.<a href="#src">²</a>
+  </div>
+
+  <h2>The boundary you're about to draw</h2>
+  <p>Here is where this bites in practice. Your pages are Server Components by
+  default,<a href="#src">³</a> so they run during the <strong>build</strong>. But
+  the glyph generator needs <code>canvas</code>, <code>IndexedDB</code>, an uploaded
+  <code>File</code> — none of which exist at build time. Run that code during the
+  prerender and it crashes.</p>
+  <p>The fix is a deliberate <strong>client boundary</strong>: put <code>"use
+  client"</code> at the top of the interactive component. Everything below it ships
+  to and runs in the browser — the right home for browser-only APIs. Placing that
+  line <em>on purpose</em>, not by reflex, is the whole skill this thread is
+  building toward.</p>
+
+  <h2>Advantages &amp; disadvantages (the part you asked about)</h2>
+  <p><strong>Why prerender at all, instead of pure CSR, if it's offline?</strong>
+  Even with no server, prerendering buys an instant first paint (no blank screen
+  while JS loads), a shell that shows with JS disabled, and clean SEO for the
+  landing page. The cost: any browser-only code must be fenced below a client
+  boundary, and mismatched HTML causes hydration errors.</p>
+  <p><strong>Why not SSR?</strong> SSR's wins — per-request freshness,
+  personalisation — are things UIToolbox never needs. Its costs — a server running
+  at runtime, per-request latency, and no purely-static/offline deploy — are exactly
+  what you're trying to avoid. For a tool that fetches nothing, SSR is all cost.</p>
+
+  <h2>Check yourself</h2>
+  <p>Answer from memory — don't scroll up. Retrieval is what makes this stick.</p>
+
+  <div class="quiz">
+    <div class="qblock" data-answer="1">
+      <p class="q">For UIToolbox, when should each page's HTML be built?</p>
+      <ul class="opts">
+        <li><button class="opt">Fresh on each user request</button></li>
+        <li><button class="opt">Once when the build runs</button></li>
+        <li><button class="opt">Live inside the web browser</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Right — prerender at build time on CI, then ship static files. No per-request rendering."
+         data-wrong="Per-request is SSR, which UIToolbox never needs. It prerenders once at build time on CI."></p>
+    </div>
+
+    <div class="qblock" data-answer="1">
+      <p class="q">The glyph generator uses canvas and IndexedDB. That code must go…</p>
+      <ul class="opts">
+        <li><button class="opt">Inside the server render tree</button></li>
+        <li><button class="opt">Below a use client boundary</button></li>
+        <li><button class="opt">Within the build step alone</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Yes — those APIs exist only in the browser, so the code belongs below the client boundary."
+         data-wrong="Canvas and IndexedDB don't exist at build/server time. That code must sit below a client boundary."></p>
+    </div>
+
+    <div class="qblock" data-answer="1">
+      <p class="q">Why isn't &ldquo;rendering on the server&rdquo; a problem for an offline app?</p>
+      <ul class="opts">
+        <li><button class="opt">It uploads the user's data</button></li>
+        <li><button class="opt">No server runs at runtime</button></li>
+        <li><button class="opt">It turns off the browser</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Exactly — the render happens once at build; at runtime it's just static files. Nothing per-request."
+         data-wrong="Prerender happens once at build time. At runtime there's no server — just static files in the browser."></p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <div class="footer">
+    <h3 id="src">Read next (primary source)</h3>
+    <p>¹ <a href="https://web.dev/articles/rendering-on-the-web">Rendering on the Web
+    — web.dev (Miller &amp; Osmani)</a>. The canonical, framework-agnostic taxonomy;
+    read the opening and the CSR/SSR/static sections. The rest of the
+    <a href="../RESOURCES.md">resources</a> build from here.</p>
+    <p>² <a href="https://nextjs.org/docs/app/guides/static-exports">Static Exports
+    — Next.js Docs</a>. ³ <a href="https://nextjs.org/docs/app/getting-started/server-and-client-components">Server
+    and Client Components — Next.js Docs</a>.</p>
+
+    <div class="ask">
+      <strong>I'm your teacher — ask me things.</strong> Good follow-ups right now:
+      "Show me exactly where <code>"use client"</code> should go in the glyph
+      generator," or "What would break if I added <code>output: 'export'</code>
+      today?", or "What is a hydration mismatch and how would I hit one?"
+    </div>
+
+    <div class="nav">
+      <span>Rendering · Lesson 1</span>
+      <span>Next up → drawing the client boundary in real code</span>
+    </div>
+  </div>
+
+</article>
+</body>
+</html>

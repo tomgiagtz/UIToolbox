@@ -128,6 +128,25 @@ pre code { background: none; padding: 0; }
 }
 .ledger .what .gloss { color: var(--muted); font-size: 0.92rem; display: block; }
 
+/* ---- Comparison matrix (shared table) ---- */
+.matrix { width: 100%; border-collapse: collapse; margin: 1.3rem 0; font-size: 0.9rem; }
+.matrix th, .matrix td {
+  text-align: left; padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--rule); vertical-align: top;
+}
+.matrix thead th {
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.matrix tbody th { font-weight: 700; white-space: nowrap; }
+.matrix col.you, .matrix th.you, .matrix td.you { background: #eef7ef; }
+.matrix .youtag {
+  font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--green); display: block; font-weight: 600;
+}
+
 /* ---- Quiz (styles; behaviour in quiz.js) ---- */
 .quiz { margin: 1.2rem 0 0.4rem; }
 .quiz .q { margin: 1.4rem 0 0.5rem; font-weight: 700; }
