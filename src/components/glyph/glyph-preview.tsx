@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { Background } from "@/lib/glyph/types";
 
@@ -12,6 +12,12 @@ export interface GlyphPreviewProps {
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
   className?: string;
+  /**
+   * Optional CSS override for the on-screen size. The canvas is still rendered
+   * at `cellSize` resolution; this only scales how large it's displayed, so a
+   * grid can pin a uniform display box while cell size drives resolution.
+   */
+  style?: CSSProperties;
 }
 
 /**
@@ -27,6 +33,7 @@ export function GlyphPreview({
   background,
   fontFamily,
   className,
+  style,
 }: GlyphPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -69,6 +76,7 @@ export function GlyphPreview({
       role="img"
       aria-label={`Glyph preview for ${label}`}
       className={className}
+      style={style}
     />
   );
 }

@@ -63,3 +63,15 @@ export const ThickBorder: Story = {
 export const LongLabelAutoShrinks: Story = {
   args: { label: "Right Stick" },
 };
+
+export const CustomColors: Story = {
+  args: {
+    label: "X",
+    textColor: "#022c22",
+    background: {
+      ...roundedRect,
+      fill: "#34d399",
+      border: { width: 6, color: "#065f46" },
+    },
+  },
+};

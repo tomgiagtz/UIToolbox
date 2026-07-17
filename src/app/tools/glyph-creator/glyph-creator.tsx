@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GlyphPreview } from "@/components/glyph/glyph-preview";
 import { downloadArtifacts, exportDevice } from "@/lib/glyph/exporter";
 import { loadFontFromFile } from "@/lib/glyph/font";
 import { generateTilesets } from "@/lib/glyph/generate";
 import { createDefaultProject } from "@/lib/glyph/presets";
+import { projectReducer } from "@/lib/glyph/project";
+import { StyleControls } from "./style-controls";
+import { DeviceControls } from "./device-controls";
+import { NamingControls } from "./naming-controls";
 
 type Status =
   | { kind: "idle" }
@@ -17,22 +21,28 @@ type Status =
   | { kind: "error"; message: string };
 
 /**
- * Preview cell size in px. Smaller than the 128px output cell so the full grid
- * fits on screen; the shared renderer scales proportionally, so the preview
- * still reflects the output faithfully.
+ * On-screen edge (px) each preview Glyph is displayed at, so the whole grid
+ * fits regardless of the chosen cell size. The canvas is still rendered at the
+ * real `cellSize` (below), so its resolution — sharp vs. blocky — reflects the
+ * output; only the CSS display box is pinned to this size.
  */
-const PREVIEW_CELL = 96;
+const PREVIEW_DISPLAY = 96;
 
 export function GlyphCreator() {
-  const [fontFamily, setFontFamily] = useState<string | null>(null);
+  // The whole editor is a thin shell over the project state + reducer; every
+  // control dispatches a ProjectAction (see project.ts).
+  const [project, dispatch] = useReducer(projectReducer, "", createDefaultProject);
+  const [fontLoaded, setFontLoaded] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const project = useMemo(
-    () => (fontFamily ? createDefaultProject(fontFamily) : null),
-    [fontFamily],
+  // Devices can be removed, so the stored index may fall out of range.
+  const activeIndex = Math.min(
+    activeDeviceIndex,
+    Math.max(0, project.devices.length - 1),
   );
-  const keyboard = project?.devices[0] ?? null;
+  const activeDevice = project.devices[activeIndex] ?? null;
 
   async function onFontChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -40,10 +50,11 @@ export function GlyphCreator() {
     setStatus({ kind: "loading-font" });
     try {
       const family = await loadFontFromFile(file);
-      setFontFamily(family);
+      dispatch({ type: "set-font", family });
+      setFontLoaded(true);
       setStatus({ kind: "ready", fontName: file.name });
     } catch {
-      setFontFamily(null);
+      setFontLoaded(false);
       setStatus({
         kind: "error",
         message: `Couldn't load "${file.name}". Please choose a valid font file (.ttf, .otf, .woff, .woff2).`,
@@ -52,11 +63,9 @@ export function GlyphCreator() {
   }
 
   async function onGenerate() {
-    if (!project) return;
+    if (!canGenerate) return;
     const fontName =
-      status.kind === "ready" || status.kind === "done"
-        ? status.fontName
-        : "font";
+      status.kind === "ready" || status.kind === "done" ? status.fontName : "font";
     setStatus({ kind: "generating", fontName });
     try {
       const outputs = generateTilesets(project);
@@ -72,15 +81,12 @@ export function GlyphCreator() {
       }
       setStatus({ kind: "done", fontName, files });
     } catch {
-      setStatus({
-        kind: "error",
-        message: "Generation failed. Please try again.",
-      });
+      setStatus({ kind: "error", message: "Generation failed. Please try again." });
     }
   }
 
-  const hasFont = fontFamily !== null && project !== null;
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
+  const canGenerate = fontLoaded && project.devices.length > 0 && !isBusy;
 
   return (
     <div className="space-y-8">
@@ -92,10 +98,7 @@ export function GlyphCreator() {
           Your font is used to render every Glyph, and never leaves your browser.
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <label
-            htmlFor="font-file"
-            className="text-sm font-medium"
-          >
+          <label htmlFor="font-file" className="text-sm font-medium">
             Font file
           </label>
           <input
@@ -109,27 +112,55 @@ export function GlyphCreator() {
         </div>
       </section>
 
+      <section aria-labelledby="devices-heading" className="space-y-3">
+        <h2 id="devices-heading" className="text-xl font-semibold">
+          2. Choose Devices &amp; Inputs
+        </h2>
+        <DeviceControls
+          project={project}
+          dispatch={dispatch}
+          activeIndex={activeIndex}
+          onSelectDevice={setActiveDeviceIndex}
+        />
+      </section>
+
+      <section aria-labelledby="style-heading" className="space-y-3">
+        <h2 id="style-heading" className="text-xl font-semibold">
+          3. Style the Glyphs
+        </h2>
+        <StyleControls project={project} dispatch={dispatch} />
+      </section>
+
+      <section aria-labelledby="naming-heading" className="space-y-3">
+        <h2 id="naming-heading" className="text-xl font-semibold">
+          4. Name the output
+        </h2>
+        <NamingControls
+          project={project}
+          dispatch={dispatch}
+          activeIndex={activeIndex}
+        />
+      </section>
+
       <section aria-labelledby="preview-heading" className="space-y-3">
         <h2 id="preview-heading" className="text-xl font-semibold">
-          2. Preview the Keyboard Glyphs
+          5. Preview the Glyphs
         </h2>
-        {hasFont && keyboard ? (
+        {fontLoaded && activeDevice ? (
           <ul
-            aria-label="Keyboard Glyph preview grid"
+            aria-label={`${activeDevice.name} Glyph preview grid`}
             className="flex flex-wrap gap-3"
           >
-            {keyboard.inputs.map((label, i) => (
-              <li
-                key={`${label}-${i}`}
-                className="flex flex-col items-center gap-1"
-              >
+            {activeDevice.inputs.map((label, i) => (
+              <li key={`${label}-${i}`} className="flex flex-col items-center gap-1">
                 <GlyphPreview
                   label={label}
-                  cellSize={PREVIEW_CELL}
+                  cellSize={project.cellSize}
                   textColor={project.textColor}
                   background={project.background}
                   fontFamily={project.font.family}
                   className="rounded-md"
+                  style={{ width: PREVIEW_DISPLAY, height: PREVIEW_DISPLAY }}
                 />
                 <span className="text-xs text-muted-foreground">{label}</span>
               </li>
@@ -137,20 +168,22 @@ export function GlyphCreator() {
           </ul>
         ) : (
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Upload a font to see a live preview of the Keyboard Glyphs.
+            {fontLoaded
+              ? "Select a Device to preview its Glyphs."
+              : "Upload a font to see a live preview of the Glyphs."}
           </p>
         )}
       </section>
 
       <section aria-labelledby="generate-heading" className="space-y-3">
         <h2 id="generate-heading" className="text-xl font-semibold">
-          3. Generate the Sprite Atlas
+          6. Generate the Sprite Atlases
         </h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Downloads a power-of-two PNG atlas and a TexturePacker-format JSON
-          sidecar.
+          Downloads one power-of-two PNG atlas and a TexturePacker-format JSON
+          sidecar per selected Device.
         </p>
-        <Button onClick={onGenerate} disabled={!hasFont || isBusy}>
+        <Button onClick={onGenerate} disabled={!canGenerate}>
           {status.kind === "generating" ? "Generating…" : "Generate"}
         </Button>
       </section>
