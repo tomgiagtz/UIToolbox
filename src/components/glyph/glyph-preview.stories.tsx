@@ -13,6 +13,9 @@ const meta = {
   title: "Glyph/GlyphPreview",
   component: GlyphPreview,
   parameters: { layout: "centered" },
+  // `background` is a shape object, not a CSS color — opt it out of the
+  // preview's default color-control matcher (which keys off the prop name).
+  argTypes: { background: { control: "object" } },
   args: {
     label: "Space",
     cellSize: 128,
