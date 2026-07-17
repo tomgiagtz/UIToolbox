@@ -23,7 +23,7 @@ test("home page has no WCAG 2.1 AA violations", async ({ page }, testInfo) => {
   await expectNoA11yViolations(page, testInfo);
 });
 
-test("glyph-creator placeholder has no WCAG 2.1 AA violations", async ({
+test("glyph-creator initial state has no WCAG 2.1 AA violations", async ({
   page,
 }, testInfo) => {
   await page.goto("/tools/glyph-creator");

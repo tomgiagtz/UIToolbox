@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { GlyphCreator } from "./glyph-creator";
 
 export const metadata: Metadata = {
   title: "Input Glyph Creator — UIToolbox",
@@ -30,12 +31,7 @@ export default function GlyphCreatorPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-        <p className="font-medium">Coming soon</p>
-        <p className="text-sm">
-          This tool is under construction. The generator is on its way.
-        </p>
-      </div>
+      <GlyphCreator />
     </div>
   );
 }
