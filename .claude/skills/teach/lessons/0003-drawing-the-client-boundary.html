@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson · Drawing the client boundary</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/quiz.js"></script>
+</head>
+<body>
+<article class="lesson">
+
+  <p class="eyebrow">Rendering · Lesson 2 · The client boundary</p>
+  <h1>Drawing the client boundary</h1>
+  <p class="lede">Last lesson gave you the map: prerender the shell, run in the
+  browser. Since then the Glyph Creator tracer bullet landed — so here is that
+  boundary drawn in <em>your own</em> code, and the one rule that keeps it safe.</p>
+
+  <hr class="rule">
+
+  <h2>The boundary is a doorway, not a label</h2>
+  <p><code>"use client"</code> does not mean "this file is browser code." It marks an
+  <strong>entry point</strong>: from that line downward — through everything the file
+  imports — the code ships to and runs in the browser. Above it, Server Components
+  render at build and <em>never</em> reach the browser.<a href="#src">¹</a></p>
+
+  <p>Your Glyph Creator crosses that doorway exactly once:</p>
+
+  <div class="ledger">
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">app/tools/glyph-creator/page.tsx</span><span class="gloss"><strong>Server Component</strong> — no directive, exports <code>metadata</code>. Renders at build; ships no JS. It draws the static chrome, then hands off…</span></span></div>
+    <div class="row"><span class="mark gate">◆</span><span class="what"><span class="name">glyph-creator.tsx · "use client"</span><span class="gloss"><strong>The boundary.</strong> Line 1. Below here is browser territory: <code>useState</code>, the file input, the Generate handler.</span></span></div>
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">everything it imports</span><span class="gloss">Pulled across into the client bundle — including <code>glyph-preview.tsx</code>, itself a second <code>"use client"</code> canvas component.</span></span></div>
+  </div>
+
+  <p>One page, one deliberate line. <code>page.tsx</code> stays a Server Component so
+  the title, breadcrumb and intro prerender instantly (<a href="0002-where-does-my-app-render.html">lesson&nbsp;1</a>);
+  only the interactive tool costs client JavaScript.</p>
+
+  <h2>Your three kinds of module</h2>
+  <p>Open <code>src/lib/glyph/</code> and every file sorts into one of these. Knowing
+  which is the whole skill:</p>
+
+  <table class="matrix">
+    <thead>
+      <tr><th>Kind</th><th>Runs where</th><th>Needs <code>"use&nbsp;client"</code>?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th>Server Component<br><span class="youtag" style="color:var(--muted)">page.tsx · layout.tsx</span></th>
+        <td>Build only</td>
+        <td>No — it's the default</td>
+      </tr>
+      <tr>
+        <th class="you">Client Component<br><span class="youtag">glyph-creator · glyph-preview</span></th>
+        <td class="you">Build once, then browser</td>
+        <td class="you">Yes — this is the line</td>
+      </tr>
+      <tr>
+        <th>Pure logic<br><span class="youtag" style="color:var(--muted)">generate · packer · naming · slugify · presets · types</span></th>
+        <td>Anywhere: build, browser, Vitest</td>
+        <td>No — it's just TypeScript</td>
+      </tr>
+      <tr>
+        <th>Browser-only<br><span class="youtag" style="color:var(--muted)">font · renderer · compositor · exporter</span></th>
+        <td>Browser only</td>
+        <td>No, but must be <em>called</em> from a client component</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout key">
+    <span class="tag">Why the pure column matters</span>
+    <code>generateTilesets</code> and its helpers return <strong>DOM-free data</strong> —
+    no <code>window</code>, no canvas. That is exactly why Vitest can test them with no
+    browser (<code>generate.test.ts</code>, <code>packer.test.ts</code>) — the same green
+    unit-test gate you decoded in the <a href="0001-reading-a-ci-run.html">CI lesson</a>.
+    Pure logic is testable <em>because</em> it stayed off the browser.
+  </div>
+
+  <h2>Why it still prerenders (the subtle part)</h2>
+  <p>Here is the trap most people miss: a Client Component is <strong>still prerendered
+  once at build</strong>. So its <em>first render</em> must be DOM-free too — no canvas,
+  no <code>File</code>, no <code>document</code>. Your tracer bullet gets this right, and
+  it's worth seeing how:</p>
+
+  <div class="ledger">
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">loadFontFromFile(file)</span><span class="gloss">Uses <code>FontFace</code> + <code>document.fonts</code> — but is called inside <code>onFontChange</code>, an <strong>event handler</strong>. Never during render.</span></span></div>
+    <div class="row"><span class="mark ok">✓</span><span class="what"><span class="name">renderGlyph(ctx, …)</span><span class="gloss">Draws to <code>&lt;canvas&gt;</code> — but inside <code>GlyphPreview</code>'s <strong><code>useEffect</code></strong>, behind a <code>typeof document !== "undefined"</code> guard. Fires only after hydration.</span></span></div>
+  </div>
+
+  <div class="callout watch">
+    <span class="tag">The one rule to keep</span>
+    Browser APIs go in <strong>event handlers or effects</strong> — never in the render
+    body. At build there is no browser, so anything that touches <code>window</code>,
+    canvas, or <code>localStorage</code> <em>during render</em> either crashes the
+    prerender or makes the build's HTML disagree with the browser's — a
+    <strong>hydration mismatch</strong>. (Your <code>Date.now()</code> in
+    <code>loadFontFromFile</code> is safe precisely because it's in a handler, not render.)
+  </div>
+
+  <h2>Check yourself</h2>
+  <p>Answer from memory — don't scroll up. Retrieval is what makes this stick.</p>
+
+  <div class="quiz">
+    <div class="qblock" data-answer="1">
+      <p class="q">A module needs the <code>"use client"</code> directive when…</p>
+      <ul class="opts">
+        <li><button class="opt">It gets imported by pages</button></li>
+        <li><button class="opt">It uses state or effects</button></li>
+        <li><button class="opt">It returns only plain data</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Right — interactivity (state, effects, handlers, browser APIs) is what defines a Client Component."
+         data-wrong="Being imported or returning data doesn't decide it. State / effects / browser APIs do — that's a client need."></p>
+    </div>
+
+    <div class="qblock" data-answer="1">
+      <p class="q">The compositor calls <code>OffscreenCanvas</code>. That call must run…</p>
+      <ul class="opts">
+        <li><button class="opt">during the build prerender pass</button></li>
+        <li><button class="opt">inside an effect or handler</button></li>
+        <li><button class="opt">directly in the render body</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Yes — canvas exists only in the browser, so the call belongs in an effect or event handler."
+         data-wrong="There's no canvas at build, and render runs at build. Browser calls go in effects or handlers."></p>
+    </div>
+
+    <div class="qblock" data-answer="1">
+      <p class="q">A Client Component's first render must be DOM-free because…</p>
+      <ul class="opts">
+        <li><button class="opt">It never runs in browsers</button></li>
+        <li><button class="opt">It is prerendered at build</button></li>
+        <li><button class="opt">It always skips the hydration</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Exactly — it's prerendered once at build, where no browser exists, then hydrated in the browser."
+         data-wrong="It does run in the browser, and it does hydrate. The catch: it's also prerendered at build first."></p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <div class="footer">
+    <h3 id="src">Read next (primary source)</h3>
+    <p>¹ <a href="https://nextjs.org/docs/app/getting-started/server-and-client-components">Server
+    and Client Components — Next.js Docs</a>. The canonical account of the default
+    (Server) and the boundary; read it against your own <code>glyph-creator.tsx</code>.
+    Reference for the directive itself: <a href="https://nextjs.org/docs/app/api-reference/directives/use-client">the
+    <code>use client</code> directive</a>. Both are in the <a href="../RESOURCES.md">resources</a>.</p>
+
+    <div class="ask">
+      <strong>I'm your teacher — ask me things.</strong> Good follow-ups right now:
+      "Trace exactly which files land in the client bundle for <code>/tools/glyph-creator</code>,"
+      or "Show me a change that <em>would</em> cause a hydration mismatch here," or
+      "If <code>generate.ts</code> is pure, why does it ship to the browser at all?"
+    </div>
+
+    <div class="nav">
+      <span>Rendering · Lesson 2</span>
+      <span>Next up → <code>output: 'export'</code> and the static-export trade-off</span>
+    </div>
+  </div>
+
+</article>
+</body>
+</html>

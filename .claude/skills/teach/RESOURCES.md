@@ -1,4 +1,40 @@
-# Continuous Integration (GitHub Actions) Resources
+# UIToolbox Learning — Resources
+
+Curated, high-trust sources, grouped by learning thread. Knowledge for lessons is
+drawn from here, not from parametric guesses.
+
+---
+
+# Rendering (Next.js) — active thread
+
+## Knowledge
+
+- [Rendering on the Web — web.dev (Jason Miller & Addy Osmani)](https://web.dev/articles/rendering-on-the-web)
+  The canonical taxonomy of CSR / SSR / static rendering / hydration, framework-agnostic. **Primary source for this thread.** Use for: the mental model of _when_ HTML is built and _where_ the app runs.
+- [Server and Client Components — Next.js Docs](https://nextjs.org/docs/app/getting-started/server-and-client-components)
+  How the App Router splits the tree; why layouts/pages are Server Components by default and how `"use client"` marks the boundary. Use for: deciding where the client boundary goes around the glyph generator.
+- [`use client` directive — Next.js Docs](https://nextjs.org/docs/app/api-reference/directives/use-client)
+  Exact semantics of the boundary directive. Use for: what actually ships to the browser once you add it.
+- [Static Exports (`output: 'export'`) — Next.js Docs](https://nextjs.org/docs/app/guides/static-exports)
+  How Next prerenders every route to static files in `out/`, and what that mode does and doesn't support. Use for: judging whether UIToolbox should drop its Node server entirely.
+- [`hydrateRoot` — React Docs](https://react.dev/reference/react-dom/client/hydrateRoot)
+  What hydration _is_ at the API level, and the "output must match the server" rule that causes hydration mismatches. Use for: understanding what goes wrong when prerendered HTML and browser render disagree.
+
+## Wisdom (Communities)
+
+- [Next.js GitHub Discussions](https://github.com/vercel/next.js/discussions)
+  Maintainer-frequented. Use for: "is this the intended way to do a client-only app on the App Router" questions grounded in real configs.
+- [r/nextjs](https://reddit.com/r/nextjs)
+  High-volume Q&A. Use for: `"use client"` boundary and static-export gotchas others have already hit.
+
+## Gaps
+- No single source yet that walks a _fully client-only_ Next.js App Router app end
+  to end (most tutorials assume server data). Currently bridged by lessons grounded
+  in UIToolbox itself; find one if it exists.
+
+---
+
+# Continuous Integration (GitHub Actions) — paused thread
 
 ## Knowledge
 
