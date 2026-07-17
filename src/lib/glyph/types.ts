@@ -51,6 +51,8 @@ export interface DeviceConfig {
  * handled by the UI/ProjectStore layer, not this pure model.
  */
 export interface Project {
+  /** User-facing config name; the default filename when saving a project file. */
+  name: string;
   font: { family: string };
   /** CSS color for the label text. */
   textColor: string;

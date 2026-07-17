@@ -94,6 +94,72 @@ test.describe("Input Glyph Creator", () => {
     ]);
   });
 
+  test("restores config + font after a reload without re-uploading", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await expect(
+      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+    ).toBeVisible();
+
+    // Edit a persisted axis so the reload proves config — not just the font —
+    // survives. Adding Xbox also gives us a second, distinct checkbox state.
+    const xbox = page.getByRole("checkbox", { name: "Xbox" });
+    await xbox.check();
+    await expect(xbox).toBeChecked();
+
+    await page.reload();
+
+    // Font restored from IndexedDB: the preview grid renders with no re-upload.
+    await expect(
+      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+    ).toBeVisible();
+    // Config restored from localStorage: the Xbox selection persisted.
+    await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
+  });
+
+  test("saves a project to a ZIP and restores it via Load after a Delete", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await expect(
+      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+    ).toBeVisible();
+
+    // Edit a persisted axis so we can prove config restores, not just the font.
+    await page.getByRole("checkbox", { name: "Xbox" }).check();
+
+    // Save with the font bundled → a .zip download.
+    await page.getByRole("button", { name: "Save…" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByRole("checkbox", { name: /include font/i }),
+    ).toBeChecked();
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    const savedPath = await download.path();
+
+    // Delete resets everything (accept the confirm prompt).
+    page.on("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Delete" }).click();
+    await expect(
+      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+    ).toBeHidden();
+    await expect(page.getByRole("checkbox", { name: "Xbox" })).not.toBeChecked();
+
+    // Load the saved ZIP: font + config come back with no re-upload.
+    await page.getByLabel("Load project file").setInputFiles(savedPath!);
+    await expect(
+      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+    ).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
+  });
+
   test("has no WCAG 2.1 AA violations", async ({ page }, testInfo) => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);

@@ -5,6 +5,7 @@ import type { Project } from "@/lib/glyph/types";
 
 function project(over: Partial<Project> = {}): Project {
   return {
+    name: "test-glyphs",
     font: { family: "TestFont" },
     textColor: "#ffffff",
     background: {
