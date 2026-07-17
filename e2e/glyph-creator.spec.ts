@@ -69,6 +69,31 @@ test.describe("Input Glyph Creator", () => {
     }
   });
 
+  test("generates one atlas + JSON per selected Device", async ({ page }) => {
+    await page.goto("/tools/glyph-creator");
+    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await expect(
+      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+    ).toBeVisible();
+
+    // Add a second Device; each selected Device yields its own atlas + JSON.
+    await page.getByRole("checkbox", { name: "Xbox" }).check();
+
+    const downloads: Download[] = [];
+    page.on("download", (d) => downloads.push(d));
+
+    await page.getByRole("button", { name: /generate/i }).click();
+    await expect.poll(() => downloads.length).toBe(4);
+
+    const names = downloads.map((d) => d.suggestedFilename()).sort();
+    expect(names).toEqual([
+      "keyboard_atlas.json",
+      "keyboard_atlas.png",
+      "xbox_atlas.json",
+      "xbox_atlas.png",
+    ]);
+  });
+
   test("has no WCAG 2.1 AA violations", async ({ page }, testInfo) => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
