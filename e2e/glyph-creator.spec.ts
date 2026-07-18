@@ -33,10 +33,10 @@ test.describe("Input Glyph Creator", () => {
 
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
 
-    // Live preview appears once the font loads.
-    const grid = page.getByRole("list", { name: /Keyboard Glyph preview grid/i });
-    await expect(grid).toBeVisible();
-    await expect(grid.getByRole("img").first()).toBeVisible();
+    // Live packed-atlas preview appears once the font loads.
+    await expect(
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
+    ).toBeVisible();
 
     await expect(generate).toBeEnabled();
 
@@ -73,7 +73,7 @@ test.describe("Input Glyph Creator", () => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
 
     // Add a second Device; each selected Device yields its own atlas + JSON.
@@ -100,7 +100,7 @@ test.describe("Input Glyph Creator", () => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
 
     // Edit a persisted axis so the reload proves config — not just the font —
@@ -113,7 +113,7 @@ test.describe("Input Glyph Creator", () => {
 
     // Font restored from IndexedDB: the preview grid renders with no re-upload.
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
     // Config restored from localStorage: the Xbox selection persisted.
     await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
@@ -125,7 +125,7 @@ test.describe("Input Glyph Creator", () => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
 
     // Edit a persisted axis so we can prove config restores, not just the font.
@@ -148,14 +148,14 @@ test.describe("Input Glyph Creator", () => {
     page.on("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Delete" }).click();
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeHidden();
     await expect(page.getByRole("checkbox", { name: "Xbox" })).not.toBeChecked();
 
     // Load the saved ZIP: font + config come back with no re-upload.
     await page.getByLabel("Load project file").setInputFiles(savedPath!);
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
   });
@@ -164,7 +164,7 @@ test.describe("Input Glyph Creator", () => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
     await expect(
-      page.getByRole("list", { name: /Keyboard Glyph preview grid/i }),
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
     await expectNoA11yViolations(page, testInfo);
   });
