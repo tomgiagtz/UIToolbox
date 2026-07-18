@@ -1,0 +1,202 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+
+interface ProjectMenuBarProps {
+  /** Current config name; the Save dialog edits this. */
+  name: string;
+  onNameChange: (name: string) => void;
+  /** Whether a font is loaded — gates the "Include font" option. */
+  fontLoaded: boolean;
+  canGenerate: boolean;
+  generating: boolean;
+  /** Save the current project to a file; `includeFont` picks ZIP vs JSON. */
+  onSave: (includeFont: boolean) => void;
+  /** A project file the user chose to load. */
+  onLoadFile: (file: File) => void;
+  /** Reset everything (config + persisted font). Parent confirms first. */
+  onDelete: () => void;
+  onGenerate: () => void;
+}
+
+/**
+ * The always-visible bottom toolbar: Save / Load / Delete a project, plus the
+ * primary Generate action. Sticks to the bottom of the viewport so the developer
+ * can act from anywhere in the (long) editor.
+ */
+export function ProjectMenuBar({
+  name,
+  onNameChange,
+  fontLoaded,
+  canGenerate,
+  generating,
+  onSave,
+  onLoadFile,
+  onDelete,
+  onGenerate,
+}: ProjectMenuBarProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const loadInputRef = useRef<HTMLInputElement>(null);
+  const [includeFont, setIncludeFont] = useState(false);
+
+  function openSaveDialog() {
+    // Default to bundling the font whenever one is available.
+    setIncludeFont(fontLoaded);
+    dialogRef.current?.showModal();
+  }
+
+  function submitSave(e: React.FormEvent) {
+    e.preventDefault();
+    onSave(includeFont && fontLoaded);
+    dialogRef.current?.close();
+  }
+
+  function onLoadChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Allow re-selecting the same file later by clearing the input.
+    e.target.value = "";
+    if (file) onLoadFile(file);
+  }
+
+  return (
+    <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="relative flex items-center gap-2">
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={openSaveDialog}>
+            Save…
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => loadInputRef.current?.click()}
+          >
+            Load…
+          </Button>
+          <Button type="button" variant="outline" onClick={onDelete}>
+            Delete
+          </Button>
+        </div>
+
+        {/* Inline-editable config name: reads as plain text, becomes a field on
+            click/focus. Kept in sync with the Save dialog's name via the model. */}
+        <input
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          aria-label="Project name"
+          title="Click to rename the project"
+          className="absolute left-1/2 hidden w-40 max-w-[40%] -translate-x-1/2 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-center text-sm font-medium text-muted-foreground hover:border-input focus:border-input focus:bg-background focus:text-foreground focus:outline-none sm:block"
+        />
+
+        <div className="ml-auto">
+          <Button type="button" onClick={onGenerate} disabled={!canGenerate}>
+            {generating ? "Generating…" : "Generate"}
+          </Button>
+        </div>
+      </div>
+
+      <input
+        ref={loadInputRef}
+        type="file"
+        accept=".json,.zip,application/json,application/zip"
+        aria-label="Load project file"
+        onChange={onLoadChange}
+        className="hidden"
+      />
+
+      <SaveDialog
+        ref={dialogRef}
+        name={name}
+        onNameChange={onNameChange}
+        fontLoaded={fontLoaded}
+        includeFont={includeFont}
+        onIncludeFontChange={setIncludeFont}
+        onSubmit={submitSave}
+      />
+    </div>
+  );
+}
+
+interface SaveDialogProps {
+  ref: React.Ref<HTMLDialogElement>;
+  name: string;
+  onNameChange: (name: string) => void;
+  fontLoaded: boolean;
+  includeFont: boolean;
+  onIncludeFontChange: (value: boolean) => void;
+  onSubmit: (e: React.FormEvent) => void;
+}
+
+function SaveDialog({
+  ref,
+  name,
+  onNameChange,
+  fontLoaded,
+  includeFont,
+  onIncludeFontChange,
+  onSubmit,
+}: SaveDialogProps) {
+  const dialogRef = ref as React.RefObject<HTMLDialogElement | null>;
+
+  // Reflect Esc / backdrop dismissal without leaving stale open state anywhere.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const onCancel = (e: Event) => e.preventDefault(); // let the form handle close
+    dialog.addEventListener("cancel", onCancel);
+    return () => dialog.removeEventListener("cancel", onCancel);
+  }, [dialogRef]);
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby="save-dialog-title"
+      className="fixed inset-0 m-auto h-fit max-h-[90vh] w-fit rounded-lg border bg-background p-0 text-foreground backdrop:bg-black/40"
+    >
+      <form onSubmit={onSubmit} method="dialog" className="w-80 space-y-4 p-5">
+        <h2 id="save-dialog-title" className="text-lg font-semibold">
+          Save project
+        </h2>
+
+        <div className="space-y-1.5">
+          <label htmlFor="save-name" className="text-sm font-medium">
+            Config name
+          </label>
+          <input
+            id="save-name"
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            autoFocus
+            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Used as the download filename.
+          </p>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={includeFont && fontLoaded}
+            disabled={!fontLoaded}
+            onChange={(e) => onIncludeFontChange(e.target.checked)}
+          />
+          <span className={fontLoaded ? undefined : "text-muted-foreground"}>
+            Include font{fontLoaded ? " (saves a .zip)" : " (upload a font first)"}
+          </span>
+        </label>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => dialogRef.current?.close()}
+          >
+            Cancel
+          </Button>
+          <Button type="submit">Save</Button>
+        </div>
+      </form>
+    </dialog>
+  );
+}

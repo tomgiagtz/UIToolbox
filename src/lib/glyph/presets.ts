@@ -121,6 +121,9 @@ export const DEFAULT_NAMING: NamingConfig = {
 /** Default output filename template. */
 export const DEFAULT_FILENAME_TEMPLATE = "{device}_atlas";
 
+/** Default config name, used as the default filename when saving a project. */
+export const DEFAULT_PROJECT_NAME = "my-glyphs";
+
 /**
  * Build the default project: the Keyboard Device seeded from its Preset, plus
  * default style and naming. The UI holds this as editable state — style, Inputs,
@@ -128,6 +131,7 @@ export const DEFAULT_FILENAME_TEMPLATE = "{device}_atlas";
  */
 export function createDefaultProject(fontFamily: string): Project {
   return {
+    name: DEFAULT_PROJECT_NAME,
     font: { family: fontFamily },
     textColor: DEFAULT_TEXT_COLOR,
     background: DEFAULT_BACKGROUND,

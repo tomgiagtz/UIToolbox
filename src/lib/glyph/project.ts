@@ -17,6 +17,9 @@ import type {
  * unit-testable seam, so the React layer stays a thin dispatcher.
  */
 export type ProjectAction =
+  // Replace the whole project — used by ProjectStore to hydrate restored state.
+  | { type: "load-project"; project: Project }
+  | { type: "set-name"; name: string }
   | { type: "set-font"; family: string }
   // --- Style (#4) ---
   | { type: "set-text-color"; color: string }
@@ -42,6 +45,12 @@ export type ProjectAction =
  */
 export function projectReducer(project: Project, action: ProjectAction): Project {
   switch (action.type) {
+    case "load-project":
+      return action.project;
+
+    case "set-name":
+      return { ...project, name: action.name };
+
     case "set-font":
       return { ...project, font: { family: action.family } };
 

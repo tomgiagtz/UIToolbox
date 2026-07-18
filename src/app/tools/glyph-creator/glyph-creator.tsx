@@ -1,16 +1,28 @@
 "use client";
 
-import { useReducer, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { GlyphPreview } from "@/components/glyph/glyph-preview";
-import { downloadArtifacts, exportDevice } from "@/lib/glyph/exporter";
-import { loadFontFromFile } from "@/lib/glyph/font";
+import {
+  downloadArtifact,
+  downloadArtifacts,
+  exportDevice,
+} from "@/lib/glyph/exporter";
+import { loadFontFromFile, registerFont } from "@/lib/glyph/font";
 import { generateTilesets } from "@/lib/glyph/generate";
 import { createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
+import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
+import {
+  clear as clearPersisted,
+  loadConfig,
+  loadFont,
+  saveConfig,
+  saveFont,
+} from "@/lib/glyph/project-store";
 import { StyleControls } from "./style-controls";
 import { DeviceControls } from "./device-controls";
 import { NamingControls } from "./naming-controls";
+import { ProjectMenuBar } from "./project-menu-bar";
 
 type Status =
   | { kind: "idle" }
@@ -36,6 +48,43 @@ export function GlyphCreator() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Until the persisted config + font have been restored, the save effect must
+  // not fire — otherwise the initial default project overwrites saved storage
+  // before the load below runs.
+  const hydrated = useRef(false);
+
+  // Restore persisted state on mount: config from localStorage, font blob from
+  // IndexedDB (re-registered under the same family the config carries).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = loadConfig();
+      if (saved && !cancelled) dispatch({ type: "load-project", project: saved });
+
+      try {
+        const font = await loadFont();
+        if (font && !cancelled) {
+          await registerFont(font.family, font.blob);
+          if (cancelled) return;
+          setFontLoaded(true);
+          setStatus({ kind: "ready", fontName: font.fileName });
+        }
+      } catch {
+        // A missing or undecodable persisted font just means no restore; the
+        // developer re-uploads. Config still restored above.
+      } finally {
+        if (!cancelled) hydrated.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist the config on every change, once hydration has completed.
+  useEffect(() => {
+    if (hydrated.current) saveConfig(project);
+  }, [project]);
 
   // Devices can be removed, so the stored index may fall out of range.
   const activeIndex = Math.min(
@@ -53,6 +102,8 @@ export function GlyphCreator() {
       dispatch({ type: "set-font", family });
       setFontLoaded(true);
       setStatus({ kind: "ready", fontName: file.name });
+      // Persist the blob so the font survives a reload (self-guards on failure).
+      await saveFont({ family, fileName: file.name, blob: file });
     } catch {
       setFontLoaded(false);
       setStatus({
@@ -83,6 +134,61 @@ export function GlyphCreator() {
     } catch {
       setStatus({ kind: "error", message: "Generation failed. Please try again." });
     }
+  }
+
+  // Save the project to a file. With the font it's a ZIP (config + font file),
+  // otherwise a config-only JSON. The font blob comes straight from IndexedDB.
+  async function onSave(includeFont: boolean) {
+    try {
+      const font = includeFont ? await loadFont() : null;
+      const artifact = await exportProjectFile(project, font);
+      downloadArtifact(artifact);
+    } catch {
+      setStatus({ kind: "error", message: "Couldn't save the project file." });
+    }
+  }
+
+  // Load a project file (JSON or ZIP). Config is hydrated via load-project; a
+  // bundled font is re-registered and re-persisted so it also survives reloads.
+  async function onLoadFile(file: File) {
+    try {
+      const imported = await importProjectFile(file);
+      if (!imported) {
+        setStatus({
+          kind: "error",
+          message: `"${file.name}" isn't a valid project file.`,
+        });
+        return;
+      }
+      dispatch({ type: "load-project", project: imported.project });
+      if (imported.font) {
+        await registerFont(imported.font.family, imported.font.blob);
+        await saveFont(imported.font);
+        setFontLoaded(true);
+        setStatus({ kind: "ready", fontName: imported.font.fileName });
+      } else {
+        // Config-only: the referenced font isn't present, so require an upload.
+        setFontLoaded(false);
+        setStatus({ kind: "idle" });
+      }
+    } catch {
+      setStatus({
+        kind: "error",
+        message: `Couldn't load "${file.name}".`,
+      });
+    }
+  }
+
+  // Reset everything: default config plus cleared localStorage + IndexedDB.
+  async function onDelete() {
+    if (!window.confirm("Discard all changes and start over? This clears the saved config and font.")) {
+      return;
+    }
+    await clearPersisted();
+    dispatch({ type: "load-project", project: createDefaultProject("") });
+    setFontLoaded(false);
+    setActiveDeviceIndex(0);
+    setStatus({ kind: "idle" });
   }
 
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
@@ -177,15 +283,14 @@ export function GlyphCreator() {
 
       <section aria-labelledby="generate-heading" className="space-y-3">
         <h2 id="generate-heading" className="text-xl font-semibold">
-          6. Generate the Sprite Atlases
+          6. Save &amp; Generate
         </h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Downloads one power-of-two PNG atlas and a TexturePacker-format JSON
-          sidecar per selected Device.
+          <strong>Generate</strong> downloads one power-of-two PNG atlas and a
+          TexturePacker-format JSON sidecar per selected Device.{" "}
+          <strong>Save</strong> writes a reusable project file (config JSON, or a
+          ZIP that also bundles your font); <strong>Load</strong> restores one.
         </p>
-        <Button onClick={onGenerate} disabled={!canGenerate}>
-          {status.kind === "generating" ? "Generating…" : "Generate"}
-        </Button>
       </section>
 
       <p role="status" aria-live="polite" className="text-sm">
@@ -202,6 +307,18 @@ export function GlyphCreator() {
           <span className="text-destructive">{status.message}</span>
         )}
       </p>
+
+      <ProjectMenuBar
+        name={project.name}
+        onNameChange={(name) => dispatch({ type: "set-name", name })}
+        fontLoaded={fontLoaded}
+        canGenerate={canGenerate}
+        generating={status.kind === "generating"}
+        onSave={onSave}
+        onLoadFile={onLoadFile}
+        onDelete={onDelete}
+        onGenerate={onGenerate}
+      />
     </div>
   );
 }
