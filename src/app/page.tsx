@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppBar } from "@/components/app-bar";
 import { Button } from "@/components/ui/button";
 
 const tools = [
@@ -12,7 +13,15 @@ const tools = [
 
 export default function Home() {
   return (
-    <div className="space-y-10">
+    <>
+      <AppBar
+        left={
+          <Link href="/" className="text-lg font-semibold">
+            UIToolbox
+          </Link>
+        }
+      />
+      <main className="mx-auto w-full max-w-5xl flex-1 space-y-10 overflow-y-auto px-6 py-12">
       <section className="space-y-3">
         <h1 className="text-3xl font-bold tracking-tight">UIToolbox</h1>
         <p className="max-w-2xl text-muted-foreground">
@@ -44,6 +53,7 @@ export default function Home() {
           ))}
         </ul>
       </section>
-    </div>
+      </main>
+    </>
   );
 }

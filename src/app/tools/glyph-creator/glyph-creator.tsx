@@ -2,7 +2,6 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { DisclosureGroup } from "react-aria-components";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { AtlasPreview } from "@/components/glyph/atlas-preview";
 import {
   downloadArtifact,
@@ -36,6 +35,30 @@ type Status =
   | { kind: "done"; fontName: string; files: string[] }
   | { kind: "error"; message: string };
 
+/**
+ * Track the edge (px) of the largest square that fits inside an element's
+ * content box, so the preview can be sized to fill its pane as a square. Returns
+ * a ref to attach and the current square edge (0 until first measured, e.g. in
+ * environments without ResizeObserver such as jsdom).
+ */
+function useSquareSize() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize(Math.floor(Math.min(width, height)));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, size };
+}
+
 export function GlyphCreator() {
   // The whole editor is a thin shell over the project state + reducer; every
   // control dispatches a ProjectAction (see project.ts).
@@ -43,7 +66,7 @@ export function GlyphCreator() {
   const [fontLoaded, setFontLoaded] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const preview = useSquareSize();
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
   // before the load below runs.
@@ -195,102 +218,79 @@ export function GlyphCreator() {
       : null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex min-h-[28rem] gap-4 lg:h-[calc(100vh-18rem)]">
-        {panelCollapsed ? (
-          <button
-            type="button"
-            aria-expanded={false}
-            aria-label="Expand editor panel"
-            onClick={() => setPanelCollapsed(false)}
-            className="flex h-full w-10 shrink-0 items-center justify-center rounded-lg border hover:bg-accent"
-          >
-            <PanelLeftOpen aria-hidden className="size-5 text-muted-foreground" />
-          </button>
-        ) : (
-          <aside
-            aria-label="Editor controls"
-            className="flex w-80 shrink-0 flex-col overflow-hidden rounded-lg border"
-          >
-            <div className="flex items-center justify-between border-b px-4 py-2.5">
-              <h2 className="text-sm font-semibold">Editor</h2>
-              <button
-                type="button"
-                aria-expanded={true}
-                aria-label="Collapse editor panel"
-                onClick={() => setPanelCollapsed(true)}
-                className="flex size-7 items-center justify-center rounded-md hover:bg-accent"
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 gap-4">
+        <aside
+          aria-label="Editor controls"
+          className="flex w-80 shrink-0 flex-col overflow-hidden rounded-lg border"
+        >
+          <div className="border-b px-4 py-2.5">
+            <h2 className="text-sm font-semibold">Editor</h2>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4">
+            <DisclosureGroup defaultExpandedKeys={["devices"]}>
+              <PanelSection
+                id="devices"
+                title="Devices"
+                help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
               >
-                <PanelLeftClose
-                  aria-hidden
-                  className="size-4 text-muted-foreground"
+                <DeviceControls
+                  project={project}
+                  dispatch={dispatch}
+                  activeIndex={activeIndex}
+                  onSelectDevice={setActiveDeviceIndex}
                 />
-              </button>
-            </div>
+              </PanelSection>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4">
-              <DisclosureGroup defaultExpandedKeys={["devices"]}>
-                <PanelSection
-                  id="devices"
-                  title="Devices"
-                  help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
-                >
-                  <DeviceControls
-                    project={project}
+              <PanelSection
+                id="inputs"
+                title="Inputs"
+                help="Add, rename, or remove the controls for the selected Device."
+              >
+                {activeDevice ? (
+                  <InputEditor
+                    device={activeDevice}
+                    deviceIndex={activeIndex}
                     dispatch={dispatch}
-                    activeIndex={activeIndex}
-                    onSelectDevice={setActiveDeviceIndex}
                   />
-                </PanelSection>
+                ) : (
+                  <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Select at least one Device to edit its Inputs.
+                  </p>
+                )}
+              </PanelSection>
 
-                <PanelSection
-                  id="inputs"
-                  title="Inputs"
-                  help="Add, rename, or remove the controls for the selected Device."
-                >
-                  {activeDevice ? (
-                    <InputEditor
-                      device={activeDevice}
-                      deviceIndex={activeIndex}
-                      dispatch={dispatch}
-                    />
-                  ) : (
-                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      Select at least one Device to edit its Inputs.
-                    </p>
-                  )}
-                </PanelSection>
+              <PanelSection
+                id="style"
+                title="Style"
+                help="Upload a font and set the tile background, colors, and cell size."
+              >
+                <div className="space-y-5">
+                  <FontUpload fontName={fontName} onFontChange={onFontChange} />
+                  <StyleControls project={project} dispatch={dispatch} />
+                </div>
+              </PanelSection>
 
-                <PanelSection
-                  id="style"
-                  title="Style"
-                  help="Upload a font and set the tile background, colors, and cell size."
-                >
-                  <div className="space-y-5">
-                    <FontUpload fontName={fontName} onFontChange={onFontChange} />
-                    <StyleControls project={project} dispatch={dispatch} />
-                  </div>
-                </PanelSection>
-
-                <PanelSection
-                  id="naming"
-                  title="Naming"
-                  help="Control Sprite Names and the exported file names."
-                >
-                  <NamingControls
-                    project={project}
-                    dispatch={dispatch}
-                    activeIndex={activeIndex}
-                  />
-                </PanelSection>
-              </DisclosureGroup>
-            </div>
-          </aside>
-        )}
+              <PanelSection
+                id="naming"
+                title="Naming"
+                help="Control Sprite Names and the exported file names."
+              >
+                <NamingControls
+                  project={project}
+                  dispatch={dispatch}
+                  activeIndex={activeIndex}
+                />
+              </PanelSection>
+            </DisclosureGroup>
+          </div>
+        </aside>
 
         <section
+          ref={preview.ref}
           aria-label="Sprite Atlas preview"
-          className="relative min-w-0 flex-1 overflow-auto rounded-lg border bg-muted/20 p-4"
+          className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border bg-muted/20 p-4"
         >
           {project.devices.length > 1 && (
             <div className="absolute right-3 top-3 z-10">
@@ -313,7 +313,11 @@ export function GlyphCreator() {
           )}
 
           {fontLoaded && activeDevice ? (
-            <div className="flex h-full items-center justify-center">
+            // Largest square that fits the pane; the atlas is drawn to fill it.
+            <div
+              className="flex items-center justify-center"
+              style={{ width: preview.size, height: preview.size }}
+            >
               <AtlasPreview
                 deviceName={activeDevice.name}
                 inputs={activeDevice.inputs}
@@ -321,17 +325,15 @@ export function GlyphCreator() {
                 textColor={project.textColor}
                 background={project.background}
                 fontFamily={project.font.family}
-                className="max-h-full max-w-full rounded-md object-contain"
+                className="h-full w-full rounded-md object-contain"
               />
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                {fontLoaded
-                  ? "Select a Device to preview its Sprite Atlas."
-                  : "Upload a font (Style tab) to see the live Sprite Atlas."}
-              </p>
-            </div>
+            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              {fontLoaded
+                ? "Select a Device to preview its Sprite Atlas."
+                : "Upload a font (Style tab) to see the live Sprite Atlas."}
+            </p>
           )}
         </section>
       </div>
