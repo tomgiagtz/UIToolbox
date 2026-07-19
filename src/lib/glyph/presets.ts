@@ -125,11 +125,21 @@ export const DEFAULT_FILENAME_TEMPLATE = "{device}_atlas";
 export const DEFAULT_PROJECT_NAME = "my-glyphs";
 
 /**
+ * Family name of the bundled default font (Inter, see #13). A fresh project
+ * renders with this immediately — no upload required — and an uploaded font
+ * simply overrides it. The matching FontFace is registered from the vendored
+ * file by {@link loadDefaultFont}.
+ */
+export const DEFAULT_FONT_FAMILY = "Inter";
+
+/**
  * Build the default project: the Keyboard Device seeded from its Preset, plus
  * default style and naming. The UI holds this as editable state — style, Inputs,
  * Devices, and naming are all changed from here by the user.
  */
-export function createDefaultProject(fontFamily: string): Project {
+export function createDefaultProject(
+  fontFamily: string = DEFAULT_FONT_FAMILY,
+): Project {
   return {
     name: DEFAULT_PROJECT_NAME,
     font: { family: fontFamily },

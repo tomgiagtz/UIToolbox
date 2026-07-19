@@ -7,8 +7,11 @@ interface ProjectMenuBarProps {
   /** Current config name; the Save dialog edits this. */
   name: string;
   onNameChange: (name: string) => void;
-  /** Whether a font is loaded — gates the "Include font" option. */
-  fontLoaded: boolean;
+  /**
+   * Whether a custom font was uploaded — gates the "Include font" option. The
+   * bundled default (Inter) is always available on load, so it is never bundled.
+   */
+  hasUploadedFont: boolean;
   canGenerate: boolean;
   generating: boolean;
   /** Save the current project to a file; `includeFont` picks ZIP vs JSON. */
@@ -28,7 +31,7 @@ interface ProjectMenuBarProps {
 export function ProjectMenuBar({
   name,
   onNameChange,
-  fontLoaded,
+  hasUploadedFont,
   canGenerate,
   generating,
   onSave,
@@ -42,13 +45,13 @@ export function ProjectMenuBar({
 
   function openSaveDialog() {
     // Default to bundling the font whenever one is available.
-    setIncludeFont(fontLoaded);
+    setIncludeFont(hasUploadedFont);
     dialogRef.current?.showModal();
   }
 
   function submitSave(e: React.FormEvent) {
     e.preventDefault();
-    onSave(includeFont && fontLoaded);
+    onSave(includeFont && hasUploadedFont);
     dialogRef.current?.close();
   }
 
@@ -108,7 +111,7 @@ export function ProjectMenuBar({
         ref={dialogRef}
         name={name}
         onNameChange={onNameChange}
-        fontLoaded={fontLoaded}
+        hasUploadedFont={hasUploadedFont}
         includeFont={includeFont}
         onIncludeFontChange={setIncludeFont}
         onSubmit={submitSave}
@@ -121,7 +124,7 @@ interface SaveDialogProps {
   ref: React.Ref<HTMLDialogElement>;
   name: string;
   onNameChange: (name: string) => void;
-  fontLoaded: boolean;
+  hasUploadedFont: boolean;
   includeFont: boolean;
   onIncludeFontChange: (value: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -131,7 +134,7 @@ function SaveDialog({
   ref,
   name,
   onNameChange,
-  fontLoaded,
+  hasUploadedFont,
   includeFont,
   onIncludeFontChange,
   onSubmit,
@@ -177,12 +180,12 @@ function SaveDialog({
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={includeFont && fontLoaded}
-            disabled={!fontLoaded}
+            checked={includeFont && hasUploadedFont}
+            disabled={!hasUploadedFont}
             onChange={(e) => onIncludeFontChange(e.target.checked)}
           />
-          <span className={fontLoaded ? undefined : "text-muted-foreground"}>
-            Include font{fontLoaded ? " (saves a .zip)" : " (upload a font first)"}
+          <span className={hasUploadedFont ? undefined : "text-muted-foreground"}>
+            Include font{hasUploadedFont ? " (saves a .zip)" : " (upload a font first)"}
           </span>
         </label>
 

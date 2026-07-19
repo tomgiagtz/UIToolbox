@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { projectReducer, type ProjectAction } from "@/lib/glyph/project";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import type { Project } from "@/lib/glyph/types";
 
 function base(): Project {
   return createDefaultProject("TestFont");
 }
+
+describe("createDefaultProject", () => {
+  it("seeds the bundled Inter family when no font is given", () => {
+    expect(createDefaultProject().font.family).toBe(DEFAULT_FONT_FAMILY);
+    expect(DEFAULT_FONT_FAMILY).toBe("Inter");
+  });
+
+  it("uses an explicitly provided family", () => {
+    expect(createDefaultProject("TestFont").font.family).toBe("TestFont");
+  });
+});
 
 function run(project: Project, ...actions: ProjectAction[]): Project {
   return actions.reduce(projectReducer, project);

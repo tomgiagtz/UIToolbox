@@ -28,7 +28,7 @@ export function FontUpload({
       <p className="text-xs text-muted-foreground">
         {fontName
           ? `Loaded "${fontName}". Used to render every Glyph.`
-          : "Used to render every Glyph, and never leaves your browser."}
+          : "Inter is used by default. Upload your own to override it — it never leaves your browser."}
       </p>
     </div>
   );
