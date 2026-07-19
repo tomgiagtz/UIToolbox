@@ -8,9 +8,9 @@ import type { Project } from "@/lib/glyph/types";
 import { inputClass } from "./controls-ui";
 
 /**
- * Controls for Devices & Inputs (#5): pick which Devices to generate (each
- * seeded from an editable Preset), choose which one to preview/edit, and
- * add / edit / remove that Device's Input labels.
+ * Controls for Devices (#5): pick which Devices to generate (each seeded from an
+ * editable Preset) and choose which one to preview/edit. The chosen Device's
+ * Input labels are edited by {@link InputEditor} in the Inputs section.
  */
 export function DeviceControls({
   project,
@@ -23,8 +23,6 @@ export function DeviceControls({
   activeIndex: number;
   onSelectDevice: (index: number) => void;
 }) {
-  const activeDevice = project.devices[activeIndex] ?? null;
-
   return (
     <div className="space-y-5">
       <fieldset className="flex flex-col gap-2">
@@ -77,22 +75,16 @@ export function DeviceControls({
         </div>
       )}
 
-      {activeDevice ? (
-        <InputEditor
-          device={activeDevice}
-          deviceIndex={activeIndex}
-          dispatch={dispatch}
-        />
-      ) : (
-        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-          Select at least one Device to edit its Inputs.
-        </p>
-      )}
     </div>
   );
 }
 
-function InputEditor({
+/**
+ * Editor for one Device's Input labels: add, rename, or remove. Lives in the
+ * Inputs section of the editor panel (the Devices section owns which Device is
+ * active). Every change dispatches a {@link ProjectAction}.
+ */
+export function InputEditor({
   device,
   deviceIndex,
   dispatch,

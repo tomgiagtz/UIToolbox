@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useRef, type CSSProperties } from "react";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { Background } from "@/lib/glyph/types";
+import { useGlyphCanvas } from "./use-glyph-canvas";
 
 export interface GlyphPreviewProps {
   label: string;
@@ -37,36 +38,13 @@ export function GlyphPreview({
 }: GlyphPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let cancelled = false;
-    const draw = () => {
-      if (!cancelled) {
-        renderGlyph(ctx, 0, 0, {
-          label,
-          cellSize,
-          textColor,
-          background,
-          fontFamily,
-        });
-      }
-    };
-
-    if (typeof document !== "undefined" && "fonts" in document) {
-      const probe = `${Math.floor(cellSize * 0.5)}px "${fontFamily}"`;
-      document.fonts.load(probe).then(draw).catch(draw);
-    } else {
-      draw();
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [label, cellSize, textColor, background, fontFamily]);
+  useGlyphCanvas(
+    canvasRef,
+    fontFamily,
+    cellSize,
+    (ctx) => renderGlyph(ctx, 0, 0, { label, cellSize, textColor, background, fontFamily }),
+    [label, cellSize, textColor, background, fontFamily],
+  );
 
   return (
     <canvas

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
-import { GlyphPreview } from "@/components/glyph/glyph-preview";
+import { DisclosureGroup } from "react-aria-components";
+import { AtlasPreview } from "@/components/glyph/atlas-preview";
 import {
   downloadArtifact,
   downloadArtifacts,
@@ -20,9 +21,11 @@ import {
   saveFont,
 } from "@/lib/glyph/project-store";
 import { StyleControls } from "./style-controls";
-import { DeviceControls } from "./device-controls";
+import { DeviceControls, InputEditor } from "./device-controls";
 import { NamingControls } from "./naming-controls";
 import { ProjectMenuBar } from "./project-menu-bar";
+import { PanelSection } from "./panel-section";
+import { FontUpload } from "./font-upload";
 
 type Status =
   | { kind: "idle" }
@@ -33,12 +36,28 @@ type Status =
   | { kind: "error"; message: string };
 
 /**
- * On-screen edge (px) each preview Glyph is displayed at, so the whole grid
- * fits regardless of the chosen cell size. The canvas is still rendered at the
- * real `cellSize` (below), so its resolution — sharp vs. blocky — reflects the
- * output; only the CSS display box is pinned to this size.
+ * Track the edge (px) of the largest square that fits inside an element's
+ * content box, so the preview can be sized to fill its pane as a square. Returns
+ * a ref to attach and the current square edge (0 until first measured, e.g. in
+ * environments without ResizeObserver such as jsdom).
  */
-const PREVIEW_DISPLAY = 96;
+function useSquareSize() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize(Math.floor(Math.min(width, height)));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, size };
+}
 
 export function GlyphCreator() {
   // The whole editor is a thin shell over the project state + reducer; every
@@ -47,7 +66,7 @@ export function GlyphCreator() {
   const [fontLoaded, setFontLoaded] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const preview = useSquareSize();
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
   // before the load below runs.
@@ -193,105 +212,131 @@ export function GlyphCreator() {
 
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
   const canGenerate = fontLoaded && project.devices.length > 0 && !isBusy;
+  const fontName =
+    status.kind === "ready" || status.kind === "generating" || status.kind === "done"
+      ? status.fontName
+      : null;
 
   return (
-    <div className="space-y-8">
-      <section aria-labelledby="upload-heading" className="space-y-3">
-        <h2 id="upload-heading" className="text-xl font-semibold">
-          1. Upload a font
-        </h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Your font is used to render every Glyph, and never leaves your browser.
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor="font-file" className="text-sm font-medium">
-            Font file
-          </label>
-          <input
-            ref={fileInputRef}
-            id="font-file"
-            type="file"
-            accept=".ttf,.otf,.woff,.woff2,font/*"
-            onChange={onFontChange}
-            className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
-          />
-        </div>
-      </section>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 gap-4">
+        <aside
+          aria-label="Editor controls"
+          className="flex w-80 shrink-0 flex-col overflow-hidden rounded-lg border"
+        >
+          <div className="border-b px-4 py-2.5">
+            <h2 className="text-sm font-semibold">Editor</h2>
+          </div>
 
-      <section aria-labelledby="devices-heading" className="space-y-3">
-        <h2 id="devices-heading" className="text-xl font-semibold">
-          2. Choose Devices &amp; Inputs
-        </h2>
-        <DeviceControls
-          project={project}
-          dispatch={dispatch}
-          activeIndex={activeIndex}
-          onSelectDevice={setActiveDeviceIndex}
-        />
-      </section>
-
-      <section aria-labelledby="style-heading" className="space-y-3">
-        <h2 id="style-heading" className="text-xl font-semibold">
-          3. Style the Glyphs
-        </h2>
-        <StyleControls project={project} dispatch={dispatch} />
-      </section>
-
-      <section aria-labelledby="naming-heading" className="space-y-3">
-        <h2 id="naming-heading" className="text-xl font-semibold">
-          4. Name the output
-        </h2>
-        <NamingControls
-          project={project}
-          dispatch={dispatch}
-          activeIndex={activeIndex}
-        />
-      </section>
-
-      <section aria-labelledby="preview-heading" className="space-y-3">
-        <h2 id="preview-heading" className="text-xl font-semibold">
-          5. Preview the Glyphs
-        </h2>
-        {fontLoaded && activeDevice ? (
-          <ul
-            aria-label={`${activeDevice.name} Glyph preview grid`}
-            className="flex flex-wrap gap-3"
-          >
-            {activeDevice.inputs.map((label, i) => (
-              <li key={`${label}-${i}`} className="flex flex-col items-center gap-1">
-                <GlyphPreview
-                  label={label}
-                  cellSize={project.cellSize}
-                  textColor={project.textColor}
-                  background={project.background}
-                  fontFamily={project.font.family}
-                  className="rounded-md"
-                  style={{ width: PREVIEW_DISPLAY, height: PREVIEW_DISPLAY }}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4">
+            <DisclosureGroup defaultExpandedKeys={["devices"]}>
+              <PanelSection
+                id="devices"
+                title="Devices"
+                help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
+              >
+                <DeviceControls
+                  project={project}
+                  dispatch={dispatch}
+                  activeIndex={activeIndex}
+                  onSelectDevice={setActiveDeviceIndex}
                 />
-                <span className="text-xs text-muted-foreground">{label}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            {fontLoaded
-              ? "Select a Device to preview its Glyphs."
-              : "Upload a font to see a live preview of the Glyphs."}
-          </p>
-        )}
-      </section>
+              </PanelSection>
 
-      <section aria-labelledby="generate-heading" className="space-y-3">
-        <h2 id="generate-heading" className="text-xl font-semibold">
-          6. Save &amp; Generate
-        </h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          <strong>Generate</strong> downloads one power-of-two PNG atlas and a
-          TexturePacker-format JSON sidecar per selected Device.{" "}
-          <strong>Save</strong> writes a reusable project file (config JSON, or a
-          ZIP that also bundles your font); <strong>Load</strong> restores one.
-        </p>
-      </section>
+              <PanelSection
+                id="inputs"
+                title="Inputs"
+                help="Add, rename, or remove the controls for the selected Device."
+              >
+                {activeDevice ? (
+                  <InputEditor
+                    device={activeDevice}
+                    deviceIndex={activeIndex}
+                    dispatch={dispatch}
+                  />
+                ) : (
+                  <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Select at least one Device to edit its Inputs.
+                  </p>
+                )}
+              </PanelSection>
+
+              <PanelSection
+                id="style"
+                title="Style"
+                help="Upload a font and set the tile background, colors, and cell size."
+              >
+                <div className="space-y-5">
+                  <FontUpload fontName={fontName} onFontChange={onFontChange} />
+                  <StyleControls project={project} dispatch={dispatch} />
+                </div>
+              </PanelSection>
+
+              <PanelSection
+                id="naming"
+                title="Naming"
+                help="Control Sprite Names and the exported file names."
+              >
+                <NamingControls
+                  project={project}
+                  dispatch={dispatch}
+                  activeIndex={activeIndex}
+                />
+              </PanelSection>
+            </DisclosureGroup>
+          </div>
+        </aside>
+
+        <section
+          ref={preview.ref}
+          aria-label="Sprite Atlas preview"
+          className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border bg-muted/20 p-4"
+        >
+          {project.devices.length > 1 && (
+            <div className="absolute right-3 top-3 z-10">
+              <label className="sr-only" htmlFor="preview-device">
+                Device to preview
+              </label>
+              <select
+                id="preview-device"
+                value={activeIndex}
+                onChange={(e) => setActiveDeviceIndex(Number(e.target.value))}
+                className="rounded-md border border-input bg-background/95 px-2.5 py-1.5 text-sm shadow-sm backdrop-blur"
+              >
+                {project.devices.map((d, i) => (
+                  <option key={d.name} value={i}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {fontLoaded && activeDevice ? (
+            // Largest square that fits the pane; the atlas is drawn to fill it.
+            <div
+              className="flex items-center justify-center"
+              style={{ width: preview.size, height: preview.size }}
+            >
+              <AtlasPreview
+                deviceName={activeDevice.name}
+                inputs={activeDevice.inputs}
+                cellSize={project.cellSize}
+                textColor={project.textColor}
+                background={project.background}
+                fontFamily={project.font.family}
+                className="h-full w-full rounded-md object-contain"
+              />
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              {fontLoaded
+                ? "Select a Device to preview its Sprite Atlas."
+                : "Upload a font (Style tab) to see the live Sprite Atlas."}
+            </p>
+          )}
+        </section>
+      </div>
 
       <p role="status" aria-live="polite" className="text-sm">
         {status.kind === "loading-font" && "Loading font…"}

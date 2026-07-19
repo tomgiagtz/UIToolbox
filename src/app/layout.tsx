@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,15 +13,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">
-        <header className="border-b">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-lg font-semibold">
-              UIToolbox
-            </Link>
-          </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-6 py-12">{children}</main>
+      {/* Full-height flex shell; each page supplies its own AppBar + scroll
+          region so tool pages can fill the viewport edge-to-edge. */}
+      <body className="flex h-screen flex-col overflow-hidden antialiased">
+        {children}
       </body>
     </html>
   );
