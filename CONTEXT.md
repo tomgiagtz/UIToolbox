@@ -14,42 +14,117 @@ UI copy should use these terms and avoid the synonyms noted.
 
 ### Glyph
 
-A single rendered control image: a **label** drawn in the user's chosen font,
-centered on a generated **Background** tile. A Glyph is produced by drawing, not
-by selecting device artwork — there are no per-device image assets (see
-ADR-0002). One Glyph occupies one cell of a **Sprite Atlas**.
+A single rendered control image: one **Render Source** composited onto a
+generated **Background** tile. The Render Source is one of a font-drawn
+**label**, a bundled **Symbol**, or a user-uploaded **custom image** — all fit
+into the same tile content box (see ADR-0004, which amends ADR-0002). One Glyph
+occupies one cell of a **Sprite Atlas**.
 
-_Avoid:_ "icon", "button image" (both imply pre-drawn artwork).
+_Avoid:_ "icon", "button image" (use Symbol / custom image for the artwork
+sources).
 
 ### Input
 
 A single control the user cares about, e.g. `A`, `Space`, `LMB`, `Right Stick`.
-Internally an Input is just a **label string**. A **Device** owns an ordered list
-of Inputs. Each Input renders to exactly one Glyph.
+An Input always carries a **label string**, which is its identity and the source
+of its **Sprite Name** even when it renders as artwork. Its **Render Source**
+(label / Symbol / custom image) decides how its one Glyph is drawn. A **Device**
+owns an ordered list of Inputs.
 
 _Avoid:_ "key", "button" as the domain type — those are Inputs on a specific
 Device.
 
+### Render Source
+
+How an Input's Glyph content is drawn: its font-rendered **label** (default for
+arbitrary Inputs), a bundled **Symbol** (default for well-known Inputs), or a
+user-uploaded **custom image**. Whichever source is chosen is composited onto the
+same Background tile.
+
+### Symbol
+
+A bundled default artwork asset the tool ships for a well-known Input (Triangle,
+Space, Enter, D-pad Up, Shift…). A Symbol is an **SVG** keyed by a stable `id`,
+and is either **tintable** (single-color, drawn with `currentColor`, so it
+follows the label text color) or **fixed-color** (brand art like PlayStation
+shapes, ignoring text color). Well-known Inputs default to their Symbol; the user
+can toggle back to the label. Distinct from a **custom image**, which the user
+supplies themselves.
+
+_Avoid:_ "icon", "default image" — use Symbol for shipped artwork.
+
 ### Device
 
-An **Input Device** — a named grouping of Inputs, e.g. Keyboard, Xbox pad,
-PlayStation pad. A Device is a _grouping_, not a render variant: no image assets
-differ per Device. Each selected Device produces one **Sprite Atlas** + one
-metadata file.
+An **Input Device** — a named device, e.g. Keyboard, Xbox pad, PlayStation pad.
+Each Device offers a fixed **Catalog** of known Inputs, arranged in a **Device
+Layout**; the user **enables** a subset and may add **custom Inputs** not in the
+Catalog. Each Device with at least one enabled or custom Input produces one
+**Sprite Atlas** + one metadata file.
 
 _Avoid:_ "platform", "controller" (a controller is one kind of Device).
 
+### Catalog
+
+The fixed set of **known Inputs** a Device offers — every keyboard key, every pad
+button. Each Catalog entry carries a stable id, a default label, an optional
+default **Symbol**, and a position in the **Device Layout**. Users toggle Catalog
+Inputs on/off; only **enabled** ones generate Glyphs. Inputs the Catalog lacks
+are added as **custom Inputs**.
+
+### Device Layout
+
+The **code-drawn schematic** used to render a Device's Catalog for selection:
+a standard US-staggered rounded-rect keycap board for the Keyboard, and clustered
+**Symbol nodes** (d-pad, face-button diamond, bumpers/triggers) for the pads.
+It is **editor chrome only** — a picker for enabling Inputs — and is never part
+of an exported Sprite Atlas. No layout art is authored; the only authored assets
+are the Symbols.
+
+_Avoid:_ "silhouette", "controller art" — the Layout is schematic, not artwork.
+
 ### Preset
 
-A starting, **editable** list of Inputs seeded onto a Device (the tool ships a
-Keyboard Preset). The user freely selects, removes, and adds Inputs afterward —
-a Preset is a convenience seed, not a fixed set.
+The **default-enabled subset** of a Device's Catalog — which Inputs start enabled
+when the tool loads. The Keyboard Preset enables ~24 common gaming keys (the rest
+of the board sits disabled in the Layout); the pad Presets enable their whole
+Catalog. A Preset is a starting selection, freely changed afterward.
 
 ### Background
 
-The tile a Glyph's label is drawn on: a **shape** (rounded-rect, square, circle,
-or none), a **fill** color, and an optional **border** (color + width). A "none"
-Background yields a transparent, label-only Glyph.
+The tile a Glyph's Render Source is drawn on. Its **source** is one of:
+
+- a **shape** — rounded-rect / square / circle / none, with a **fill** color and
+  optional **border** (color + width); "none" yields a transparent, content-only
+  Glyph;
+- an **uploaded image** — the user's own tile graphic; or
+- an **authored Background** — a shipped SVG tile from the tool's gallery.
+
+The Background source resolves through the **Style Cascade** like any other style
+property. Some Catalog Inputs whose identity is their tile *shape* (bumpers,
+triggers) default to a specific authored Background rather than a plain shape.
+
+### Authored Background
+
+A shipped SVG tile graphic the project owner authors (a growing gallery),
+selectable as a Background source. Distinct from a **Symbol** (foreground Render
+Source content): an Authored Background is the *tile*, a Symbol is what's drawn
+*on* it. Bumper- and trigger-shaped tiles are Authored Backgrounds; their label
+(e.g. `LB`, `RT`) is the Render Source drawn on top.
+
+### Style Cascade
+
+How a Glyph's style + Render Source are resolved, lowest precedence to highest:
+
+**Project** defaults → **Device** overrides → **Catalog per-Input default** →
+**Glyph** overrides.
+
+Each level is a sparse subset; anything unset falls up the chain. Every Background
+property (source, shape, corner radius, fill, border width+color) and the text
+color can be set at any level. The **Catalog per-Input default** tier is what lets
+a bumper keep its authored Background even when its Device is set to "circle" —
+the shipped per-Input default outranks a device-wide override, and only an
+explicit Glyph edit outranks it. `cellSize` and the **font** are the exception:
+they stay Project-global (uniform grid, one font).
 
 ### Sprite Atlas
 

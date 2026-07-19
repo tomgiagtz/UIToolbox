@@ -20,4 +20,15 @@ describe("GlyphCreator editor shell", () => {
     // "Font file" label keeps working for uploads and e2e.
     expect(screen.getByLabelText("Font file")).toBeInTheDocument();
   });
+
+  it("no longer gates the editor behind a font upload (#13)", () => {
+    render(<GlyphCreator />);
+    // The old "must upload a font first" preview gate is gone — the bundled
+    // Inter renders the preview with no upload.
+    expect(
+      screen.queryByText(/Upload a font .*to see the live Sprite Atlas/i),
+    ).not.toBeInTheDocument();
+    // The Style copy points at Inter as the default rather than demanding one.
+    expect(screen.getByText(/Inter is used by default/i)).toBeInTheDocument();
+  });
 });

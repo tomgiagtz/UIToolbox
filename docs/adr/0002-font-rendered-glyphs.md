@@ -1,8 +1,15 @@
 # ADR-0002: Glyphs are font-rendered, not device artwork
 
-- **Status:** Accepted
+- **Status:** Partially superseded by ADR-0004
 - **Date:** 2026-07-16
 - **Context ticket:** #1 (Spec: Input Glyph Creator)
+
+> **Amended by [ADR-0004](0004-symbol-and-image-render-sources.md):** Inputs may
+> now render a bundled **Symbol** or a user-uploaded **custom image** in place of
+> the label. The core of this ADR still holds — labels remain the default and the
+> device-agnostic drawing model is unchanged — but "there are **no** per-device
+> image assets" and "authentic device button symbols are explicitly out of scope"
+> no longer hold. See ADR-0004 for what changed and why.
 
 ## Context
 

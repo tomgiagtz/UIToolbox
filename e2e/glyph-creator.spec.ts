@@ -22,18 +22,35 @@ async function readDownload(download: Download): Promise<Buffer> {
 }
 
 test.describe("Input Glyph Creator", () => {
-  test("uploads a font, previews Glyphs, and downloads a pow2 atlas + JSON", async ({
+  test("previews and generates with the bundled default font — no upload", async ({
     page,
   }) => {
     await page.goto("/tools/glyph-creator");
 
-    // Before a font is uploaded, Generate is unavailable.
+    // With Inter bundled (#13), the preview renders and Generate is available
+    // immediately — no font upload required.
     const generate = page.getByRole("button", { name: /generate/i });
-    await expect(generate).toBeDisabled();
+    await expect(
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
+    ).toBeVisible();
+    await expect(generate).toBeEnabled();
 
+    // Generate emits the PNG + JSON downloads using only the default font.
+    const defaultDownloads: Download[] = [];
+    page.on("download", (d) => defaultDownloads.push(d));
+    await generate.click();
+    await expect.poll(() => defaultDownloads.length).toBe(2);
+  });
+
+  test("an uploaded font overrides the default for preview + generation", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+
+    const generate = page.getByRole("button", { name: /generate/i });
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
 
-    // Live packed-atlas preview appears once the font loads.
+    // Live packed-atlas preview reflects the uploaded font.
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
@@ -144,13 +161,15 @@ test.describe("Input Glyph Creator", () => {
     expect(download.suggestedFilename()).toMatch(/\.zip$/);
     const savedPath = await download.path();
 
-    // Delete resets everything (accept the confirm prompt).
+    // Delete resets the config (accept the confirm prompt). The preview stays
+    // visible on the bundled Inter (#13); the Xbox reset proves the config
+    // itself was cleared.
     page.on("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("checkbox", { name: "Xbox" })).not.toBeChecked();
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
-    ).toBeHidden();
-    await expect(page.getByRole("checkbox", { name: "Xbox" })).not.toBeChecked();
+    ).toBeVisible();
 
     // Load the saved ZIP: font + config come back with no re-upload.
     await page.getByLabel("Load project file").setInputFiles(savedPath!);

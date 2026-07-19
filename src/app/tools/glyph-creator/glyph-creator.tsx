@@ -8,9 +8,9 @@ import {
   downloadArtifacts,
   exportDevice,
 } from "@/lib/glyph/exporter";
-import { loadFontFromFile, registerFont } from "@/lib/glyph/font";
+import { loadDefaultFont, loadFontFromFile, registerFont } from "@/lib/glyph/font";
 import { generateTilesets } from "@/lib/glyph/generate";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import {
@@ -62,8 +62,17 @@ function useSquareSize() {
 export function GlyphCreator() {
   // The whole editor is a thin shell over the project state + reducer; every
   // control dispatches a ProjectAction (see project.ts).
-  const [project, dispatch] = useReducer(projectReducer, "", createDefaultProject);
+  const [project, dispatch] = useReducer(
+    projectReducer,
+    undefined,
+    () => createDefaultProject(),
+  );
+  // A font is available for preview + generation. True once the bundled Inter
+  // (or a restored upload) is registered.
   const [fontLoaded, setFontLoaded] = useState(false);
+  // A custom font was uploaded/imported (vs. the always-available bundled Inter).
+  // Gates only the "Include font" ZIP option, since Inter never needs bundling.
+  const [hasUploadedFont, setHasUploadedFont] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
   const preview = useSquareSize();
@@ -72,6 +81,16 @@ export function GlyphCreator() {
   // before the load below runs.
   const hydrated = useRef(false);
 
+  // Mark the always-available bundled Inter as the active font: preview +
+  // generation are enabled, no custom upload is bundled into saved ZIPs, and the
+  // status reflects the default. Shared by mount, config-only import, and reset
+  // so "revert to the default font" is one behavior in one place.
+  function markDefaultFontReady() {
+    setFontLoaded(true);
+    setHasUploadedFont(false);
+    setStatus({ kind: "ready", fontName: DEFAULT_FONT_FAMILY });
+  }
+
   // Restore persisted state on mount: config from localStorage, font blob from
   // IndexedDB (re-registered under the same family the config carries).
   useEffect(() => {
@@ -79,18 +98,44 @@ export function GlyphCreator() {
     (async () => {
       const saved = loadConfig();
       if (saved && !cancelled) dispatch({ type: "load-project", project: saved });
+      // Migrate pre-#13 configs that predate the bundled font (empty family) so
+      // they render in Inter instead of the browser default.
+      if (saved && saved.font.family === "" && !cancelled) {
+        dispatch({ type: "set-font", family: DEFAULT_FONT_FAMILY });
+      }
 
+      // Always register the bundled Inter so preview + generation work with no
+      // upload. It stays available even after an upload overrides it for output.
+      try {
+        await loadDefaultFont();
+        if (!cancelled) markDefaultFontReady();
+      } catch {
+        // In a real browser a failure here (offline / 404) means the editor has
+        // no font, so surface it — Generate stays disabled otherwise with no
+        // explanation. Under jsdom (no FontFace) the failure is expected, so
+        // stay silent and let an upload or e2e provide the real font.
+        if (!cancelled && typeof FontFace !== "undefined") {
+          setStatus({
+            kind: "error",
+            message:
+              "Couldn't load the default font. Check your connection or upload a font (Style tab).",
+          });
+        }
+      }
+
+      // A restored upload overrides Inter for both preview and generation.
       try {
         const font = await loadFont();
         if (font && !cancelled) {
           await registerFont(font.family, font.blob);
           if (cancelled) return;
           setFontLoaded(true);
+          setHasUploadedFont(true);
           setStatus({ kind: "ready", fontName: font.fileName });
         }
       } catch {
         // A missing or undecodable persisted font just means no restore; the
-        // developer re-uploads. Config still restored above.
+        // developer re-uploads. Config + bundled Inter still apply above.
       } finally {
         if (!cancelled) hydrated.current = true;
       }
@@ -120,11 +165,13 @@ export function GlyphCreator() {
       const family = await loadFontFromFile(file);
       dispatch({ type: "set-font", family });
       setFontLoaded(true);
+      setHasUploadedFont(true);
       setStatus({ kind: "ready", fontName: file.name });
       // Persist the blob so the font survives a reload (self-guards on failure).
       await saveFont({ family, fileName: file.name, blob: file });
     } catch {
-      setFontLoaded(false);
+      // The upload failed, but the bundled Inter is still available — keep the
+      // preview rendering rather than gating it.
       setStatus({
         kind: "error",
         message: `Couldn't load "${file.name}". Please choose a valid font file (.ttf, .otf, .woff, .woff2).`,
@@ -184,11 +231,15 @@ export function GlyphCreator() {
         await registerFont(imported.font.family, imported.font.blob);
         await saveFont(imported.font);
         setFontLoaded(true);
+        setHasUploadedFont(true);
         setStatus({ kind: "ready", fontName: imported.font.fileName });
       } else {
-        // Config-only: the referenced font isn't present, so require an upload.
-        setFontLoaded(false);
-        setStatus({ kind: "idle" });
+        // Config-only: the referenced upload isn't present, so fall back to the
+        // always-available Inter for both preview and generation.
+        if (imported.project.font.family !== DEFAULT_FONT_FAMILY) {
+          dispatch({ type: "set-font", family: DEFAULT_FONT_FAMILY });
+        }
+        markDefaultFontReady();
       }
     } catch {
       setStatus({
@@ -204,10 +255,10 @@ export function GlyphCreator() {
       return;
     }
     await clearPersisted();
-    dispatch({ type: "load-project", project: createDefaultProject("") });
-    setFontLoaded(false);
+    dispatch({ type: "load-project", project: createDefaultProject() });
+    // The bundled Inter stays registered, so the reset preview keeps rendering.
+    markDefaultFontReady();
     setActiveDeviceIndex(0);
-    setStatus({ kind: "idle" });
   }
 
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
@@ -264,7 +315,7 @@ export function GlyphCreator() {
               <PanelSection
                 id="style"
                 title="Style"
-                help="Upload a font and set the tile background, colors, and cell size."
+                help="Set the font (Inter by default) and the tile background, colors, and cell size."
               >
                 <div className="space-y-5">
                   <FontUpload fontName={fontName} onFontChange={onFontChange} />
@@ -330,9 +381,9 @@ export function GlyphCreator() {
             </div>
           ) : (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              {fontLoaded
-                ? "Select a Device to preview its Sprite Atlas."
-                : "Upload a font (Style tab) to see the live Sprite Atlas."}
+              {!fontLoaded
+                ? "Loading font…"
+                : "Select a Device to preview its Sprite Atlas."}
             </p>
           )}
         </section>
@@ -356,7 +407,7 @@ export function GlyphCreator() {
       <ProjectMenuBar
         name={project.name}
         onNameChange={(name) => dispatch({ type: "set-name", name })}
-        fontLoaded={fontLoaded}
+        hasUploadedFont={hasUploadedFont}
         canGenerate={canGenerate}
         generating={status.kind === "generating"}
         onSave={onSave}
