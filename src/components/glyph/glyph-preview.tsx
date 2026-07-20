@@ -42,7 +42,13 @@ export function GlyphPreview({
     canvasRef,
     fontFamily,
     cellSize,
-    (ctx) => renderGlyph(ctx, 0, 0, { label, cellSize, textColor, background, fontFamily }),
+    (ctx) =>
+      renderGlyph(ctx, 0, 0, {
+        label,
+        cellSize,
+        style: { textColor, background },
+        fontFamily,
+      }),
     [label, cellSize, textColor, background, fontFamily],
   );
 

@@ -1,24 +1,30 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { gridPack } from "@/lib/glyph/packer";
-import type { Background } from "@/lib/glyph/types";
-import { AtlasPreview } from "./atlas-preview";
+import type { GlyphStyle } from "@/lib/glyph/style";
+import { AtlasPreview, type PreviewGlyph } from "./atlas-preview";
 
-const background: Background = {
-  shape: "rounded-rect",
-  fill: "#222222",
-  cornerRadius: 16,
-  border: { width: 0, color: "#000000" },
+const style: GlyphStyle = {
+  textColor: "#ffffff",
+  background: {
+    shape: "rounded-rect",
+    fill: "#222222",
+    cornerRadius: 16,
+    border: { width: 0, color: "#000000" },
+  },
 };
+
+/** Build preview Glyphs from labels, all sharing the one test style. */
+function glyphsOf(labels: string[]): PreviewGlyph[] {
+  return labels.map((label) => ({ label, style }));
+}
 
 function renderAtlas(props: Partial<React.ComponentProps<typeof AtlasPreview>> = {}) {
   return render(
     <AtlasPreview
       deviceName="Keyboard"
-      inputs={["A", "B", "Space"]}
+      glyphs={glyphsOf(["A", "B", "Space"])}
       cellSize={128}
-      textColor="#ffffff"
-      background={background}
       fontFamily="Test"
       {...props}
     />,
@@ -27,21 +33,21 @@ function renderAtlas(props: Partial<React.ComponentProps<typeof AtlasPreview>> =
 
 describe("AtlasPreview", () => {
   it("renders a canvas sized to the packed power-of-two atlas", () => {
-    const inputs = ["A", "B", "Space", "Enter", "Shift"];
+    const glyphs = glyphsOf(["A", "B", "Space", "Enter", "Shift"]);
     const cellSize = 128;
-    renderAtlas({ inputs, cellSize });
+    renderAtlas({ glyphs, cellSize });
 
     const canvas = screen.getByRole("img", {
       name: /Keyboard Sprite Atlas preview/i,
     }) as HTMLCanvasElement;
-    const { atlasSize } = gridPack(inputs.length, cellSize);
+    const { atlasSize } = gridPack(glyphs.length, cellSize);
 
     expect(canvas.width).toBe(atlasSize.width);
     expect(canvas.height).toBe(atlasSize.height);
   });
 
   it("shows a placeholder instead of a canvas when there are no inputs", () => {
-    renderAtlas({ inputs: [] });
+    renderAtlas({ glyphs: [] });
 
     expect(
       screen.queryByRole("img", { name: /Sprite Atlas preview/i }),

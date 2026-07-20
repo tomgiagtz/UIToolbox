@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig, saveConfig } from "@/lib/glyph/project-store";
+import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
 import { createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
@@ -13,7 +13,7 @@ function edited(): Project {
     { type: "set-cell-size", size: 256 } as const,
     { type: "set-bg-shape", shape: "circle" } as const,
     { type: "toggle-device", presetId: "xbox" } as const,
-    { type: "add-input", deviceIndex: 0, label: "F5" } as const,
+    { type: "add-custom-input", deviceIndex: 0, label: "F5" } as const,
     { type: "set-naming-template", template: "btn_{input}" } as const,
     { type: "set-naming-case", case: "kebab" } as const,
     { type: "set-filename-template", template: "atlas_{device}" } as const,
@@ -60,5 +60,55 @@ describe("ProjectStore — config (localStorage)", () => {
       JSON.stringify({ version: 999, project: edited() }),
     );
     expect(loadConfig()).toBeNull();
+  });
+});
+
+describe("ProjectStore — v1 → v2 migration", () => {
+  // A v1 config: Devices were a flat list of Input label strings.
+  function v1(devices: { name: string; inputs: string[] }[]): string {
+    return JSON.stringify({
+      version: 1,
+      project: {
+        name: "legacy",
+        font: { family: "Inter" },
+        textColor: "#f8fafc",
+        background: {
+          shape: "rounded-rect",
+          fill: "#1e293b",
+          cornerRadius: 18,
+          border: { width: 4, color: "#475569" },
+        },
+        cellSize: 128,
+        devices,
+        naming: { template: "{device}_{input}", case: "snake" },
+        filenameTemplate: "{device}_atlas",
+      },
+    });
+  }
+
+  it("maps Catalog-matching labels to enabled ids and the rest to custom", () => {
+    const project = parseConfig(v1([{ name: "Keyboard", inputs: ["W", "A", "MyKey"] }]));
+    expect(project).not.toBeNull();
+    const [kb] = project!.devices;
+    expect(kb.catalogId).toBe("keyboard");
+    expect(kb.enabled).toEqual(["key-w", "key-a"]);
+    expect(kb.custom).toEqual([{ id: "custom-1", label: "MyKey" }]);
+    expect(kb.style).toEqual({});
+    expect(kb.glyphStyles).toEqual({});
+  });
+
+  it("migrates a full pad Device to its enabled Catalog ids", () => {
+    const project = parseConfig(
+      v1([{ name: "Xbox", inputs: ["A", "B", "LB"] }]),
+    );
+    expect(project!.devices[0].enabled).toEqual(["xbox-a", "xbox-b", "xbox-lb"]);
+    expect(project!.devices[0].custom).toEqual([]);
+  });
+
+  it("produces a config that passes current-version validation on re-save", () => {
+    const migrated = parseConfig(v1([{ name: "Keyboard", inputs: ["W"] }]))!;
+    saveConfig(migrated);
+    // Round-trips through the v2 validator without another migration.
+    expect(loadConfig()).toEqual(migrated);
   });
 });

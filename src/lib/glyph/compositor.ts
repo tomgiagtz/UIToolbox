@@ -1,9 +1,7 @@
 import { renderGlyph } from "@/lib/glyph/renderer";
-import type { Background, DeviceOutput } from "@/lib/glyph/types";
+import type { DeviceOutput } from "@/lib/glyph/types";
 
 export interface AtlasRenderInputs {
-  textColor: string;
-  background: Background;
   /** Registered FontFace family name. */
   fontFamily: string;
 }
@@ -13,7 +11,8 @@ export interface AtlasRenderInputs {
  *
  * Uses an {@link OffscreenCanvas} sized to the (power-of-two) atlas and the
  * shared {@link renderGlyph} renderer, so the output is pixel-consistent with
- * the live preview. Returns a PNG Blob.
+ * the live preview. Each Glyph is drawn from its own cascade-resolved style
+ * carried on the placement. Returns a PNG Blob.
  */
 export async function renderAtlasBlob(
   output: DeviceOutput,
@@ -30,8 +29,7 @@ export async function renderAtlasBlob(
     renderGlyph(ctx, placement.rect.x, placement.rect.y, {
       label: placement.label,
       cellSize: output.cellSize,
-      textColor: inputs.textColor,
-      background: inputs.background,
+      style: placement.style,
       fontFamily: inputs.fontFamily,
     });
   }

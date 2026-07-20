@@ -5,6 +5,7 @@
  * Background, Sprite Atlas, Sprite Name. Keep these terms; avoid the synonyms
  * noted in the glossary.
  */
+import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
 
 /** The shape of a Glyph's Background tile. "none" yields a label-only Glyph. */
 export type BackgroundShape = "rounded-rect" | "square" | "circle" | "none";
@@ -27,6 +28,15 @@ export interface Background {
 export type CaseStyle = "snake" | "kebab" | "camel";
 
 /**
+ * An off-catalog Input the user added by hand (ADR-0005). Carries its own stable
+ * id (so per-Glyph overrides can key off it) and a free-text label.
+ */
+export interface CustomInput {
+  id: string;
+  label: string;
+}
+
+/**
  * How Sprite Names are derived. Labels are always slug-normalized (mandatory);
  * the template and case are user-controlled.
  *
@@ -37,12 +47,39 @@ export interface NamingConfig {
   case: CaseStyle;
 }
 
-/** A Device — a named grouping of Inputs. Each Input is just a label string. */
+/**
+ * A Device: a fixed Catalog (referenced by {@link catalogId}) with a per-Project
+ * **enabled** selection of Catalog ids and a list of **custom** off-catalog
+ * Inputs (ADR-0005). Its generated Inputs are the enabled Catalog entries, in
+ * order, followed by the custom Inputs.
+ *
+ * `style` is the Device tier of the Style Cascade and `glyphStyles` the Glyph
+ * tier (keyed by Catalog id or custom id); both are sparse and empty by default
+ * so a fresh Device resolves to the Project style (ADR-0006).
+ */
 export interface DeviceConfig {
   /** Display name, e.g. "Keyboard". */
   name: string;
-  /** Ordered Input labels, e.g. ["A", "Space", "→"]. */
-  inputs: string[];
+  /** Which {@link DeviceCatalog} this Device draws its known Inputs from. */
+  catalogId: string;
+  /** Enabled Catalog entry ids, in generation order. */
+  enabled: string[];
+  /** Off-catalog Inputs, generated after the enabled ones. */
+  custom: CustomInput[];
+  /** Device-tier style overrides (sparse; `{}` by default). */
+  style: StyleOverride;
+  /** Per-Glyph style overrides, keyed by Catalog id or custom id (`{}` default). */
+  glyphStyles: Record<string, StyleOverride>;
+}
+
+/**
+ * One Input resolved for generation: its stable id, effective label, and the
+ * effective {@link GlyphStyle} the Style Cascade produced for it.
+ */
+export interface ResolvedInput {
+  id: string;
+  label: string;
+  style: GlyphStyle;
 }
 
 /**
@@ -79,11 +116,16 @@ export interface AtlasSize {
   height: number;
 }
 
-/** One placed Glyph: its original label, derived Sprite Name, and cell rect. */
+/**
+ * One placed Glyph: its original label, derived Sprite Name, cell rect, and the
+ * effective {@link GlyphStyle} resolved through the Style Cascade — so the
+ * compositor and preview draw each cell from the same per-Glyph style.
+ */
 export interface GlyphPlacement {
   label: string;
   spriteName: string;
   rect: Rect;
+  style: GlyphStyle;
 }
 
 /** The result of packing one Device's Glyphs. */
