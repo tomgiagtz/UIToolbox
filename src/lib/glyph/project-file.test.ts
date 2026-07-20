@@ -35,7 +35,9 @@ describe("project-file — config-only (JSON)", () => {
     const artifact = await exportProjectFile(project, null);
     expect(artifact.filename).toBe("My-Cool-Glyphs.json");
 
-    const imported = await importProjectFile(asFile(artifact.blob, artifact.filename));
+    const imported = await importProjectFile(
+      asFile(artifact.blob, artifact.filename),
+    );
     expect(imported).not.toBeNull();
     expect(imported!.project).toEqual(project);
     expect(imported!.font).toBeNull();
@@ -60,7 +62,9 @@ describe("project-file — with font (ZIP)", () => {
     const artifact = await exportProjectFile(project, font);
     expect(artifact.filename).toBe("My-Cool-Glyphs.zip");
 
-    const imported = await importProjectFile(asFile(artifact.blob, artifact.filename));
+    const imported = await importProjectFile(
+      asFile(artifact.blob, artifact.filename),
+    );
     expect(imported).not.toBeNull();
     expect(imported!.project).toEqual(project);
     expect(imported!.font?.fileName).toBe("Heros.ttf");
@@ -68,7 +72,9 @@ describe("project-file — with font (ZIP)", () => {
     // name the config references.
     expect(imported!.font?.family).toBe(project.font.family);
 
-    const roundTripped = new Uint8Array(await imported!.font!.blob.arrayBuffer());
+    const roundTripped = new Uint8Array(
+      await imported!.font!.blob.arrayBuffer(),
+    );
     expect(Array.from(roundTripped)).toEqual(Array.from(fontBytes));
   });
 });

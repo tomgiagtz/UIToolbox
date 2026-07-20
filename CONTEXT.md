@@ -2,7 +2,8 @@
 
 UIToolbox is a collection of browser-based tools for game developers. The first
 (and, today, only) tool is the **Input Glyph Creator**: it turns a font + style
-+ a list of controls into engine-ready sprite atlases of input prompts.
+
+- a list of controls into engine-ready sprite atlases of input prompts.
 
 Everything runs client-side — no accounts, no server-side generation, no upload
 of the user's fonts or settings.
@@ -100,15 +101,15 @@ The tile a Glyph's Render Source is drawn on. Its **source** is one of:
 - an **authored Background** — a shipped SVG tile from the tool's gallery.
 
 The Background source resolves through the **Style Cascade** like any other style
-property. Some Catalog Inputs whose identity is their tile *shape* (bumpers,
+property. Some Catalog Inputs whose identity is their tile _shape_ (bumpers,
 triggers) default to a specific authored Background rather than a plain shape.
 
 ### Authored Background
 
 A shipped SVG tile graphic the project owner authors (a growing gallery),
 selectable as a Background source. Distinct from a **Symbol** (foreground Render
-Source content): an Authored Background is the *tile*, a Symbol is what's drawn
-*on* it. Bumper- and trigger-shaped tiles are Authored Backgrounds; their label
+Source content): an Authored Background is the _tile_, a Symbol is what's drawn
+_on_ it. Bumper- and trigger-shaped tiles are Authored Backgrounds; their label
 (e.g. `LB`, `RT`) is the Render Source drawn on top.
 
 ### Style Cascade

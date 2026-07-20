@@ -83,7 +83,11 @@ function buildDeviceOutput(
  * (e.g. "→" and "->"), so suffix duplicates with `2`, `3`, … joined using the
  * active case style's separator so the suffix matches the rest of the name.
  */
-function uniqueName(base: string, used: Set<string>, caseStyle: CaseStyle): string {
+function uniqueName(
+  base: string,
+  used: Set<string>,
+  caseStyle: CaseStyle,
+): string {
   let name = base;
   let n = 2;
   const sep = caseSeparator(caseStyle);

@@ -1,4 +1,9 @@
-import type { Background, DeviceConfig, NamingConfig, Project } from "@/lib/glyph/types";
+import type {
+  Background,
+  DeviceConfig,
+  NamingConfig,
+  Project,
+} from "@/lib/glyph/types";
 
 /**
  * The Keyboard Preset: a starting, editable list of common keyboard Inputs

@@ -93,7 +93,9 @@ function importZip(bytes: Uint8Array): ImportedProject | null {
 
   // Any non-config entry is the bundled font. Re-registered under the family the
   // config already carries, so the same family name round-trips (see font.ts).
-  const fontEntry = Object.entries(entries).find(([name]) => name !== CONFIG_ENTRY);
+  const fontEntry = Object.entries(entries).find(
+    ([name]) => name !== CONFIG_ENTRY,
+  );
   const font: PersistedFont | null = fontEntry
     ? {
         family: project.font.family,

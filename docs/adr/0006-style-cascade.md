@@ -25,9 +25,9 @@ and the text color may be set at **any** level; unset properties fall up the cha
 
 The **Catalog per-Input default** tier carries shipped, input-specific defaults —
 a bumper's authored Background, a well-known key's Symbol Render Source. It sits
-*above* Device overrides so input-specific identity survives a device-wide change
+_above_ Device overrides so input-specific identity survives a device-wide change
 (setting "Xbox = circle" reshapes face buttons but leaves bumpers on their authored
-backers), and *below* explicit Glyph edits so the user always has the final say.
+backers), and _below_ explicit Glyph edits so the user always has the final say.
 
 `cellSize` and the **font** are deliberately **not** cascadable — they stay
 Project-global. cellSize keeps the atlas grid uniform; a single font keeps the

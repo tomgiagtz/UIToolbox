@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { gridPack, GUTTER, isPowerOfTwo, nextPowerOfTwo } from "@/lib/glyph/packer";
+import {
+  gridPack,
+  GUTTER,
+  isPowerOfTwo,
+  nextPowerOfTwo,
+} from "@/lib/glyph/packer";
 
 describe("nextPowerOfTwo", () => {
   it("returns the same value for exact powers of two", () => {

@@ -11,7 +11,9 @@ const background: Background = {
   border: { width: 0, color: "#000000" },
 };
 
-function renderAtlas(props: Partial<React.ComponentProps<typeof AtlasPreview>> = {}) {
+function renderAtlas(
+  props: Partial<React.ComponentProps<typeof AtlasPreview>> = {},
+) {
   return render(
     <AtlasPreview
       deviceName="Keyboard"

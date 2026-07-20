@@ -186,7 +186,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isPersistedConfig(value: unknown): value is PersistedConfig {
-  return isRecord(value) && typeof value.version === "number" && "project" in value;
+  return (
+    isRecord(value) && typeof value.version === "number" && "project" in value
+  );
 }
 
 function isBackground(value: unknown): value is Background {

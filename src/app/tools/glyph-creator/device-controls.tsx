@@ -29,9 +29,14 @@ export function DeviceControls({
         <legend className="mb-1 text-sm font-medium">Devices</legend>
         <div className="flex flex-wrap gap-4">
           {DEVICE_PRESETS.map((preset) => {
-            const selected = project.devices.some((d) => d.name === preset.name);
+            const selected = project.devices.some(
+              (d) => d.name === preset.name,
+            );
             return (
-              <label key={preset.id} className="flex items-center gap-1.5 text-sm">
+              <label
+                key={preset.id}
+                className="flex items-center gap-1.5 text-sm"
+              >
                 <input
                   type="checkbox"
                   checked={selected}
@@ -74,7 +79,6 @@ export function DeviceControls({
           ))}
         </div>
       )}
-
     </div>
   );
 }
@@ -144,7 +148,12 @@ export function InputEditor({
           onChange={(e) => setDraft(e.target.value)}
           className={`${inputClass} w-48`}
         />
-        <Button type="submit" variant="secondary" size="sm" disabled={!draft.trim()}>
+        <Button
+          type="submit"
+          variant="secondary"
+          size="sm"
+          disabled={!draft.trim()}
+        >
           Add Input
         </Button>
       </form>

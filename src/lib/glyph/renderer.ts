@@ -7,8 +7,7 @@ import type { Background } from "@/lib/glyph/types";
  * preview and output pixel-consistent.
  */
 export type Canvas2DContext =
-  | CanvasRenderingContext2D
-  | OffscreenCanvasRenderingContext2D;
+  CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 export interface RenderGlyphOptions {
   label: string;
@@ -44,7 +43,14 @@ export function renderGlyph(
   ctx.clearRect(0, 0, cellSize, cellSize);
 
   drawBackground(ctx, cellSize, background);
-  drawLabel(ctx, cellSize, label, textColor, fontFamily, background.border.width);
+  drawLabel(
+    ctx,
+    cellSize,
+    label,
+    textColor,
+    fontFamily,
+    background.border.width,
+  );
 
   ctx.restore();
 }
