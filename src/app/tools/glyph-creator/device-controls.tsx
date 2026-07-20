@@ -39,7 +39,7 @@ export function DeviceControls({
                   type="checkbox"
                   checked={selected}
                   onChange={() =>
-                    dispatch({ type: "toggle-device", presetId: catalog.id })
+                    dispatch({ type: "toggle-device", catalogId: catalog.id })
                   }
                   className="size-4"
                 />

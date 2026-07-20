@@ -31,7 +31,7 @@ export type ProjectAction =
   | { type: "set-bg-border-width"; width: number }
   | { type: "set-bg-border-color"; color: string }
   // --- Devices, Catalog selection & custom Inputs (#5, #15) ---
-  | { type: "toggle-device"; presetId: string }
+  | { type: "toggle-device"; catalogId: string }
   | { type: "toggle-input"; deviceIndex: number; inputId: string }
   | { type: "add-custom-input"; deviceIndex: number; label: string }
   | { type: "edit-custom-input"; deviceIndex: number; id: string; label: string }
@@ -78,7 +78,7 @@ export function projectReducer(project: Project, action: ProjectAction): Project
       return patchBorder(project, { color: action.color });
 
     case "toggle-device":
-      return { ...project, devices: toggleDevice(project.devices, action.presetId) };
+      return { ...project, devices: toggleDevice(project.devices, action.catalogId) };
 
     case "toggle-input":
       return {
@@ -155,12 +155,12 @@ function catalogOrder(catalogId: string): number {
 }
 
 /**
- * Add the Device for `presetId` (a Catalog id) if absent — inserted so Devices
- * stay in Catalog order — or remove it if already present. Toggling is by
- * catalogId so an edited Device (renamed, re-selected Inputs) still round-trips.
+ * Add the Device for `catalogId` if absent — inserted so Devices stay in Catalog
+ * order — or remove it if already present. Toggling is by catalogId so an edited
+ * Device (renamed, re-selected Inputs) still round-trips.
  */
-function toggleDevice(devices: DeviceConfig[], presetId: string): DeviceConfig[] {
-  const catalog = getCatalog(presetId);
+function toggleDevice(devices: DeviceConfig[], catalogId: string): DeviceConfig[] {
+  const catalog = getCatalog(catalogId);
   if (!catalog) return devices;
 
   if (devices.some((d) => d.catalogId === catalog.id)) {

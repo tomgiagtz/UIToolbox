@@ -62,7 +62,7 @@ describe("projectReducer — style (#4)", () => {
 
 describe("projectReducer — devices (#5)", () => {
   it("adds a Device seeded from a Catalog Preset", () => {
-    const next = run(base(), { type: "toggle-device", presetId: "xbox" });
+    const next = run(base(), { type: "toggle-device", catalogId: "xbox" });
     expect(next.devices.map((d) => d.name)).toEqual(["Keyboard", "Xbox"]);
     expect(next.devices[1].catalogId).toBe("xbox");
     expect(next.devices[1].enabled).toContain("xbox-a");
@@ -72,8 +72,8 @@ describe("projectReducer — devices (#5)", () => {
   it("keeps Devices in Catalog order regardless of toggle sequence", () => {
     const next = run(
       base(),
-      { type: "toggle-device", presetId: "playstation" },
-      { type: "toggle-device", presetId: "xbox" },
+      { type: "toggle-device", catalogId: "playstation" },
+      { type: "toggle-device", catalogId: "xbox" },
     );
     expect(next.devices.map((d) => d.name)).toEqual([
       "Keyboard",
@@ -85,8 +85,8 @@ describe("projectReducer — devices (#5)", () => {
   it("removes a Device when toggled off", () => {
     const next = run(
       base(),
-      { type: "toggle-device", presetId: "xbox" },
-      { type: "toggle-device", presetId: "xbox" },
+      { type: "toggle-device", catalogId: "xbox" },
+      { type: "toggle-device", catalogId: "xbox" },
     );
     expect(next.devices.map((d) => d.name)).toEqual(["Keyboard"]);
   });

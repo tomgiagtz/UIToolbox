@@ -12,7 +12,7 @@ function edited(): Project {
     { type: "set-text-color", color: "#ff0000" } as const,
     { type: "set-cell-size", size: 256 } as const,
     { type: "set-bg-shape", shape: "circle" } as const,
-    { type: "toggle-device", presetId: "xbox" } as const,
+    { type: "toggle-device", catalogId: "xbox" } as const,
     { type: "add-custom-input", deviceIndex: 0, label: "F5" } as const,
     { type: "set-naming-template", template: "btn_{input}" } as const,
     { type: "set-naming-case", case: "kebab" } as const,
