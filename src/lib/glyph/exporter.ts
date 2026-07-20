@@ -1,4 +1,7 @@
-import { renderAtlasBlob, type AtlasRenderInputs } from "@/lib/glyph/compositor";
+import {
+  renderAtlasBlob,
+  type AtlasRenderInputs,
+} from "@/lib/glyph/compositor";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
 export interface ExportArtifact {

@@ -1,0 +1,23 @@
+# Build output & generated files
+.next/
+out/
+build/
+storybook-static/
+coverage/
+playwright-report/
+test-results/
+
+# Dependencies
+node_modules/
+
+# Lockfiles
+package-lock.json
+
+# Type declaration stubs
+next-env.d.ts
+
+# Vendored agent skills & tooling
+.claude/
+
+# Logs
+*.log

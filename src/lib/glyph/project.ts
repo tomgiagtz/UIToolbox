@@ -34,7 +34,12 @@ export type ProjectAction =
   | { type: "toggle-device"; catalogId: string }
   | { type: "toggle-input"; deviceIndex: number; inputId: string }
   | { type: "add-custom-input"; deviceIndex: number; label: string }
-  | { type: "edit-custom-input"; deviceIndex: number; id: string; label: string }
+  | {
+      type: "edit-custom-input";
+      deviceIndex: number;
+      id: string;
+      label: string;
+    }
   | { type: "remove-custom-input"; deviceIndex: number; id: string }
   // --- Naming (#6) ---
   | { type: "set-naming-template"; template: string }
@@ -45,7 +50,10 @@ export type ProjectAction =
  * Apply one {@link ProjectAction} to a {@link Project}, returning a new object.
  * Never mutates its input, so it drops straight into React's `useReducer`.
  */
-export function projectReducer(project: Project, action: ProjectAction): Project {
+export function projectReducer(
+  project: Project,
+  action: ProjectAction,
+): Project {
   switch (action.type) {
     case "load-project":
       return action.project;
@@ -78,7 +86,10 @@ export function projectReducer(project: Project, action: ProjectAction): Project
       return patchBorder(project, { color: action.color });
 
     case "toggle-device":
-      return { ...project, devices: toggleDevice(project.devices, action.catalogId) };
+      return {
+        ...project,
+        devices: toggleDevice(project.devices, action.catalogId),
+      };
 
     case "toggle-input":
       return {
@@ -123,7 +134,10 @@ export function projectReducer(project: Project, action: ProjectAction): Project
       };
 
     case "set-naming-template":
-      return { ...project, naming: { ...project.naming, template: action.template } };
+      return {
+        ...project,
+        naming: { ...project.naming, template: action.template },
+      };
 
     case "set-naming-case":
       return { ...project, naming: { ...project.naming, case: action.case } };
@@ -134,7 +148,10 @@ export function projectReducer(project: Project, action: ProjectAction): Project
 }
 
 /** Return `project` with a shallow patch applied to its Background. */
-function patchBackground(project: Project, patch: Partial<Background>): Project {
+function patchBackground(
+  project: Project,
+  patch: Partial<Background>,
+): Project {
   return { ...project, background: { ...project.background, ...patch } };
 }
 
@@ -159,7 +176,10 @@ function catalogOrder(catalogId: string): number {
  * order — or remove it if already present. Toggling is by catalogId so an edited
  * Device (renamed, re-selected Inputs) still round-trips.
  */
-function toggleDevice(devices: DeviceConfig[], catalogId: string): DeviceConfig[] {
+function toggleDevice(
+  devices: DeviceConfig[],
+  catalogId: string,
+): DeviceConfig[] {
   const catalog = getCatalog(catalogId);
   if (!catalog) return devices;
 

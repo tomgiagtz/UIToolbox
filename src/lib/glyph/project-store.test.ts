@@ -87,7 +87,9 @@ describe("ProjectStore — v1 → v2 migration", () => {
   }
 
   it("maps Catalog-matching labels to enabled ids and the rest to custom", () => {
-    const project = parseConfig(v1([{ name: "Keyboard", inputs: ["W", "A", "MyKey"] }]));
+    const project = parseConfig(
+      v1([{ name: "Keyboard", inputs: ["W", "A", "MyKey"] }]),
+    );
     expect(project).not.toBeNull();
     const [kb] = project!.devices;
     expect(kb.catalogId).toBe("keyboard");
@@ -101,7 +103,11 @@ describe("ProjectStore — v1 → v2 migration", () => {
     const project = parseConfig(
       v1([{ name: "Xbox", inputs: ["A", "B", "LB"] }]),
     );
-    expect(project!.devices[0].enabled).toEqual(["xbox-a", "xbox-b", "xbox-lb"]);
+    expect(project!.devices[0].enabled).toEqual([
+      "xbox-a",
+      "xbox-b",
+      "xbox-lb",
+    ]);
     expect(project!.devices[0].custom).toEqual([]);
   });
 

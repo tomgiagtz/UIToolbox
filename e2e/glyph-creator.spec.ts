@@ -166,7 +166,9 @@ test.describe("Input Glyph Creator", () => {
     // itself was cleared.
     page.on("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Delete" }).click();
-    await expect(page.getByRole("checkbox", { name: "Xbox" })).not.toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "Xbox" }),
+    ).not.toBeChecked();
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();

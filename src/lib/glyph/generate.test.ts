@@ -47,10 +47,7 @@ describe("generateTilesets", () => {
   it("returns one DeviceOutput per Device", () => {
     const out = generateTilesets(
       project({
-        devices: [
-          device(["A"]),
-          device(["A", "B"], "Xbox", "xbox"),
-        ],
+        devices: [device(["A"]), device(["A", "B"], "Xbox", "xbox")],
       }),
     );
     expect(out.map((d) => d.device)).toEqual(["Keyboard", "Xbox"]);
@@ -157,9 +154,7 @@ describe("generateTilesets", () => {
     // Distinct labels that slugify to the same base ("right_stick").
     const [kb] = generateTilesets(
       project({
-        devices: [
-          device(["Right Stick", "RIGHT  STICK"]),
-        ],
+        devices: [device(["Right Stick", "RIGHT  STICK"])],
         naming: { template: "{input}", case: "snake" },
       }),
     );
@@ -186,8 +181,30 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
   // The frozen labels the tool generated for the Keyboard before the Catalog
   // model. Generation must still emit exactly these, in this order.
   const LEGACY_KEYBOARD = [
-    "W", "A", "S", "D", "Q", "E", "R", "F", "Space", "Shift", "Ctrl", "Alt",
-    "Tab", "Enter", "Esc", "↑", "↓", "←", "→", "LMB", "RMB", "1", "2", "3",
+    "W",
+    "A",
+    "S",
+    "D",
+    "Q",
+    "E",
+    "R",
+    "F",
+    "Space",
+    "Shift",
+    "Ctrl",
+    "Alt",
+    "Tab",
+    "Enter",
+    "Esc",
+    "↑",
+    "↓",
+    "←",
+    "→",
+    "LMB",
+    "RMB",
+    "1",
+    "2",
+    "3",
   ];
 
   it("emits the legacy Keyboard Inputs, in order, for the default project", () => {

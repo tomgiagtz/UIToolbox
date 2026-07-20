@@ -72,14 +72,19 @@ export function resolveStyle(
 }
 
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */
-function applyBackground(bg: Background, patch: BackgroundOverride): Background {
+function applyBackground(
+  bg: Background,
+  patch: BackgroundOverride,
+): Background {
   const next: Background = { ...bg, border: { ...bg.border } };
   if (patch.shape !== undefined) next.shape = patch.shape;
   if (patch.fill !== undefined) next.fill = patch.fill;
   if (patch.cornerRadius !== undefined) next.cornerRadius = patch.cornerRadius;
   if (patch.border) {
-    if (patch.border.width !== undefined) next.border.width = patch.border.width;
-    if (patch.border.color !== undefined) next.border.color = patch.border.color;
+    if (patch.border.width !== undefined)
+      next.border.width = patch.border.width;
+    if (patch.border.color !== undefined)
+      next.border.color = patch.border.color;
   }
   return next;
 }

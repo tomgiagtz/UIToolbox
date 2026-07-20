@@ -42,7 +42,12 @@ export function resolveDeviceInputs(
     resolved.push({
       id,
       label: entry.label,
-      style: resolveStyle(base, device.style, entry.defaultStyle, device.glyphStyles[id]),
+      style: resolveStyle(
+        base,
+        device.style,
+        entry.defaultStyle,
+        device.glyphStyles[id],
+      ),
     });
   }
 
@@ -51,7 +56,12 @@ export function resolveDeviceInputs(
       id,
       label,
       // Custom Inputs have no Catalog per-Input default tier.
-      style: resolveStyle(base, device.style, undefined, device.glyphStyles[id]),
+      style: resolveStyle(
+        base,
+        device.style,
+        undefined,
+        device.glyphStyles[id],
+      ),
     });
   }
 
@@ -132,7 +142,11 @@ function buildDeviceOutput(
  * (e.g. "→" and "->"), so suffix duplicates with `2`, `3`, … joined using the
  * active case style's separator so the suffix matches the rest of the name.
  */
-function uniqueName(base: string, used: Set<string>, caseStyle: CaseStyle): string {
+function uniqueName(
+  base: string,
+  used: Set<string>,
+  caseStyle: CaseStyle,
+): string {
   let name = base;
   let n = 2;
   const sep = caseSeparator(caseStyle);

@@ -35,7 +35,10 @@ export function DeviceControls({
               (d) => d.catalogId === catalog.id,
             );
             return (
-              <label key={catalog.id} className="flex items-center gap-1.5 text-sm">
+              <label
+                key={catalog.id}
+                className="flex items-center gap-1.5 text-sm"
+              >
                 <input
                   type="checkbox"
                   checked={selected}
@@ -153,7 +156,11 @@ export function InputEditor({
                   size="sm"
                   aria-label={`Remove ${c.label || c.id}`}
                   onClick={() =>
-                    dispatch({ type: "remove-custom-input", deviceIndex, id: c.id })
+                    dispatch({
+                      type: "remove-custom-input",
+                      deviceIndex,
+                      id: c.id,
+                    })
                   }
                 >
                   Remove
@@ -171,7 +178,12 @@ export function InputEditor({
             onChange={(e) => setDraft(e.target.value)}
             className={`${inputClass} w-48`}
           />
-          <Button type="submit" variant="secondary" size="sm" disabled={!draft.trim()}>
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={!draft.trim()}
+          >
             Add Input
           </Button>
         </form>

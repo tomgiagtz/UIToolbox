@@ -3,7 +3,9 @@ import { applyTemplate } from "@/lib/glyph/naming";
 import { slugify } from "@/lib/glyph/slugify";
 
 describe("applyTemplate", () => {
-  const tokens = (over: Partial<Record<"device" | "input" | "index", string>>) => ({
+  const tokens = (
+    over: Partial<Record<"device" | "input" | "index", string>>,
+  ) => ({
     device: "keyboard",
     input: "right_stick",
     index: "0",
@@ -30,15 +32,19 @@ describe("applyTemplate", () => {
 
   it("supports the {index} token", () => {
     expect(
-      applyTemplate("{device}_{index}_{input}", tokens({ index: "3" }), "snake"),
+      applyTemplate(
+        "{device}_{index}_{input}",
+        tokens({ index: "3" }),
+        "snake",
+      ),
     ).toBe("keyboard_3_right_stick");
   });
 
   it("treats literal punctuation in the template as a word boundary", () => {
     expect(applyTemplate("{input}", tokens({ input: "a" }), "camel")).toBe("a");
-    expect(
-      applyTemplate("btn.{input}", tokens({ input: "a" }), "snake"),
-    ).toBe("btn_a");
+    expect(applyTemplate("btn.{input}", tokens({ input: "a" }), "snake")).toBe(
+      "btn_a",
+    );
   });
 
   it("ignores unknown tokens (leaves no braces in output)", () => {
@@ -51,7 +57,12 @@ describe("applyTemplate", () => {
 describe("template + case over slugged labels (#6)", () => {
   // The mandatory slug normalization runs first; the template + case apply on
   // top of the slugged tokens, exactly as generateTilesets composes them.
-  const named = (device: string, label: string, template: string, c: Parameters<typeof applyTemplate>[2]) =>
+  const named = (
+    device: string,
+    label: string,
+    template: string,
+    c: Parameters<typeof applyTemplate>[2],
+  ) =>
     applyTemplate(
       template,
       { device: slugify(device), input: slugify(label), index: "0" },

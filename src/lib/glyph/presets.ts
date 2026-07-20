@@ -1,5 +1,10 @@
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
-import type { Background, DeviceConfig, NamingConfig, Project } from "@/lib/glyph/types";
+import type {
+  Background,
+  DeviceConfig,
+  NamingConfig,
+  Project,
+} from "@/lib/glyph/types";
 
 /**
  * Build a fresh Device from a Catalog: its Preset becomes the enabled selection,

@@ -7,7 +7,11 @@ import { PanelSection } from "./panel-section";
 function renderSection(defaultExpanded = false) {
   return render(
     <DisclosureGroup defaultExpandedKeys={defaultExpanded ? ["devices"] : []}>
-      <PanelSection id="devices" title="Devices" help="Pick which Devices to generate.">
+      <PanelSection
+        id="devices"
+        title="Devices"
+        help="Pick which Devices to generate."
+      >
         <p>Device controls</p>
       </PanelSection>
     </DisclosureGroup>,
@@ -17,9 +21,7 @@ function renderSection(defaultExpanded = false) {
 describe("PanelSection", () => {
   it("renders a trigger for the section title", () => {
     renderSection();
-    expect(
-      screen.getByRole("button", { name: "Devices" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Devices" })).toBeInTheDocument();
   });
 
   it("hides panel content until the section is expanded", async () => {
