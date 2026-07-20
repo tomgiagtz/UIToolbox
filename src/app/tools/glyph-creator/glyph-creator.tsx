@@ -278,7 +278,7 @@ export function GlyphCreator() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4">
-            <DisclosureGroup defaultExpandedKeys={["devices"]}>
+            <DisclosureGroup defaultExpandedKeys={["devices"]} allowsMultipleExpanded={true}>
               <PanelSection
                 id="devices"
                 title="Devices"
