@@ -1,8 +1,9 @@
 import {
-  DEVICE_PRESETS,
-  createDeviceFromPreset,
-  type DevicePreset,
-} from "@/lib/glyph/presets";
+  DEVICE_CATALOGS,
+  getCatalog,
+  type DeviceCatalog,
+} from "@/lib/glyph/catalog";
+import { createDeviceFromCatalog } from "@/lib/glyph/presets";
 import type {
   Background,
   BackgroundShape,
@@ -21,7 +22,7 @@ export type ProjectAction =
   | { type: "load-project"; project: Project }
   | { type: "set-name"; name: string }
   | { type: "set-font"; family: string }
-  // --- Style (#4) ---
+  // --- Project-tier style (#4) ---
   | { type: "set-text-color"; color: string }
   | { type: "set-cell-size"; size: number }
   | { type: "set-bg-shape"; shape: BackgroundShape }
@@ -29,11 +30,12 @@ export type ProjectAction =
   | { type: "set-bg-corner-radius"; radius: number }
   | { type: "set-bg-border-width"; width: number }
   | { type: "set-bg-border-color"; color: string }
-  // --- Devices & Inputs (#5) ---
-  | { type: "toggle-device"; presetId: string }
-  | { type: "add-input"; deviceIndex: number; label: string }
-  | { type: "edit-input"; deviceIndex: number; inputIndex: number; label: string }
-  | { type: "remove-input"; deviceIndex: number; inputIndex: number }
+  // --- Devices, Catalog selection & custom Inputs (#5, #15) ---
+  | { type: "toggle-device"; catalogId: string }
+  | { type: "toggle-input"; deviceIndex: number; inputId: string }
+  | { type: "add-custom-input"; deviceIndex: number; label: string }
+  | { type: "edit-custom-input"; deviceIndex: number; id: string; label: string }
+  | { type: "remove-custom-input"; deviceIndex: number; id: string }
   // --- Naming (#6) ---
   | { type: "set-naming-template"; template: string }
   | { type: "set-naming-case"; case: CaseStyle }
@@ -76,37 +78,47 @@ export function projectReducer(project: Project, action: ProjectAction): Project
       return patchBorder(project, { color: action.color });
 
     case "toggle-device":
-      return { ...project, devices: toggleDevice(project.devices, action.presetId) };
+      return { ...project, devices: toggleDevice(project.devices, action.catalogId) };
 
-    case "add-input": {
+    case "toggle-input":
+      return {
+        ...project,
+        devices: patchDevice(project.devices, action.deviceIndex, (d) =>
+          toggleInput(d, action.inputId),
+        ),
+      };
+
+    case "add-custom-input": {
       const label = action.label.trim();
       if (!label) return project;
       return {
         ...project,
         devices: patchDevice(project.devices, action.deviceIndex, (d) => ({
           ...d,
-          inputs: [...d.inputs, label],
+          custom: [...d.custom, { id: nextCustomId(d), label }],
         })),
       };
     }
 
-    case "edit-input":
+    case "edit-custom-input":
       return {
         ...project,
         devices: patchDevice(project.devices, action.deviceIndex, (d) => ({
           ...d,
-          inputs: d.inputs.map((input, i) =>
-            i === action.inputIndex ? action.label : input,
+          custom: d.custom.map((c) =>
+            c.id === action.id ? { ...c, label: action.label } : c,
           ),
         })),
       };
 
-    case "remove-input":
+    case "remove-custom-input":
       return {
         ...project,
         devices: patchDevice(project.devices, action.deviceIndex, (d) => ({
           ...d,
-          inputs: d.inputs.filter((_, i) => i !== action.inputIndex),
+          custom: d.custom.filter((c) => c.id !== action.id),
+          // Drop any Glyph override that keyed off the removed custom Input.
+          glyphStyles: omitKey(d.glyphStyles, action.id),
         })),
       };
 
@@ -136,36 +148,81 @@ function patchBorder(
   });
 }
 
-/** The preset ordinal for a Device name, or a large value for custom Devices. */
-function presetOrder(name: string): number {
-  const i = DEVICE_PRESETS.findIndex((p) => p.name === name);
+/** The Catalog ordinal for a Device's catalogId, or a large value if unknown. */
+function catalogOrder(catalogId: string): number {
+  const i = DEVICE_CATALOGS.findIndex((c) => c.id === catalogId);
   return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 }
 
 /**
- * Add the Device for `presetId` if absent (inserted so Devices stay in Preset
- * order), or remove it if already present. Toggling is by Device name so an
- * edited Device still round-trips.
+ * Add the Device for `catalogId` if absent — inserted so Devices stay in Catalog
+ * order — or remove it if already present. Toggling is by catalogId so an edited
+ * Device (renamed, re-selected Inputs) still round-trips.
  */
-function toggleDevice(devices: DeviceConfig[], presetId: string): DeviceConfig[] {
-  const preset = DEVICE_PRESETS.find((p) => p.id === presetId);
-  if (!preset) return devices;
+function toggleDevice(devices: DeviceConfig[], catalogId: string): DeviceConfig[] {
+  const catalog = getCatalog(catalogId);
+  if (!catalog) return devices;
 
-  if (devices.some((d) => d.name === preset.name)) {
-    return devices.filter((d) => d.name !== preset.name);
+  if (devices.some((d) => d.catalogId === catalog.id)) {
+    return devices.filter((d) => d.catalogId !== catalog.id);
   }
-  return insertInPresetOrder(devices, preset);
+  return insertInCatalogOrder(devices, catalog);
 }
 
-function insertInPresetOrder(
+function insertInCatalogOrder(
   devices: DeviceConfig[],
-  preset: DevicePreset,
+  catalog: DeviceCatalog,
 ): DeviceConfig[] {
-  const device = createDeviceFromPreset(preset);
-  const order = presetOrder(preset.name);
-  const at = devices.findIndex((d) => presetOrder(d.name) > order);
+  const device = createDeviceFromCatalog(catalog);
+  const order = catalogOrder(catalog.id);
+  const at = devices.findIndex((d) => catalogOrder(d.catalogId) > order);
   if (at === -1) return [...devices, device];
   return [...devices.slice(0, at), device, ...devices.slice(at)];
+}
+
+/**
+ * Enable or disable a Catalog Input on a Device. Enabling inserts the id so the
+ * enabled list stays in Catalog order; disabling removes it and drops any Glyph
+ * override that keyed off it.
+ */
+function toggleInput(device: DeviceConfig, inputId: string): DeviceConfig {
+  if (device.enabled.includes(inputId)) {
+    return {
+      ...device,
+      enabled: device.enabled.filter((id) => id !== inputId),
+      glyphStyles: omitKey(device.glyphStyles, inputId),
+    };
+  }
+
+  const catalog = getCatalog(device.catalogId);
+  if (!catalog || !catalog.inputs.some((i) => i.id === inputId)) return device;
+
+  const rank = (id: string) => catalog.inputs.findIndex((i) => i.id === id);
+  const target = rank(inputId);
+  const at = device.enabled.findIndex((id) => rank(id) > target);
+  const enabled =
+    at === -1
+      ? [...device.enabled, inputId]
+      : [...device.enabled.slice(0, at), inputId, ...device.enabled.slice(at)];
+  return { ...device, enabled };
+}
+
+/** Next custom id for a Device: `custom-<n>` above the highest existing one. */
+function nextCustomId(device: DeviceConfig): string {
+  let max = 0;
+  for (const { id } of device.custom) {
+    const match = /^custom-(\d+)$/.exec(id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `custom-${max + 1}`;
+}
+
+/** Return a copy of `record` without `key` (no-op if absent). */
+function omitKey<V>(record: Record<string, V>, key: string): Record<string, V> {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
 }
 
 function patchDevice(

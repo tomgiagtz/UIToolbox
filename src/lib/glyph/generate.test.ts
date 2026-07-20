@@ -1,7 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { generateTilesets } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
-import type { Project } from "@/lib/glyph/types";
+import { createDefaultProject } from "@/lib/glyph/presets";
+import type { DeviceConfig, Project } from "@/lib/glyph/types";
+
+/**
+ * A Device whose Inputs are supplied as custom (off-catalog) labels, so a test
+ * can pin an exact ordered label list regardless of the Catalog. Enabled Catalog
+ * Inputs are exercised via the parity test and the reducer tests.
+ */
+function device(
+  labels: string[],
+  name = "Keyboard",
+  catalogId = "keyboard",
+): DeviceConfig {
+  return {
+    name,
+    catalogId,
+    enabled: [],
+    custom: labels.map((label, i) => ({ id: `c${i}`, label })),
+    style: {},
+    glyphStyles: {},
+  };
+}
 
 function project(over: Partial<Project> = {}): Project {
   return {
@@ -15,7 +36,7 @@ function project(over: Partial<Project> = {}): Project {
       border: { width: 2, color: "#333333" },
     },
     cellSize: 128,
-    devices: [{ name: "Keyboard", inputs: ["A", "Right Stick", "→"] }],
+    devices: [device(["A", "Right Stick", "→"])],
     naming: { template: "{device}_{input}", case: "snake" },
     filenameTemplate: "{device}_atlas",
     ...over,
@@ -27,8 +48,8 @@ describe("generateTilesets", () => {
     const out = generateTilesets(
       project({
         devices: [
-          { name: "Keyboard", inputs: ["A"] },
-          { name: "Xbox", inputs: ["A", "B"] },
+          device(["A"]),
+          device(["A", "B"], "Xbox", "xbox"),
         ],
       }),
     );
@@ -58,7 +79,7 @@ describe("generateTilesets", () => {
   it("supports the {index} token", () => {
     const [kb] = generateTilesets(
       project({
-        devices: [{ name: "Keyboard", inputs: ["A", "B"] }],
+        devices: [device(["A", "B"])],
         naming: { template: "{input}_{index}", case: "snake" },
       }),
     );
@@ -68,7 +89,7 @@ describe("generateTilesets", () => {
   it("produces a power-of-two atlas large enough for all cells", () => {
     const [kb] = generateTilesets(
       project({
-        devices: [{ name: "Keyboard", inputs: Array(17).fill("A") }],
+        devices: [device(Array(17).fill("A"))],
       }),
     );
     expect(isPowerOfTwo(kb.atlasSize.width)).toBe(true);
@@ -81,7 +102,7 @@ describe("generateTilesets", () => {
 
   it("produces non-overlapping cell rects", () => {
     const [kb] = generateTilesets(
-      project({ devices: [{ name: "Keyboard", inputs: Array(9).fill("A") }] }),
+      project({ devices: [device(Array(9).fill("A"))] }),
     );
     const rects = kb.placements.map((p) => p.rect);
     for (let i = 0; i < rects.length; i++) {
@@ -137,7 +158,7 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [
-          { name: "Keyboard", inputs: ["Right Stick", "RIGHT  STICK"] },
+          device(["Right Stick", "RIGHT  STICK"]),
         ],
         naming: { template: "{input}", case: "snake" },
       }),
@@ -150,7 +171,7 @@ describe("generateTilesets", () => {
   it("keeps collision suffixes consistent with the case style", () => {
     const [kb] = generateTilesets(
       project({
-        devices: [{ name: "Keyboard", inputs: ["A", "a"] }],
+        devices: [device(["A", "a"])],
         naming: { template: "{input}", case: "camel" },
       }),
     );
@@ -158,5 +179,30 @@ describe("generateTilesets", () => {
     expect(new Set(names).size).toBe(names.length);
     // camelCase has no separator, so the suffix appends directly.
     expect(names).toEqual(["a", "a2"]);
+  });
+});
+
+describe("parity — the Style Cascade is a no-op at defaults", () => {
+  // The frozen labels the tool generated for the Keyboard before the Catalog
+  // model. Generation must still emit exactly these, in this order.
+  const LEGACY_KEYBOARD = [
+    "W", "A", "S", "D", "Q", "E", "R", "F", "Space", "Shift", "Ctrl", "Alt",
+    "Tab", "Enter", "Esc", "↑", "↓", "←", "→", "LMB", "RMB", "1", "2", "3",
+  ];
+
+  it("emits the legacy Keyboard Inputs, in order, for the default project", () => {
+    const [kb] = generateTilesets(createDefaultProject("TestFont"));
+    expect(kb.placements.map((p) => p.label)).toEqual(LEGACY_KEYBOARD);
+  });
+
+  it("resolves every Glyph to the untouched Project style", () => {
+    const proj = createDefaultProject("TestFont");
+    const base = { textColor: proj.textColor, background: proj.background };
+    const [kb] = generateTilesets(proj);
+    for (const placement of kb.placements) {
+      // Empty Device / Catalog / Glyph tiers ⇒ effective style === Project style,
+      // so pixels are byte-identical to the pre-cascade output.
+      expect(placement.style).toEqual(base);
+    }
   });
 });
