@@ -16,6 +16,9 @@ package-lock.json
 # Type declaration stubs
 next-env.d.ts
 
+# Codegen output (see src/lib/glyph/layouts/build-layouts.mjs)
+src/lib/glyph/layouts/pad-layouts.generated.ts
+
 # Vendored agent skills & tooling
 .claude/
 

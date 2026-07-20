@@ -11,10 +11,7 @@ import {
 /** Do two unit rectangles overlap (share positive area)? Touching edges is fine. */
 function overlaps(a: KeycapKey, b: KeycapKey): boolean {
   return (
-    a.x < b.x + b.w &&
-    b.x < a.x + a.w &&
-    a.y < b.y + b.h &&
-    b.y < a.y + a.h
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
   );
 }
 
@@ -66,24 +63,26 @@ describe("PAD_LAYOUTS", () => {
       const catalog = getCatalog(catalogId)!;
       const layout = getPadLayout(catalogId)!;
 
-      it("has one node per Catalog Input, and nothing else", () => {
-        const nodeIds = layout.nodes.map((n) => n.id).sort();
+      // Bijection Catalog ↔ Layout: every Input is exactly one clickable button,
+      // and no button toggles an Input the Catalog doesn't have. Holds whether the
+      // Layout is code-drawn or parsed from an authored SVG.
+      it("has one button per Catalog Input, and nothing else", () => {
+        const buttonIds = layout.buttons.map((b) => b.id).sort();
         const catalogIds = catalog.inputs.map((i) => i.id).sort();
-        expect(nodeIds).toEqual(catalogIds);
+        expect(buttonIds).toEqual(catalogIds);
       });
 
-      it("keeps every node inside its viewBox", () => {
-        for (const node of layout.nodes) {
-          expect(node.x - node.r).toBeGreaterThanOrEqual(0);
-          expect(node.y - node.r).toBeGreaterThanOrEqual(0);
-          expect(node.x + node.r).toBeLessThanOrEqual(layout.viewBox.width);
-          expect(node.y + node.r).toBeLessThanOrEqual(layout.viewBox.height);
+      it("gives every button a shape tag and geometry", () => {
+        for (const button of layout.buttons) {
+          expect(button.tag.length).toBeGreaterThan(0);
+          expect(Object.keys(button.geom).length).toBeGreaterThan(0);
         }
       });
 
-      it("draws a prototype outline path", () => {
-        expect(layout.outline.startsWith("M")).toBe(true);
-        expect(layout.outline.length).toBeGreaterThan(10);
+      it("has a positive viewBox and a decoration layer", () => {
+        expect(layout.viewBox.width).toBeGreaterThan(0);
+        expect(layout.viewBox.height).toBeGreaterThan(0);
+        expect(layout.decoration.length).toBeGreaterThan(0);
       });
     });
   }

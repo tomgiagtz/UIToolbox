@@ -1,12 +1,12 @@
 "use client";
 
-import { type Dispatch, type KeyboardEvent } from "react";
+import { type Dispatch, type KeyboardEvent, type SVGProps } from "react";
 import { catalogIndex, getCatalog } from "@/lib/glyph/catalog";
 import {
   KEYBOARD_LAYOUT,
   getPadLayout,
   keyboardExtent,
-  type PadNode,
+  type PadButtonShape,
 } from "@/lib/glyph/layout";
 import type { ProjectAction } from "@/lib/glyph/project";
 import type { DeviceConfig } from "@/lib/glyph/types";
@@ -52,7 +52,8 @@ export function DeviceLayout({
     deviceName: device.name,
     label: (id) => labels.get(id)?.label ?? id,
     isEnabled: (id) => enabled.has(id),
-    onToggle: (inputId) => dispatch({ type: "toggle-input", deviceIndex, inputId }),
+    onToggle: (inputId) =>
+      dispatch({ type: "toggle-input", deviceIndex, inputId }),
   };
 
   const pad = getPadLayout(device.catalogId);
@@ -75,11 +76,21 @@ function toggleKeyHandler(onToggle: () => void) {
   };
 }
 
-/** Fill/text classes for an enabled vs. disabled node — disabled reads dimmed. */
+/**
+ * Fill/border/text classes for an enabled vs. disabled Input — disabled reads
+ * dimmed. Uses the dedicated `--input-*` theme tokens (see `globals.css`) so the
+ * Device Layout can be themed apart from the app's buttons.
+ */
 function nodeClasses(on: boolean) {
   return on
-    ? { shape: "fill-primary stroke-primary", text: "fill-primary-foreground" }
-    : { shape: "fill-muted stroke-border", text: "fill-muted-foreground" };
+    ? {
+        shape: "fill-input-fill-primary stroke-input-border-primary",
+        text: "fill-primary-foreground",
+      }
+    : {
+        shape: "fill-input-fill-muted stroke-input-border-muted",
+        text: "fill-muted-foreground",
+      };
 }
 
 /**
@@ -87,7 +98,12 @@ function nodeClasses(on: boolean) {
  * `maxWidth`, clamped so tiny keys stay legible. Uses a rough average glyph
  * width so long legends (Backspace, Options) shrink instead of overflowing.
  */
-function fitFontSize(label: string, maxWidth: number, cap: number, floor: number) {
+function fitFontSize(
+  label: string,
+  maxWidth: number,
+  cap: number,
+  floor: number,
+) {
   const approx = maxWidth / (Math.max(label.length, 1) * 0.6);
   return Math.max(floor, Math.min(cap, approx));
 }
@@ -163,40 +179,69 @@ function PadDiagram({
       viewBox={`0 0 ${pad.viewBox.width} ${pad.viewBox.height}`}
       className="w-full select-none"
     >
-      {/* Prototype controller outline, purely decorative, drawn behind the nodes. */}
-      <path
-        data-outline
-        d={pad.outline}
-        className="fill-muted/30 stroke-border"
-        strokeWidth={2}
+      {/*
+        The controller outline and any non-interactive backer shapes, drawn behind
+        the buttons and painted verbatim from the authored (or code-drawn) source.
+        Trusted, committed markup; `pointer-events-none` lets clicks reach buttons.
+      */}
+      <g
+        data-decoration
+        className="[&_*]:pointer-events-none"
+        dangerouslySetInnerHTML={{ __html: pad.decoration }}
       />
-      {pad.nodes.map((node) => (
+      {pad.buttons.map((shape) => (
         <PadButton
-          key={node.id}
-          node={node}
-          label={label(node.id)}
-          on={isEnabled(node.id)}
-          onToggle={() => onToggle(node.id)}
+          key={shape.id}
+          shape={shape}
+          label={label(shape.id)}
+          on={isEnabled(shape.id)}
+          onToggle={() => onToggle(shape.id)}
         />
       ))}
     </svg>
   );
 }
 
-/** One clustered pad node: a circle with its label placeholder inside. */
+/** The SVG geometry attribute names a pad button shape may carry. */
+type GeomAttrs = Pick<
+  SVGProps<SVGPathElement & SVGCircleElement & SVGRectElement>,
+  | "d"
+  | "cx"
+  | "cy"
+  | "r"
+  | "rx"
+  | "ry"
+  | "x"
+  | "y"
+  | "width"
+  | "height"
+  | "points"
+  | "transform"
+>;
+
+/**
+ * One clickable pad button: the authored (or code-drawn) shape rendered directly,
+ * recoloured by enabled state. The Catalog's authored fill is stripped at ingest
+ * so the whole footprint takes `fill-primary` (enabled) / `fill-muted` (disabled).
+ * For this to be clickable across the button, author each shape **solid** (a
+ * filled region), not as a hollow outline ring. A centred label placeholder shows
+ * for the simple code-drawn shapes that report a centre (Symbols replace these).
+ */
 function PadButton({
-  node,
+  shape,
   label,
   on,
   onToggle,
 }: {
-  node: PadNode;
+  shape: PadButtonShape;
   label: string;
   on: boolean;
   onToggle: () => void;
 }) {
   const cls = nodeClasses(on);
-  const glyph = padGlyph(node.id, label);
+  const Shape = shape.tag as "path";
+  const glyph = padGlyph(shape.id, label);
+  const at = shape.labelAt;
   return (
     <g
       role="button"
@@ -205,20 +250,30 @@ function PadButton({
       tabIndex={0}
       onClick={onToggle}
       onKeyDown={toggleKeyHandler(onToggle)}
-      className="cursor-pointer outline-none [&:focus-visible_circle]:stroke-ring [&:hover_circle]:opacity-80"
+      className="cursor-pointer outline-none [&:focus-visible_[data-shape]]:stroke-ring [&:hover_[data-shape]]:opacity-80"
     >
       <title>{label}</title>
-      <circle cx={node.x} cy={node.y} r={node.r} strokeWidth={1.5} className={cls.shape} />
-      <text
-        x={node.x}
-        y={node.y}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={fitFontSize(glyph, node.r * 1.7, 9, 5)}
-        className={`${cls.text} pointer-events-none`}
-      >
-        {glyph}
-      </text>
+      <Shape
+        data-shape
+        {...(shape.geom as GeomAttrs)}
+        // Honour the even-odd rule so any intentional holes in the authored shape
+        // (e.g. a symbol counter) stay open; solid shapes fill either way.
+        fillRule="evenodd"
+        strokeWidth={1.5}
+        className={cls.shape}
+      />
+      {at && (
+        <text
+          x={at.x}
+          y={at.y}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={fitFontSize(glyph, at.r * 1.7, 9, 5)}
+          className={`${cls.text} pointer-events-none`}
+        >
+          {glyph}
+        </text>
+      )}
     </g>
   );
 }

@@ -35,7 +35,9 @@ describe("DeviceLayout", () => {
   it("dispatches a toggle for the clicked Input", async () => {
     const dispatch = vi.fn();
     const device = keyboardDevice();
-    render(<DeviceLayout device={device} deviceIndex={2} dispatch={dispatch} />);
+    render(
+      <DeviceLayout device={device} deviceIndex={2} dispatch={dispatch} />,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Z" }));
     expect(dispatch).toHaveBeenCalledWith({
       type: "toggle-input",
@@ -44,14 +46,14 @@ describe("DeviceLayout", () => {
     });
   });
 
-  it("renders pad nodes over a prototype outline", () => {
+  it("renders clickable pad buttons over a decoration layer", () => {
     const device = createDeviceFromCatalog(getCatalog("xbox")!);
     const { container } = render(
       <DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />,
     );
     // Every pad button is reachable; e.g. the A face button.
     expect(screen.getByRole("button", { name: "A" })).toBeInTheDocument();
-    // The prototype controller outline is a decorative path behind the nodes.
-    expect(container.querySelector("path[data-outline]")).toBeInTheDocument();
+    // The outline + any backers render as a non-interactive layer behind them.
+    expect(container.querySelector("[data-decoration]")).toBeInTheDocument();
   });
 });

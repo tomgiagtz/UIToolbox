@@ -13,6 +13,8 @@
  * on its Layout, and the Layout never references an Input the Catalog dropped.
  */
 
+import { AUTHORED_PAD_LAYOUTS } from "@/lib/glyph/layouts/pad-layouts.generated";
+
 // --- Keyboard --------------------------------------------------------------
 
 /** One keycap on the keyboard Layout, in key-units (1u = one standard key). */
@@ -67,40 +69,88 @@ const FUNCTION_ROW: RowItem[][] = [
   [
     k("esc"),
     gap(0.5),
-    k("f1"), k("f2"), k("f3"), k("f4"),
+    k("f1"),
+    k("f2"),
+    k("f3"),
+    k("f4"),
     gap(0.5),
-    k("f5"), k("f6"), k("f7"), k("f8"),
+    k("f5"),
+    k("f6"),
+    k("f7"),
+    k("f8"),
     gap(0.5),
-    k("f9"), k("f10"), k("f11"), k("f12"),
+    k("f9"),
+    k("f10"),
+    k("f11"),
+    k("f12"),
   ],
 ];
 
 const MAIN_ROWS: RowItem[][] = [
   [
     k("backtick"),
-    k("1"), k("2"), k("3"), k("4"), k("5"),
-    k("6"), k("7"), k("8"), k("9"), k("0"),
-    k("minus"), k("equals"), k("backspace", 2),
+    k("1"),
+    k("2"),
+    k("3"),
+    k("4"),
+    k("5"),
+    k("6"),
+    k("7"),
+    k("8"),
+    k("9"),
+    k("0"),
+    k("minus"),
+    k("equals"),
+    k("backspace", 2),
   ],
   [
     k("tab", 1.5),
-    k("q"), k("w"), k("e"), k("r"), k("t"),
-    k("y"), k("u"), k("i"), k("o"), k("p"),
-    k("bracket-left"), k("bracket-right"), k("backslash", 1.5),
+    k("q"),
+    k("w"),
+    k("e"),
+    k("r"),
+    k("t"),
+    k("y"),
+    k("u"),
+    k("i"),
+    k("o"),
+    k("p"),
+    k("bracket-left"),
+    k("bracket-right"),
+    k("backslash", 1.5),
   ],
   [
     k("caps-lock", 1.75),
-    k("a"), k("s"), k("d"), k("f"), k("g"),
-    k("h"), k("j"), k("k"), k("l"),
-    k("semicolon"), k("quote"), k("enter", 2.25),
+    k("a"),
+    k("s"),
+    k("d"),
+    k("f"),
+    k("g"),
+    k("h"),
+    k("j"),
+    k("k"),
+    k("l"),
+    k("semicolon"),
+    k("quote"),
+    k("enter", 2.25),
   ],
   [
     k("shift", 2.25),
-    k("z"), k("x"), k("c"), k("v"), k("b"),
-    k("n"), k("m"), k("comma"), k("period"), k("slash"),
+    k("z"),
+    k("x"),
+    k("c"),
+    k("v"),
+    k("b"),
+    k("n"),
+    k("m"),
+    k("comma"),
+    k("period"),
+    k("slash"),
   ],
   [
-    k("ctrl", 1.25), k("super", 1.25), k("alt", 1.25),
+    k("ctrl", 1.25),
+    k("super", 1.25),
+    k("alt", 1.25),
     k("space", 6.25),
     k("menu", 1.25),
   ],
@@ -156,25 +206,38 @@ export function keyboardExtent(): { width: number; height: number } {
 
 // --- Pads ------------------------------------------------------------------
 
-/** One clustered node on a pad Layout, at (`x`,`y`) with radius `r`, in viewBox units. */
-export interface PadNode {
-  /** Catalog id this node toggles, e.g. "xbox-a". */
+/**
+ * One clickable shape on a pad Layout, bound to a Catalog id. `tag` + `geom`
+ * reconstruct the SVG element ({@link DeviceLayout} strips authored fill/stroke
+ * and applies the enabled/disabled theme). `labelAt` is an optional centre for
+ * an in-shape label placeholder (Symbols replace these later); it is set for the
+ * simple code-drawn/round shapes and omitted for arbitrary authored paths.
+ */
+export interface PadButtonShape {
+  /** Catalog id this shape toggles, e.g. "xbox-a". */
   id: string;
-  x: number;
-  y: number;
-  r: number;
+  /** SVG element name, e.g. "circle", "rect", "path", "polygon". */
+  tag: string;
+  /** Geometry attributes only (e.g. `d`, `cx`/`cy`/`r`, `points`, `x`/`y`/…). */
+  geom: Record<string, string | number>;
+  labelAt?: { x: number; y: number; r: number };
 }
 
-/** A pad's code-drawn Layout: its viewBox, a prototype outline, and its nodes. */
+/**
+ * A pad's Layout: a viewBox, a `decoration` blob (the controller outline plus any
+ * non-interactive backer shapes, drawn behind and painted verbatim), and the
+ * clickable `buttons`. Authored SVGs (see `layouts/`) and the code-drawn fallback
+ * below both produce this one shape so the renderer only knows one thing.
+ */
 export interface PadLayout {
   viewBox: { width: number; height: number };
-  /** SVG path for the prototype controller outline, drawn behind the nodes. */
-  outline: string;
-  nodes: PadNode[];
+  /** Raw SVG markup for the outline + backers, drawn behind the buttons. */
+  decoration: string;
+  buttons: PadButtonShape[];
 }
 
-// Both pads share one geometry template (a standard twin-stick controller); only
-// the Catalog ids/labels differ. Slots are filled per pad below.
+// Both code-drawn pads share one geometry template (a standard twin-stick
+// controller); only the Catalog ids/labels differ. Slots are filled per pad below.
 const PAD_VIEWBOX = { width: 300, height: 210 };
 
 /** Radii for the different node kinds — sticks read largest, centers smallest. */
@@ -199,29 +262,39 @@ interface PadSlots {
   centerR: string;
 }
 
-/** Place a pad's Inputs into the shared controller template. */
+/** A code-drawn circular button: a circle shape with a centred label slot. */
+function circleButton(
+  id: string,
+  x: number,
+  y: number,
+  r: number,
+): PadButtonShape {
+  return { id, tag: "circle", geom: { cx: x, cy: y, r }, labelAt: { x, y, r } };
+}
+
+/** Place a pad's Inputs into the shared code-drawn controller template. */
 function padLayout(slots: PadSlots): PadLayout {
-  const nodes: PadNode[] = [
-    { id: slots.triggerL, x: 60, y: 20, r: R.button },
-    { id: slots.triggerR, x: 240, y: 20, r: R.button },
-    { id: slots.bumperL, x: 60, y: 48, r: R.button },
-    { id: slots.bumperR, x: 240, y: 48, r: R.button },
-    { id: slots.stickL, x: 72, y: 90, r: R.stick },
-    { id: slots.stickR, x: 200, y: 150, r: R.stick },
+  const buttons: PadButtonShape[] = [
+    circleButton(slots.triggerL, 60, 20, R.button),
+    circleButton(slots.triggerR, 240, 20, R.button),
+    circleButton(slots.bumperL, 60, 48, R.button),
+    circleButton(slots.bumperR, 240, 48, R.button),
+    circleButton(slots.stickL, 72, 90, R.stick),
+    circleButton(slots.stickR, 200, 150, R.stick),
     // D-pad cross, centred at (110, 135).
-    { id: slots.dpadUp, x: 110, y: 113, r: R.button },
-    { id: slots.dpadDown, x: 110, y: 157, r: R.button },
-    { id: slots.dpadLeft, x: 88, y: 135, r: R.button },
-    { id: slots.dpadRight, x: 132, y: 135, r: R.button },
+    circleButton(slots.dpadUp, 110, 113, R.button),
+    circleButton(slots.dpadDown, 110, 157, R.button),
+    circleButton(slots.dpadLeft, 88, 135, R.button),
+    circleButton(slots.dpadRight, 132, 135, R.button),
     // Face-button diamond, centred at (228, 95).
-    { id: slots.faceTop, x: 228, y: 73, r: R.button },
-    { id: slots.faceBottom, x: 228, y: 117, r: R.button },
-    { id: slots.faceLeft, x: 206, y: 95, r: R.button },
-    { id: slots.faceRight, x: 250, y: 95, r: R.button },
-    { id: slots.centerL, x: 135, y: 82, r: R.center },
-    { id: slots.centerR, x: 165, y: 82, r: R.center },
+    circleButton(slots.faceTop, 228, 73, R.button),
+    circleButton(slots.faceBottom, 228, 117, R.button),
+    circleButton(slots.faceLeft, 206, 95, R.button),
+    circleButton(slots.faceRight, 250, 95, R.button),
+    circleButton(slots.centerL, 135, 82, R.center),
+    circleButton(slots.centerR, 165, 82, R.center),
   ];
-  return { viewBox: PAD_VIEWBOX, outline: PAD_OUTLINE, nodes };
+  return { viewBox: PAD_VIEWBOX, decoration: PAD_DECORATION, buttons };
 }
 
 /** Schematic twin-stick controller outline, sized to {@link PAD_VIEWBOX}. */
@@ -230,8 +303,11 @@ const PAD_OUTLINE =
   "L168,152 C180,152 190,168 205,177 C240,197 284,182 280,112 C278,72 260,47 " +
   "230,52 C170,62 130,62 70,52 Z";
 
-/** Pad Layouts keyed by Catalog id. Keyboards use {@link KEYBOARD_LAYOUT}. */
-export const PAD_LAYOUTS: Record<string, PadLayout> = {
+/** The code-drawn fallback's decoration: just the prototype outline path. */
+const PAD_DECORATION = `<path data-outline d="${PAD_OUTLINE}" class="fill-muted/30 stroke-border" stroke-width="2" />`;
+
+/** The code-drawn fallback Layouts, used until an authored SVG lands per pad. */
+const CODE_DRAWN_PAD_LAYOUTS: Record<string, PadLayout> = {
   xbox: padLayout({
     triggerL: "xbox-lt",
     triggerR: "xbox-rt",
@@ -268,6 +344,16 @@ export const PAD_LAYOUTS: Record<string, PadLayout> = {
     centerL: "ps-share",
     centerR: "ps-options",
   }),
+};
+
+/**
+ * Pad Layouts keyed by Catalog id: an **authored** SVG Layout when one has been
+ * exported for that pad (see `layouts/`), otherwise the code-drawn fallback.
+ * Keyboards use {@link KEYBOARD_LAYOUT}, not this.
+ */
+export const PAD_LAYOUTS: Record<string, PadLayout> = {
+  ...CODE_DRAWN_PAD_LAYOUTS,
+  ...AUTHORED_PAD_LAYOUTS,
 };
 
 /** The pad Layout for a Catalog id, or `undefined` (e.g. for the keyboard). */
