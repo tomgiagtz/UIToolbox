@@ -207,7 +207,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isPersistedConfig(value: unknown): value is PersistedConfig {
-  return isRecord(value) && typeof value.version === "number" && "project" in value;
+  return (
+    isRecord(value) && typeof value.version === "number" && "project" in value
+  );
 }
 
 function isBackground(value: unknown): value is Background {
@@ -258,7 +260,9 @@ function isDevice(value: unknown): value is DeviceConfig {
  * The Project shape shared by v1 and v2 (everything except the Devices). Split
  * out so both the current validator and the v1 migrator check the common fields.
  */
-function hasProjectCommonFields(value: unknown): value is Record<string, unknown> {
+function hasProjectCommonFields(
+  value: unknown,
+): value is Record<string, unknown> {
   return (
     isRecord(value) &&
     typeof value.name === "string" &&
@@ -302,7 +306,9 @@ function isDeviceV1(value: unknown): value is DeviceV1 {
   );
 }
 
-function isProjectV1(value: unknown): value is Project & { devices: DeviceV1[] } {
+function isProjectV1(
+  value: unknown,
+): value is Project & { devices: DeviceV1[] } {
   return (
     hasProjectCommonFields(value) &&
     (value.devices as unknown[]).every(isDeviceV1)

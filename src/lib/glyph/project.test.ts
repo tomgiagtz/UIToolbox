@@ -149,7 +149,12 @@ describe("projectReducer — Catalog Inputs & custom Inputs (#15)", () => {
     const next = run(
       base(),
       { type: "add-custom-input", deviceIndex: 0, label: "F5" },
-      { type: "edit-custom-input", deviceIndex: 0, id: "custom-1", label: "F6" },
+      {
+        type: "edit-custom-input",
+        deviceIndex: 0,
+        id: "custom-1",
+        label: "F6",
+      },
     );
     expect(next.devices[0].custom).toEqual([{ id: "custom-1", label: "F6" }]);
   });

@@ -12,17 +12,66 @@ import {
  * (see the parity test). Kept here as the frozen expectation.
  */
 const LEGACY_KEYBOARD = [
-  "W", "A", "S", "D", "Q", "E", "R", "F", "Space", "Shift", "Ctrl", "Alt",
-  "Tab", "Enter", "Esc", "↑", "↓", "←", "→", "LMB", "RMB", "1", "2", "3",
+  "W",
+  "A",
+  "S",
+  "D",
+  "Q",
+  "E",
+  "R",
+  "F",
+  "Space",
+  "Shift",
+  "Ctrl",
+  "Alt",
+  "Tab",
+  "Enter",
+  "Esc",
+  "↑",
+  "↓",
+  "←",
+  "→",
+  "LMB",
+  "RMB",
+  "1",
+  "2",
+  "3",
 ];
 const LEGACY_XBOX = [
-  "A", "B", "X", "Y", "LB", "RB", "LT", "RT", "View", "Menu", "Left Stick",
-  "Right Stick", "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
+  "A",
+  "B",
+  "X",
+  "Y",
+  "LB",
+  "RB",
+  "LT",
+  "RT",
+  "View",
+  "Menu",
+  "Left Stick",
+  "Right Stick",
+  "D-Pad Up",
+  "D-Pad Down",
+  "D-Pad Left",
+  "D-Pad Right",
 ];
 const LEGACY_PLAYSTATION = [
-  "Cross", "Circle", "Square", "Triangle", "L1", "R1", "L2", "R2", "Share",
-  "Options", "Left Stick", "Right Stick", "D-Pad Up", "D-Pad Down",
-  "D-Pad Left", "D-Pad Right",
+  "Cross",
+  "Circle",
+  "Square",
+  "Triangle",
+  "L1",
+  "R1",
+  "L2",
+  "R2",
+  "Share",
+  "Options",
+  "Left Stick",
+  "Right Stick",
+  "D-Pad Up",
+  "D-Pad Down",
+  "D-Pad Left",
+  "D-Pad Right",
 ];
 
 describe("DEVICE_CATALOGS", () => {
@@ -56,7 +105,9 @@ describe("DEVICE_CATALOGS", () => {
 
 describe("Presets seed the legacy default-enabled subset", () => {
   it("keyboard preset resolves to the ~24 legacy keys, in order", () => {
-    expect(catalogPresetLabels(getCatalog("keyboard")!)).toEqual(LEGACY_KEYBOARD);
+    expect(catalogPresetLabels(getCatalog("keyboard")!)).toEqual(
+      LEGACY_KEYBOARD,
+    );
   });
 
   it("keyboard Catalog is larger than its enabled preset", () => {

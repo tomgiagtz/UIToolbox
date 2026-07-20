@@ -29,7 +29,8 @@ export function NamingControls({
 }) {
   const sample = useMemo(() => {
     const active = project.devices[activeIndex];
-    if (!active || resolveDeviceInputs(active, project).length === 0) return null;
+    if (!active || resolveDeviceInputs(active, project).length === 0)
+      return null;
     const [output] = generateTilesets({ ...project, devices: [active] });
     return {
       filename: output.filename,
@@ -50,7 +51,10 @@ export function NamingControls({
               id={id}
               value={project.naming.template}
               onChange={(e) =>
-                dispatch({ type: "set-naming-template", template: e.target.value })
+                dispatch({
+                  type: "set-naming-template",
+                  template: e.target.value,
+                })
               }
               className={`${inputClass} font-mono`}
               spellCheck={false}
@@ -86,7 +90,9 @@ export function NamingControls({
                 name="naming-case"
                 value={c.value}
                 checked={project.naming.case === c.value}
-                onChange={() => dispatch({ type: "set-naming-case", case: c.value })}
+                onChange={() =>
+                  dispatch({ type: "set-naming-case", case: c.value })
+                }
                 className="size-4"
               />
               <span className="font-mono">{c.label}</span>

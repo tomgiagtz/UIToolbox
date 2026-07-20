@@ -46,7 +46,9 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
   });
 
   it("applies tiers left-to-right so the last override wins", () => {
-    const device: StyleOverride = { background: { shape: "circle", fill: "#111" } };
+    const device: StyleOverride = {
+      background: { shape: "circle", fill: "#111" },
+    };
     const catalog: StyleOverride = { background: { fill: "#222" } };
     const glyph: StyleOverride = { textColor: "#0f0" };
     const out = resolveStyle(base(), device, catalog, glyph);

@@ -8,7 +8,11 @@ import {
   downloadArtifacts,
   exportDevice,
 } from "@/lib/glyph/exporter";
-import { loadDefaultFont, loadFontFromFile, registerFont } from "@/lib/glyph/font";
+import {
+  loadDefaultFont,
+  loadFontFromFile,
+  registerFont,
+} from "@/lib/glyph/font";
 import { generateTilesets, resolveDeviceInputs } from "@/lib/glyph/generate";
 import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
@@ -62,10 +66,8 @@ function useSquareSize() {
 export function GlyphCreator() {
   // The whole editor is a thin shell over the project state + reducer; every
   // control dispatches a ProjectAction (see project.ts).
-  const [project, dispatch] = useReducer(
-    projectReducer,
-    undefined,
-    () => createDefaultProject(),
+  const [project, dispatch] = useReducer(projectReducer, undefined, () =>
+    createDefaultProject(),
   );
   // A font is available for preview + generation. True once the bundled Inter
   // (or a restored upload) is registered.
@@ -97,7 +99,8 @@ export function GlyphCreator() {
     let cancelled = false;
     (async () => {
       const saved = loadConfig();
-      if (saved && !cancelled) dispatch({ type: "load-project", project: saved });
+      if (saved && !cancelled)
+        dispatch({ type: "load-project", project: saved });
       // Migrate pre-#13 configs that predate the bundled font (empty family) so
       // they render in Inter instead of the browser default.
       if (saved && saved.font.family === "" && !cancelled) {
@@ -182,7 +185,9 @@ export function GlyphCreator() {
   async function onGenerate() {
     if (!canGenerate) return;
     const fontName =
-      status.kind === "ready" || status.kind === "done" ? status.fontName : "font";
+      status.kind === "ready" || status.kind === "done"
+        ? status.fontName
+        : "font";
     setStatus({ kind: "generating", fontName });
     try {
       const outputs = generateTilesets(project);
@@ -196,7 +201,10 @@ export function GlyphCreator() {
       }
       setStatus({ kind: "done", fontName, files });
     } catch {
-      setStatus({ kind: "error", message: "Generation failed. Please try again." });
+      setStatus({
+        kind: "error",
+        message: "Generation failed. Please try again.",
+      });
     }
   }
 
@@ -249,7 +257,11 @@ export function GlyphCreator() {
 
   // Reset everything: default config plus cleared localStorage + IndexedDB.
   async function onDelete() {
-    if (!window.confirm("Discard all changes and start over? This clears the saved config and font.")) {
+    if (
+      !window.confirm(
+        "Discard all changes and start over? This clears the saved config and font.",
+      )
+    ) {
       return;
     }
     await clearPersisted();
@@ -262,7 +274,9 @@ export function GlyphCreator() {
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
   const canGenerate = fontLoaded && project.devices.length > 0 && !isBusy;
   const fontName =
-    status.kind === "ready" || status.kind === "generating" || status.kind === "done"
+    status.kind === "ready" ||
+    status.kind === "generating" ||
+    status.kind === "done"
       ? status.fontName
       : null;
 

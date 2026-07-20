@@ -19,7 +19,9 @@ function glyphsOf(labels: string[]): PreviewGlyph[] {
   return labels.map((label) => ({ label, style }));
 }
 
-function renderAtlas(props: Partial<React.ComponentProps<typeof AtlasPreview>> = {}) {
+function renderAtlas(
+  props: Partial<React.ComponentProps<typeof AtlasPreview>> = {},
+) {
   return render(
     <AtlasPreview
       deviceName="Keyboard"

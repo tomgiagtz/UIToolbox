@@ -47,7 +47,9 @@ export function StyleControls({
                 name="bg-shape"
                 value={s.value}
                 checked={bg.shape === s.value}
-                onChange={() => dispatch({ type: "set-bg-shape", shape: s.value })}
+                onChange={() =>
+                  dispatch({ type: "set-bg-shape", shape: s.value })
+                }
                 className="size-4"
               />
               {s.label}
@@ -128,7 +130,9 @@ export function StyleControls({
           <ColorField
             label="Border color"
             value={bg.border.color}
-            onChange={(color) => dispatch({ type: "set-bg-border-color", color })}
+            onChange={(color) =>
+              dispatch({ type: "set-bg-border-color", color })
+            }
           />
         </>
       )}

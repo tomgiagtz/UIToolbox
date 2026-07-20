@@ -27,17 +27,17 @@ The home page links to the Input Glyph Creator at `/tools/glyph-creator`.
 
 ## Scripts
 
-| Script                    | What it does                                  |
-| ------------------------- | --------------------------------------------- |
-| `npm run dev`             | Start the dev server                          |
-| `npm run build`           | Production build                              |
-| `npm run start`           | Serve the production build                     |
-| `npm run typecheck`       | `tsc --noEmit`                                |
-| `npm run lint`            | ESLint                                        |
-| `npm run test`            | Vitest (unit / component)                     |
-| `npm run test:e2e`        | Playwright e2e + axe a11y (needs a build)     |
-| `npm run storybook`       | Storybook dev server on port 6006             |
-| `npm run build-storybook` | Static Storybook build                        |
+| Script                    | What it does                              |
+| ------------------------- | ----------------------------------------- |
+| `npm run dev`             | Start the dev server                      |
+| `npm run build`           | Production build                          |
+| `npm run start`           | Serve the production build                |
+| `npm run typecheck`       | `tsc --noEmit`                            |
+| `npm run lint`            | ESLint                                    |
+| `npm run test`            | Vitest (unit / component)                 |
+| `npm run test:e2e`        | Playwright e2e + axe a11y (needs a build) |
+| `npm run storybook`       | Storybook dev server on port 6006         |
+| `npm run build-storybook` | Static Storybook build                    |
 
 ## Testing seams
 

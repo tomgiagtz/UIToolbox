@@ -7,7 +7,7 @@
 
 Originally a Device was just an editable list of label strings, and every Input
 in the list was generated. The redesign wants a clickable device diagram where
-the user turns Inputs on and off — which implies each Device has a *known set* of
+the user turns Inputs on and off — which implies each Device has a _known set_ of
 possible Inputs, not an open-ended list. We also considered author-supplied
 device artwork (silhouettes / photoreal diagrams with hotspots) but rejected it:
 the only assets the project owner wants to author are the Symbols.
@@ -29,7 +29,7 @@ selection:
 
 The Layout is **editor chrome only**: it never appears in an exported Sprite
 Atlas, and no layout art is authored — the pads reuse the already-authored
-Symbols; the keyboard is drawn from key metadata. The *styled* output preview
+Symbols; the keyboard is drawn from key metadata. The _styled_ output preview
 (Background, chosen Render Source) lives in the right-hand preview, not on the
 Layout.
 

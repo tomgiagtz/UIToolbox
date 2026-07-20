@@ -184,8 +184,11 @@ function SaveDialog({
             disabled={!hasUploadedFont}
             onChange={(e) => onIncludeFontChange(e.target.checked)}
           />
-          <span className={hasUploadedFont ? undefined : "text-muted-foreground"}>
-            Include font{hasUploadedFont ? " (saves a .zip)" : " (upload a font first)"}
+          <span
+            className={hasUploadedFont ? undefined : "text-muted-foreground"}
+          >
+            Include font
+            {hasUploadedFont ? " (saves a .zip)" : " (upload a font first)"}
           </span>
         </label>
 

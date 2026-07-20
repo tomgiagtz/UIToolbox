@@ -56,9 +56,7 @@ const LETTERS: CatalogInput[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   .map((c) => key(c.toLowerCase(), c));
 
 /** Digits 0–9 (id `key-0`, label "0", …). */
-const DIGITS: CatalogInput[] = "0123456789"
-  .split("")
-  .map((d) => key(d, d));
+const DIGITS: CatalogInput[] = "0123456789".split("").map((d) => key(d, d));
 
 /** Function row F1–F12 (id `key-f1`, label "F1", …). */
 const FUNCTION_KEYS: CatalogInput[] = Array.from({ length: 12 }, (_, i) =>
@@ -113,10 +111,30 @@ const KEYBOARD_INPUTS: CatalogInput[] = [
  * board ships in the Catalog but disabled.
  */
 const KEYBOARD_PRESET: string[] = [
-  "key-w", "key-a", "key-s", "key-d", "key-q", "key-e", "key-r", "key-f",
-  "key-space", "key-shift", "key-ctrl", "key-alt", "key-tab", "key-enter",
-  "key-esc", "key-arrow-up", "key-arrow-down", "key-arrow-left",
-  "key-arrow-right", "mouse-left", "mouse-right", "key-1", "key-2", "key-3",
+  "key-w",
+  "key-a",
+  "key-s",
+  "key-d",
+  "key-q",
+  "key-e",
+  "key-r",
+  "key-f",
+  "key-space",
+  "key-shift",
+  "key-ctrl",
+  "key-alt",
+  "key-tab",
+  "key-enter",
+  "key-esc",
+  "key-arrow-up",
+  "key-arrow-down",
+  "key-arrow-left",
+  "key-arrow-right",
+  "mouse-left",
+  "mouse-right",
+  "key-1",
+  "key-2",
+  "key-3",
 ];
 
 // --- Pad catalogs ----------------------------------------------------------
@@ -129,21 +147,41 @@ function pad(prefix: string, entries: [string, string][]): CatalogInput[] {
 }
 
 const XBOX_INPUTS = pad("xbox", [
-  ["a", "A"], ["b", "B"], ["x", "X"], ["y", "Y"],
-  ["lb", "LB"], ["rb", "RB"], ["lt", "LT"], ["rt", "RT"],
-  ["view", "View"], ["menu", "Menu"],
-  ["left-stick", "Left Stick"], ["right-stick", "Right Stick"],
-  ["dpad-up", "D-Pad Up"], ["dpad-down", "D-Pad Down"],
-  ["dpad-left", "D-Pad Left"], ["dpad-right", "D-Pad Right"],
+  ["a", "A"],
+  ["b", "B"],
+  ["x", "X"],
+  ["y", "Y"],
+  ["lb", "LB"],
+  ["rb", "RB"],
+  ["lt", "LT"],
+  ["rt", "RT"],
+  ["view", "View"],
+  ["menu", "Menu"],
+  ["left-stick", "Left Stick"],
+  ["right-stick", "Right Stick"],
+  ["dpad-up", "D-Pad Up"],
+  ["dpad-down", "D-Pad Down"],
+  ["dpad-left", "D-Pad Left"],
+  ["dpad-right", "D-Pad Right"],
 ]);
 
 const PLAYSTATION_INPUTS = pad("ps", [
-  ["cross", "Cross"], ["circle", "Circle"], ["square", "Square"],
-  ["triangle", "Triangle"], ["l1", "L1"], ["r1", "R1"], ["l2", "L2"],
-  ["r2", "R2"], ["share", "Share"], ["options", "Options"],
-  ["left-stick", "Left Stick"], ["right-stick", "Right Stick"],
-  ["dpad-up", "D-Pad Up"], ["dpad-down", "D-Pad Down"],
-  ["dpad-left", "D-Pad Left"], ["dpad-right", "D-Pad Right"],
+  ["cross", "Cross"],
+  ["circle", "Circle"],
+  ["square", "Square"],
+  ["triangle", "Triangle"],
+  ["l1", "L1"],
+  ["r1", "R1"],
+  ["l2", "L2"],
+  ["r2", "R2"],
+  ["share", "Share"],
+  ["options", "Options"],
+  ["left-stick", "Left Stick"],
+  ["right-stick", "Right Stick"],
+  ["dpad-up", "D-Pad Up"],
+  ["dpad-down", "D-Pad Down"],
+  ["dpad-left", "D-Pad Left"],
+  ["dpad-right", "D-Pad Right"],
 ]);
 
 /** The Catalogs the tool ships, in picker order. */
