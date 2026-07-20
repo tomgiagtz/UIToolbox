@@ -23,6 +23,12 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* Device Layout Input fills/borders — enabled vs disabled. Distinct from the
+     app's button colors so the Input picker can be themed on its own. */
+  --input-fill-primary: oklch(0.347 0.008 255.548);
+  --input-fill-muted: oklch(0.776 0 0);
+  --input-border-primary: oklch(0.776 0 0);
+  --input-border-muted: oklch(0.876 0 0);
 }
 
 .dark {
@@ -44,6 +50,10 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --input-fill-primary: oklch(0.922 0 0);
+  --input-fill-muted: oklch(0.269 0 0);
+  --input-border-primary: oklch(0.922 0 0);
+  --input-border-muted: oklch(1 0 0 / 10%);
 }
 
 @theme inline {
@@ -65,6 +75,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-input-fill-primary: var(--input-fill-primary);
+  --color-input-fill-muted: var(--input-fill-muted);
+  --color-input-border-primary: var(--input-border-primary);
+  --color-input-border-muted: var(--input-border-muted);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

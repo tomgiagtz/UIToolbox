@@ -6,6 +6,7 @@ import { DEVICE_CATALOGS, getCatalog } from "@/lib/glyph/catalog";
 import type { ProjectAction } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
 import { inputClass } from "./controls-ui";
+import { DeviceLayout } from "./device-layout";
 
 /**
  * Controls for Devices (#5): pick which Devices to generate (each seeded from a
@@ -85,10 +86,10 @@ export function DeviceControls({
 }
 
 /**
- * Editor for one Device's Inputs (ADR-0005): toggle which fixed **Catalog**
- * Inputs are enabled, and add/rename/remove free-text **custom** Inputs. Lives
- * in the Inputs section of the editor panel. Every change dispatches a
- * {@link ProjectAction}.
+ * Editor for one Device's Inputs (ADR-0005): a clickable code-drawn Device
+ * Layout for toggling which fixed **Catalog** Inputs are enabled, plus an
+ * add/rename/remove list for free-text **custom** Inputs. Lives in the Inputs
+ * section of the editor panel. Every change dispatches a {@link ProjectAction}.
  */
 export function InputEditor({
   device,
@@ -101,7 +102,6 @@ export function InputEditor({
 }) {
   const [draft, setDraft] = useState("");
   const catalog = getCatalog(device.catalogId);
-  const enabled = new Set(device.enabled);
 
   function onAdd(e: FormEvent) {
     e.preventDefault();
@@ -114,36 +114,18 @@ export function InputEditor({
   return (
     <div className="space-y-5">
       {catalog && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium">Catalog Inputs</legend>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">Catalog Inputs</p>
           <p className="text-xs text-muted-foreground">
-            Toggle which of {device.name}&apos;s known Inputs generate a Glyph.
+            Click an Input on the Layout to toggle whether it generates a Glyph.
+            Enabled Inputs are highlighted; dimmed ones are off.
           </p>
-          <ul
-            aria-label={`${device.name} Catalog Inputs`}
-            className="flex flex-wrap gap-x-4 gap-y-1.5"
-          >
-            {catalog.inputs.map((entry) => (
-              <li key={entry.id}>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={enabled.has(entry.id)}
-                    onChange={() =>
-                      dispatch({
-                        type: "toggle-input",
-                        deviceIndex,
-                        inputId: entry.id,
-                      })
-                    }
-                    className="size-4"
-                  />
-                  {entry.label}
-                </label>
-              </li>
-            ))}
-          </ul>
-        </fieldset>
+          <DeviceLayout
+            device={device}
+            deviceIndex={deviceIndex}
+            dispatch={dispatch}
+          />
+        </div>
       )}
 
       <div className="space-y-3">
