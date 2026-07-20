@@ -46,8 +46,7 @@ export function GlyphPreview({
       renderGlyph(ctx, 0, 0, {
         label,
         cellSize,
-        textColor,
-        background,
+        style: { textColor, background },
         fontFamily,
       }),
     [label, cellSize, textColor, background, fontFamily],

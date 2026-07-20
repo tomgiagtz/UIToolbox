@@ -1,3 +1,4 @@
+import type { GlyphStyle } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 
 /**
@@ -13,8 +14,8 @@ export interface RenderGlyphOptions {
   label: string;
   /** Square cell edge length in px. */
   cellSize: number;
-  textColor: string;
-  background: Background;
+  /** Effective per-Glyph style (text color + Background) from the Style Cascade. */
+  style: GlyphStyle;
   /** Registered FontFace family name. */
   fontFamily: string;
 }
@@ -36,7 +37,8 @@ export function renderGlyph(
   oy: number,
   opts: RenderGlyphOptions,
 ): void {
-  const { cellSize, background, textColor, fontFamily, label } = opts;
+  const { cellSize, style, fontFamily, label } = opts;
+  const { background, textColor } = style;
 
   ctx.save();
   ctx.translate(ox, oy);

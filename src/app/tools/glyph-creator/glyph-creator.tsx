@@ -13,7 +13,7 @@ import {
   loadFontFromFile,
   registerFont,
 } from "@/lib/glyph/font";
-import { generateTilesets } from "@/lib/glyph/generate";
+import { generateTilesets, resolveDeviceInputs } from "@/lib/glyph/generate";
 import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
@@ -194,8 +194,6 @@ export function GlyphCreator() {
       const files: string[] = [];
       for (const output of outputs) {
         const { png, json } = await exportDevice(output, {
-          textColor: project.textColor,
-          background: project.background,
           fontFamily: project.font.family,
         });
         await downloadArtifacts([png, json]);
@@ -385,10 +383,8 @@ export function GlyphCreator() {
             >
               <AtlasPreview
                 deviceName={activeDevice.name}
-                inputs={activeDevice.inputs}
+                glyphs={resolveDeviceInputs(activeDevice, project)}
                 cellSize={project.cellSize}
-                textColor={project.textColor}
-                background={project.background}
                 fontFamily={project.font.family}
                 className="h-full w-full rounded-md object-contain"
               />

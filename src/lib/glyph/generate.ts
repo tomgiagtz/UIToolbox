@@ -1,14 +1,72 @@
+import { catalogIndex, getCatalog } from "@/lib/glyph/catalog";
 import { applyTemplate, caseSeparator } from "@/lib/glyph/naming";
 import { gridPack } from "@/lib/glyph/packer";
 import { slugify } from "@/lib/glyph/slugify";
+import { resolveStyle, type GlyphStyle } from "@/lib/glyph/style";
 import type {
   CaseStyle,
   DeviceConfig,
   DeviceOutput,
   GlyphPlacement,
   Project,
+  ResolvedInput,
   TexturePackerDoc,
 } from "@/lib/glyph/types";
+
+/** The Project tier of the Style Cascade: the project's base style. */
+function projectBaseStyle(project: Project): GlyphStyle {
+  return { textColor: project.textColor, background: project.background };
+}
+
+/**
+ * Resolve a Device's generated Inputs (ADR-0005): the enabled Catalog entries,
+ * in order, then the custom Inputs. Each Input's effective style is resolved
+ * through the four-tier Style Cascade — Project → Device → Catalog per-Input
+ * default → Glyph (ADR-0006) — so callers get ready-to-draw {@link GlyphStyle}s.
+ *
+ * Shared by generation and the live preview so both go through the same cascade.
+ */
+export function resolveDeviceInputs(
+  device: DeviceConfig,
+  project: Project,
+): ResolvedInput[] {
+  const base = projectBaseStyle(project);
+  const catalog = getCatalog(device.catalogId);
+  const byId = catalog ? catalogIndex(catalog) : null;
+  const resolved: ResolvedInput[] = [];
+
+  for (const id of device.enabled) {
+    const entry = byId?.get(id);
+    // An enabled id with no Catalog entry (stale save) is skipped, not drawn.
+    if (!entry) continue;
+    resolved.push({
+      id,
+      label: entry.label,
+      style: resolveStyle(
+        base,
+        device.style,
+        entry.defaultStyle,
+        device.glyphStyles[id],
+      ),
+    });
+  }
+
+  for (const { id, label } of device.custom) {
+    resolved.push({
+      id,
+      label,
+      // Custom Inputs have no Catalog per-Input default tier.
+      style: resolveStyle(
+        base,
+        device.style,
+        undefined,
+        device.glyphStyles[id],
+      ),
+    });
+  }
+
+  return resolved;
+}
 
 const TEXTUREPACKER_APP = "UIToolbox Input Glyph Creator";
 const TEXTUREPACKER_VERSION = "1.0";
@@ -30,14 +88,15 @@ function buildDeviceOutput(
   project: Project,
 ): DeviceOutput {
   const { cellSize } = project;
-  const { atlasSize, placements } = gridPack(device.inputs.length, cellSize);
+  const inputs = resolveDeviceInputs(device, project);
+  const { atlasSize, placements } = gridPack(inputs.length, cellSize);
 
   const deviceSlug = slugify(device.name);
   const used = new Set<string>();
 
   const glyphPlacements: GlyphPlacement[] = placements.map(
     ({ index, rect }) => {
-      const label = device.inputs[index];
+      const { label, style } = inputs[index];
       const spriteName = uniqueName(
         applyTemplate(
           project.naming.template,
@@ -51,7 +110,7 @@ function buildDeviceOutput(
         used,
         project.naming.case,
       );
-      return { label, spriteName, rect };
+      return { label, spriteName, rect, style };
     },
   );
 

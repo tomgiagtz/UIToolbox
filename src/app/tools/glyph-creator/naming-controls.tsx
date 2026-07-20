@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, type Dispatch } from "react";
-import { generateTilesets } from "@/lib/glyph/generate";
+import { generateTilesets, resolveDeviceInputs } from "@/lib/glyph/generate";
 import type { ProjectAction } from "@/lib/glyph/project";
 import type { CaseStyle, Project } from "@/lib/glyph/types";
 import { Field, inputClass } from "./controls-ui";
@@ -29,7 +29,8 @@ export function NamingControls({
 }) {
   const sample = useMemo(() => {
     const active = project.devices[activeIndex];
-    if (!active || active.inputs.length === 0) return null;
+    if (!active || resolveDeviceInputs(active, project).length === 0)
+      return null;
     const [output] = generateTilesets({ ...project, devices: [active] });
     return {
       filename: output.filename,

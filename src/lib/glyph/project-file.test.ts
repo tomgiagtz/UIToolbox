@@ -20,7 +20,7 @@ function edited(): Project {
     { type: "set-font", family: "UITBFont-abc" } as const,
     { type: "set-text-color", color: "#ff0000" } as const,
     { type: "set-bg-shape", shape: "circle" } as const,
-    { type: "toggle-device", presetId: "xbox" } as const,
+    { type: "toggle-device", catalogId: "xbox" } as const,
   ].reduce(projectReducer, createDefaultProject(""));
 }
 

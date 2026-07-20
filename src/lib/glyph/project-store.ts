@@ -13,20 +13,27 @@
  * access is defensively guarded so a private-mode / quota / SSR failure degrades
  * to "start fresh" rather than throwing.
  */
+import { getCatalogByName } from "@/lib/glyph/catalog";
 import type {
   Background,
+  CustomInput,
   DeviceConfig,
   NamingConfig,
   Project,
 } from "@/lib/glyph/types";
 
 const CONFIG_KEY = "uitoolbox.glyph-creator.project";
-/** Bump when the persisted config shape changes incompatibly. */
-const CONFIG_VERSION = 1;
+/**
+ * Bump when the persisted config shape changes incompatibly.
+ * - v1: Devices were `{ name, inputs: string[] }`.
+ * - v2: Devices are `{ name, catalogId, enabled, custom, style, glyphStyles }`
+ *   (the Catalog + Style Cascade model, #15). v1 saves are migrated on load.
+ */
+const CONFIG_VERSION = 2;
 
 interface PersistedConfig {
   version: number;
-  project: Project;
+  project: unknown;
 }
 
 // --- Config format ---------------------------------------------------------
@@ -44,9 +51,10 @@ export function serializeConfig(project: Project): string {
 
 /**
  * Parse config JSON back into a {@link Project}, or `null` if it is unreadable,
- * structurally invalid, or of an unknown schema version. Untrusted input (old
- * builds, hand-edited storage, or an arbitrary uploaded file) is rejected rather
- * than trusted.
+ * structurally invalid, or of an unknown schema version. Older but recognized
+ * versions are migrated forward (see {@link migrateConfig}) so existing saves
+ * still load. Untrusted input (old builds, hand-edited storage, or an arbitrary
+ * uploaded file) is rejected rather than trusted.
  */
 export function parseConfig(raw: string): Project | null {
   let parsed: unknown;
@@ -57,9 +65,22 @@ export function parseConfig(raw: string): Project | null {
   }
 
   if (!isPersistedConfig(parsed)) return null;
-  if (parsed.version !== CONFIG_VERSION) return null;
-  if (!isProject(parsed.project)) return null;
-  return parsed.project;
+  return migrateConfig(parsed.version, parsed.project);
+}
+
+/**
+ * Bring a persisted payload up to the current {@link Project} shape, or return
+ * `null` for an unknown version or a payload that doesn't match the shape it
+ * claims.
+ */
+function migrateConfig(version: number, project: unknown): Project | null {
+  if (version === CONFIG_VERSION) {
+    return isProject(project) ? project : null;
+  }
+  if (version === 1) {
+    return isProjectV1(project) ? migrateV1(project) : null;
+  }
+  return null;
 }
 
 // --- Config (localStorage) -------------------------------------------------
@@ -212,16 +233,36 @@ function isNaming(value: unknown): value is NamingConfig {
   );
 }
 
+function isCustomInput(value: unknown): value is CustomInput {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.label === "string"
+  );
+}
+
 function isDevice(value: unknown): value is DeviceConfig {
   return (
     isRecord(value) &&
     typeof value.name === "string" &&
-    Array.isArray(value.inputs) &&
-    value.inputs.every((i) => typeof i === "string")
+    typeof value.catalogId === "string" &&
+    Array.isArray(value.enabled) &&
+    value.enabled.every((id) => typeof id === "string") &&
+    Array.isArray(value.custom) &&
+    value.custom.every(isCustomInput) &&
+    // Style Cascade overrides are sparse objects; validated by shape, not content.
+    isRecord(value.style) &&
+    isRecord(value.glyphStyles)
   );
 }
 
-function isProject(value: unknown): value is Project {
+/**
+ * The Project shape shared by v1 and v2 (everything except the Devices). Split
+ * out so both the current validator and the v1 migrator check the common fields.
+ */
+function hasProjectCommonFields(
+  value: unknown,
+): value is Record<string, unknown> {
   return (
     isRecord(value) &&
     typeof value.name === "string" &&
@@ -231,8 +272,78 @@ function isProject(value: unknown): value is Project {
     isBackground(value.background) &&
     typeof value.cellSize === "number" &&
     Array.isArray(value.devices) &&
-    value.devices.every(isDevice) &&
     isNaming(value.naming) &&
     typeof value.filenameTemplate === "string"
   );
+}
+
+function isProject(value: unknown): value is Project {
+  return (
+    hasProjectCommonFields(value) &&
+    (value.devices as unknown[]).every(isDevice)
+  );
+}
+
+// --- v1 → v2 migration -----------------------------------------------------
+//
+// v1 Devices were a flat list of Input label strings. v2 splits them into a
+// Catalog-referenced enabled selection plus custom Inputs. Labels that match a
+// Catalog entry are enabled (preserving encounter order); the rest become custom
+// Inputs — so a v1 save still loads and generates the same Inputs.
+
+/** A v1 Device: `{ name, inputs: string[] }`. */
+interface DeviceV1 {
+  name: string;
+  inputs: string[];
+}
+
+function isDeviceV1(value: unknown): value is DeviceV1 {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    Array.isArray(value.inputs) &&
+    value.inputs.every((i) => typeof i === "string")
+  );
+}
+
+function isProjectV1(
+  value: unknown,
+): value is Project & { devices: DeviceV1[] } {
+  return (
+    hasProjectCommonFields(value) &&
+    (value.devices as unknown[]).every(isDeviceV1)
+  );
+}
+
+function migrateV1(project: Project & { devices: DeviceV1[] }): Project {
+  return { ...project, devices: project.devices.map(migrateV1Device) };
+}
+
+function migrateV1Device(device: DeviceV1): DeviceConfig {
+  const catalog = getCatalogByName(device.name);
+  const byLabel = new Map(
+    catalog?.inputs.map((i) => [i.label, i.id] as const) ?? [],
+  );
+
+  const enabled: string[] = [];
+  const custom: CustomInput[] = [];
+  let customCount = 0;
+
+  for (const label of device.inputs) {
+    const id = byLabel.get(label);
+    if (id !== undefined && !enabled.includes(id)) {
+      enabled.push(id);
+    } else {
+      custom.push({ id: `custom-${++customCount}`, label });
+    }
+  }
+
+  return {
+    name: device.name,
+    catalogId: catalog?.id ?? "",
+    enabled,
+    custom,
+    style: {},
+    glyphStyles: {},
+  };
 }
