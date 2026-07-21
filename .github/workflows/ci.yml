@@ -32,6 +32,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Format check
+        run: npm run format:check
+
+      - name: Pad Layouts up to date
+        run: |
+          npm run layouts
+          git diff --exit-code -- src/lib/glyph/layouts/pad-layouts.generated.ts \
+            || (echo "::error::pad-layouts.generated.ts is out of date. Run 'npm run layouts' and commit the result." && exit 1)
+
       - name: Unit tests
         run: npm run test
 
