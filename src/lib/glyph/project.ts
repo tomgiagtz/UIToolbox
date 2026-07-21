@@ -4,13 +4,15 @@ import {
   type DeviceCatalog,
 } from "@/lib/glyph/catalog";
 import { createDeviceFromCatalog } from "@/lib/glyph/presets";
-import type {
-  Background,
-  BackgroundShape,
-  CaseStyle,
-  DeviceConfig,
-  Project,
-} from "@/lib/glyph/types";
+import {
+  clearOverrideField,
+  mergeOverride,
+  resolveStyle,
+  type StyleField,
+  type StyleOverride,
+  type StyleScope,
+} from "@/lib/glyph/style";
+import type { CaseStyle, DeviceConfig, Project } from "@/lib/glyph/types";
 
 /**
  * Every edit the UI can make to a {@link Project}. Keeping these as plain data
@@ -22,14 +24,13 @@ export type ProjectAction =
   | { type: "load-project"; project: Project }
   | { type: "set-name"; name: string }
   | { type: "set-font"; family: string }
-  // --- Project-tier style (#4) ---
-  | { type: "set-text-color"; color: string }
+  // --- Style Cascade edits (#4, #19) ---
+  // Patch/clear a sparse override at any scope; the Project tier folds the patch
+  // into its full base style, Device/Glyph tiers merge into their StyleOverride.
+  | { type: "patch-style"; scope: StyleScope; patch: StyleOverride }
+  | { type: "clear-style"; scope: StyleScope; field: StyleField }
+  // cellSize stays Project-global — not part of the cascade (ADR-0006).
   | { type: "set-cell-size"; size: number }
-  | { type: "set-bg-shape"; shape: BackgroundShape }
-  | { type: "set-bg-fill"; fill: string }
-  | { type: "set-bg-corner-radius"; radius: number }
-  | { type: "set-bg-border-width"; width: number }
-  | { type: "set-bg-border-color"; color: string }
   // --- Devices, Catalog selection & custom Inputs (#5, #15) ---
   | { type: "toggle-device"; catalogId: string }
   | { type: "toggle-input"; deviceIndex: number; inputId: string }
@@ -64,26 +65,14 @@ export function projectReducer(
     case "set-font":
       return { ...project, font: { family: action.family } };
 
-    case "set-text-color":
-      return { ...project, textColor: action.color };
+    case "patch-style":
+      return patchStyle(project, action.scope, action.patch);
+
+    case "clear-style":
+      return clearStyle(project, action.scope, action.field);
 
     case "set-cell-size":
       return { ...project, cellSize: action.size };
-
-    case "set-bg-shape":
-      return patchBackground(project, { shape: action.shape });
-
-    case "set-bg-fill":
-      return patchBackground(project, { fill: action.fill });
-
-    case "set-bg-corner-radius":
-      return patchBackground(project, { cornerRadius: action.radius });
-
-    case "set-bg-border-width":
-      return patchBorder(project, { width: action.width });
-
-    case "set-bg-border-color":
-      return patchBorder(project, { color: action.color });
 
     case "toggle-device":
       return {
@@ -147,22 +136,71 @@ export function projectReducer(
   }
 }
 
-/** Return `project` with a shallow patch applied to its Background. */
-function patchBackground(
+/**
+ * Apply a sparse style patch at `scope`. The Project tier folds the patch into
+ * its full base style (via {@link resolveStyle}); the Device and Glyph tiers deep-
+ * merge it into their sparse {@link StyleOverride} so only the set properties win.
+ */
+function patchStyle(
   project: Project,
-  patch: Partial<Background>,
+  scope: StyleScope,
+  patch: StyleOverride,
 ): Project {
-  return { ...project, background: { ...project.background, ...patch } };
+  if (scope.tier === "project") {
+    const resolved = resolveStyle(
+      { textColor: project.textColor, background: project.background },
+      patch,
+    );
+    return {
+      ...project,
+      textColor: resolved.textColor,
+      background: resolved.background,
+    };
+  }
+  return patchDeviceStyle(project, scope, (override) =>
+    mergeOverride(override, patch),
+  );
 }
 
-/** Return `project` with a shallow patch applied to its Background border. */
-function patchBorder(
+/**
+ * Clear one field of the override at `scope`, so it falls back up the cascade.
+ * A no-op at the Project tier, which has no override to clear (its base style is
+ * always fully set).
+ */
+function clearStyle(
   project: Project,
-  patch: Partial<Background["border"]>,
+  scope: StyleScope,
+  field: StyleField,
 ): Project {
-  return patchBackground(project, {
-    border: { ...project.background.border, ...patch },
-  });
+  if (scope.tier === "project") return project;
+  return patchDeviceStyle(project, scope, (override) =>
+    clearOverrideField(override, field),
+  );
+}
+
+/**
+ * Apply `edit` to the sparse override addressed by a Device- or Glyph-tier
+ * `scope`. A Glyph override that collapses to `{}` is dropped from `glyphStyles`
+ * so an unedited Glyph leaves no trace.
+ */
+function patchDeviceStyle(
+  project: Project,
+  scope: Exclude<StyleScope, { tier: "project" }>,
+  edit: (override: StyleOverride) => StyleOverride,
+): Project {
+  return {
+    ...project,
+    devices: patchDevice(project.devices, scope.deviceIndex, (device) => {
+      if (scope.tier === "device") {
+        return { ...device, style: edit(device.style) };
+      }
+      const next = edit(device.glyphStyles[scope.glyphId] ?? {});
+      const glyphStyles = { ...device.glyphStyles };
+      if (Object.keys(next).length > 0) glyphStyles[scope.glyphId] = next;
+      else delete glyphStyles[scope.glyphId];
+      return { ...device, glyphStyles };
+    }),
+  };
 }
 
 /** The Catalog ordinal for a Device's catalogId, or a large value if unknown. */

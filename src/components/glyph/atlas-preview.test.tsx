@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { gridPack } from "@/lib/glyph/packer";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { AtlasPreview, type PreviewGlyph } from "./atlas-preview";
@@ -63,5 +63,57 @@ describe("AtlasPreview", () => {
     expect(
       screen.getByRole("img", { name: /Xbox Sprite Atlas preview/i }),
     ).toBeInTheDocument();
+  });
+
+  it("reports the clicked cell index via onSelectGlyph", () => {
+    const onSelectGlyph = vi.fn();
+    const glyphs = glyphsOf(["A", "B", "Space", "Enter", "Shift"]);
+    const cellSize = 128;
+    renderAtlas({ glyphs, cellSize, onSelectGlyph });
+
+    const canvas = screen.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    }) as HTMLCanvasElement;
+    const { atlasSize, placements } = gridPack(glyphs.length, cellSize);
+
+    // Render the canvas 1:1 with the atlas (no object-contain scaling) so a click
+    // at a placement's center maps straight back to that cell's index.
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: atlasSize.width,
+        height: atlasSize.height,
+      }) as DOMRect;
+
+    const cell = placements[2].rect;
+    fireEvent.click(canvas, {
+      clientX: cell.x + cell.w / 2,
+      clientY: cell.y + cell.h / 2,
+    });
+    expect(onSelectGlyph).toHaveBeenCalledWith(2);
+  });
+
+  it("ignores a click in the gutter (no cell selected)", () => {
+    const onSelectGlyph = vi.fn();
+    const glyphs = glyphsOf(["A", "B", "Space", "Enter", "Shift"]);
+    const cellSize = 128;
+    renderAtlas({ glyphs, cellSize, onSelectGlyph });
+
+    const canvas = screen.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    }) as HTMLCanvasElement;
+    const { atlasSize } = gridPack(glyphs.length, cellSize);
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: atlasSize.width,
+        height: atlasSize.height,
+      }) as DOMRect;
+
+    // 129px lands in the 2px gutter just past the first cell's far edge.
+    fireEvent.click(canvas, { clientX: 129, clientY: 10 });
+    expect(onSelectGlyph).not.toHaveBeenCalled();
   });
 });

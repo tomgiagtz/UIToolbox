@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { gridPack } from "@/lib/glyph/packer";
+import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { useGlyphCanvas } from "./use-glyph-canvas";
@@ -21,6 +21,11 @@ export interface AtlasPreviewProps {
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
   className?: string;
+  /**
+   * Called with the index of the Glyph whose cell was clicked, so the editor can
+   * select that Glyph and focus Glyph scope. When set, the canvas is clickable.
+   */
+  onSelectGlyph?: (index: number) => void;
 }
 
 /**
@@ -38,9 +43,32 @@ export function AtlasPreview({
   cellSize,
   fontFamily,
   className,
+  onSelectGlyph,
 }: AtlasPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { atlasSize, placements } = gridPack(glyphs.length, cellSize);
+
+  /**
+   * Map a click on the CSS-scaled, `object-contain` canvas back to a Glyph index.
+   * The canvas is drawn at the full power-of-two atlas resolution but letterboxed
+   * to fit its box, so undo the fit-scale + centering offset before hit-testing.
+   */
+  function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas || !onSelectGlyph) return;
+    const box = canvas.getBoundingClientRect();
+    const scale = Math.min(
+      box.width / atlasSize.width,
+      box.height / atlasSize.height,
+    );
+    if (scale <= 0) return;
+    const drawnW = atlasSize.width * scale;
+    const drawnH = atlasSize.height * scale;
+    const x = (e.clientX - box.left - (box.width - drawnW) / 2) / scale;
+    const y = (e.clientY - box.top - (box.height - drawnH) / 2) / scale;
+    const index = findPlacementIndexAt(placements, x, y);
+    if (index !== null) onSelectGlyph(index);
+  }
 
   useGlyphCanvas(
     canvasRef,
@@ -77,6 +105,9 @@ export function AtlasPreview({
       role="img"
       aria-label={`${deviceName} Sprite Atlas preview`}
       className={className}
+      onClick={onSelectGlyph ? handleClick : undefined}
+      title={onSelectGlyph ? "Click a cell to edit that Glyph" : undefined}
+      style={onSelectGlyph ? { cursor: "pointer" } : undefined}
     />
   );
 }

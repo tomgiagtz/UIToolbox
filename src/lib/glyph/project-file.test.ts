@@ -18,8 +18,11 @@ function edited(): Project {
   return [
     { type: "set-name", name: "My Cool Glyphs" } as const,
     { type: "set-font", family: "UITBFont-abc" } as const,
-    { type: "set-text-color", color: "#ff0000" } as const,
-    { type: "set-bg-shape", shape: "circle" } as const,
+    {
+      type: "patch-style",
+      scope: { tier: "project" },
+      patch: { textColor: "#ff0000", background: { shape: "circle" } },
+    } as const,
     { type: "toggle-device", catalogId: "xbox" } as const,
   ].reduce(projectReducer, createDefaultProject(""));
 }

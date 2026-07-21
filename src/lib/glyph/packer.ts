@@ -53,3 +53,20 @@ export function gridPack(count: number, cellSize: number): PackResult {
     placements,
   };
 }
+
+/**
+ * The index of the placement whose cell rect contains atlas-space point
+ * `(x, y)`, or `null` if the point falls in a gutter or outside every cell.
+ * Used to turn a click on the atlas preview into a Glyph selection.
+ */
+export function findPlacementIndexAt(
+  placements: PackResult["placements"],
+  x: number,
+  y: number,
+): number | null {
+  const hit = placements.find(
+    ({ rect }) =>
+      x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h,
+  );
+  return hit ? hit.index : null;
+}

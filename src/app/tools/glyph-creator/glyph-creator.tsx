@@ -13,9 +13,15 @@ import {
   loadFontFromFile,
   registerFont,
 } from "@/lib/glyph/font";
-import { generateTilesets, resolveDeviceInputs } from "@/lib/glyph/generate";
+import {
+  generateTilesets,
+  resolveDeviceInputs,
+  resolveScopeStyle,
+} from "@/lib/glyph/generate";
 import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
+import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
+import type { Project } from "@/lib/glyph/types";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import {
   clear as clearPersisted,
@@ -24,7 +30,11 @@ import {
   saveConfig,
   saveFont,
 } from "@/lib/glyph/project-store";
-import { StyleControls } from "./style-controls";
+import {
+  StyleControls,
+  StyleScopeSwitcher,
+  type SelectedGlyph,
+} from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
 import { NamingControls } from "./naming-controls";
 import { ProjectMenuBar } from "./project-menu-bar";
@@ -63,6 +73,34 @@ function useSquareSize() {
   return { ref, size };
 }
 
+/** The sparse override stored at `scope` — `{}` at Project scope or if missing. */
+function overrideAt(project: Project, scope: StyleScope): StyleOverride {
+  if (scope.tier === "project") return {};
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return {};
+  if (scope.tier === "device") return device.style;
+  return device.glyphStyles[scope.glyphId] ?? {};
+}
+
+/** True when `scope` still points at a Device (and Glyph) that resolves today. */
+function isScopeValid(scope: StyleScope, project: Project): boolean {
+  if (scope.tier === "project") return true;
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return false;
+  if (scope.tier === "device") return true;
+  return resolveDeviceInputs(device, project).some(
+    (i) => i.id === scope.glyphId,
+  );
+}
+
+/** True when a selected Glyph still resolves on its Device. */
+function isGlyphValid(glyph: SelectedGlyph, project: Project): boolean {
+  return isScopeValid(
+    { tier: "glyph", deviceIndex: glyph.deviceIndex, glyphId: glyph.glyphId },
+    project,
+  );
+}
+
 export function GlyphCreator() {
   // The whole editor is a thin shell over the project state + reducer; every
   // control dispatches a ProjectAction (see project.ts).
@@ -77,6 +115,12 @@ export function GlyphCreator() {
   const [hasUploadedFont, setHasUploadedFont] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
+  // Which cascade tier the Style tab edits, plus the Glyph the user last picked
+  // in the preview (kept so the switcher can offer "Glyph: <label>" as a target).
+  const [styleScope, setStyleScope] = useState<StyleScope>({ tier: "project" });
+  const [selectedGlyph, setSelectedGlyph] = useState<SelectedGlyph | null>(
+    null,
+  );
   const preview = useSquareSize();
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
@@ -159,6 +203,39 @@ export function GlyphCreator() {
     Math.max(0, project.devices.length - 1),
   );
   const activeDevice = project.devices[activeIndex] ?? null;
+  // The active Device's Glyphs, resolved through the cascade — shared by the
+  // preview and by cell-click → Glyph selection so both index the same list.
+  const activeInputs = activeDevice
+    ? resolveDeviceInputs(activeDevice, project)
+    : [];
+
+  // Devices/Glyphs can disappear (delete, toggled off). Drop a scope or selected
+  // Glyph that no longer resolves so the Style tab never edits a phantom target.
+  const validScope = isScopeValid(styleScope, project)
+    ? styleScope
+    : ({ tier: "project" } as StyleScope);
+  const validSelectedGlyph =
+    selectedGlyph && isGlyphValid(selectedGlyph, project)
+      ? selectedGlyph
+      : null;
+  const scopeStyle = resolveScopeStyle(project, validScope);
+  const scopeOverride = overrideAt(project, validScope);
+
+  // Select the Glyph in cell `index` of the active Device and focus Glyph scope.
+  function onSelectGlyph(index: number) {
+    const input = activeInputs[index];
+    if (!input) return;
+    setSelectedGlyph({
+      deviceIndex: activeIndex,
+      glyphId: input.id,
+      label: input.label,
+    });
+    setStyleScope({
+      tier: "glyph",
+      deviceIndex: activeIndex,
+      glyphId: input.id,
+    });
+  }
 
   async function onFontChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -269,6 +346,8 @@ export function GlyphCreator() {
     // The bundled Inter stays registered, so the reset preview keeps rendering.
     markDefaultFontReady();
     setActiveDeviceIndex(0);
+    setStyleScope({ tier: "project" });
+    setSelectedGlyph(null);
   }
 
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
@@ -334,7 +413,19 @@ export function GlyphCreator() {
               >
                 <div className="space-y-5">
                   <FontUpload fontName={fontName} onFontChange={onFontChange} />
-                  <StyleControls project={project} dispatch={dispatch} />
+                  <StyleScopeSwitcher
+                    project={project}
+                    scope={validScope}
+                    selectedGlyph={validSelectedGlyph}
+                    onScopeChange={setStyleScope}
+                  />
+                  <StyleControls
+                    project={project}
+                    dispatch={dispatch}
+                    scope={validScope}
+                    style={scopeStyle}
+                    override={scopeOverride}
+                  />
                 </div>
               </PanelSection>
 
@@ -386,10 +477,11 @@ export function GlyphCreator() {
             >
               <AtlasPreview
                 deviceName={activeDevice.name}
-                glyphs={resolveDeviceInputs(activeDevice, project)}
+                glyphs={activeInputs}
                 cellSize={project.cellSize}
                 fontFamily={project.font.family}
                 className="h-full w-full rounded-md object-contain"
+                onSelectGlyph={onSelectGlyph}
               />
             </div>
           ) : (

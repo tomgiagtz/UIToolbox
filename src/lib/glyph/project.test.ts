@@ -22,40 +22,91 @@ function run(project: Project, ...actions: ProjectAction[]): Project {
   return actions.reduce(projectReducer, project);
 }
 
-describe("projectReducer — style (#4)", () => {
-  it("sets the text color", () => {
-    const next = run(base(), { type: "set-text-color", color: "#ff0000" });
-    expect(next.textColor).toBe("#ff0000");
-  });
+describe("projectReducer — style cascade (#4, #19)", () => {
+  const project = { tier: "project" } as const;
 
-  it("sets the cell size", () => {
-    const next = run(base(), { type: "set-cell-size", size: 256 });
-    expect(next.cellSize).toBe(256);
-  });
-
-  it("sets the Background shape without dropping other fields", () => {
-    const next = run(base(), { type: "set-bg-shape", shape: "circle" });
-    expect(next.background.shape).toBe("circle");
-    expect(next.background.fill).toBe(base().background.fill);
-  });
-
-  it("sets fill, corner radius, and border", () => {
+  it("folds a Project-tier patch into the full base style", () => {
     const next = run(
       base(),
-      { type: "set-bg-fill", fill: "#123456" },
-      { type: "set-bg-corner-radius", radius: 30 },
-      { type: "set-bg-border-width", width: 8 },
-      { type: "set-bg-border-color", color: "#abcdef" },
+      { type: "patch-style", scope: project, patch: { textColor: "#ff0000" } },
+      {
+        type: "patch-style",
+        scope: project,
+        patch: { background: { fill: "#123456" } },
+      },
+      {
+        type: "patch-style",
+        scope: project,
+        patch: { background: { border: { width: 8 } } },
+      },
     );
+    expect(next.textColor).toBe("#ff0000");
     expect(next.background.fill).toBe("#123456");
-    expect(next.background.cornerRadius).toBe(30);
-    expect(next.background.border).toEqual({ width: 8, color: "#abcdef" });
+    // Border deep-merges: width changes, color survives.
+    expect(next.background.border).toEqual({
+      width: 8,
+      color: base().background.border.color,
+    });
+  });
+
+  it("stores a Device-tier edit as a sparse override, leaving Project untouched", () => {
+    const next = run(base(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { shape: "circle" } },
+    });
+    expect(next.devices[0].style).toEqual({ background: { shape: "circle" } });
+    expect(next.background.shape).toBe(base().background.shape);
+  });
+
+  it("stores a Glyph-tier edit keyed by glyph id", () => {
+    const next = run(base(), {
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "key-w" },
+      patch: { textColor: "#0f0" },
+    });
+    expect(next.devices[0].glyphStyles).toEqual({
+      "key-w": { textColor: "#0f0" },
+    });
+  });
+
+  it("clears one overridden field so it falls back up the cascade", () => {
+    const scope = { tier: "device", deviceIndex: 0 } as const;
+    const next = run(
+      base(),
+      {
+        type: "patch-style",
+        scope,
+        patch: { background: { shape: "circle", fill: "#111" } },
+      },
+      { type: "clear-style", scope, field: "fill" },
+    );
+    expect(next.devices[0].style).toEqual({ background: { shape: "circle" } });
+  });
+
+  it("drops a Glyph override entirely once its last field is cleared", () => {
+    const scope = { tier: "glyph", deviceIndex: 0, glyphId: "key-w" } as const;
+    const next = run(
+      base(),
+      { type: "patch-style", scope, patch: { textColor: "#0f0" } },
+      { type: "clear-style", scope, field: "textColor" },
+    );
+    expect(next.devices[0].glyphStyles).toEqual({});
+  });
+
+  it("sets the cell size (Project-global, not cascaded)", () => {
+    const next = run(base(), { type: "set-cell-size", size: 256 });
+    expect(next.cellSize).toBe(256);
   });
 
   it("does not mutate the previous project (immutability)", () => {
     const prev = base();
     const snapshot = JSON.parse(JSON.stringify(prev));
-    projectReducer(prev, { type: "set-bg-fill", fill: "#000000" });
+    projectReducer(prev, {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { fill: "#000000" } },
+    });
     expect(prev).toEqual(snapshot);
   });
 });
