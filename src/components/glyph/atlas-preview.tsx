@@ -1,10 +1,16 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { useGlyphCanvas } from "./use-glyph-canvas";
+
+/** A hovered cell + its box relative to the canvas, driving the click highlight. */
+interface Hover {
+  index: number;
+  rect: { left: number; top: number; width: number; height: number };
+}
 
 /** One Glyph to draw in the preview: its label + cascade-resolved style. */
 export interface PreviewGlyph {
@@ -46,6 +52,7 @@ export function AtlasPreview({
   onSelectGlyph,
 }: AtlasPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
   const { placements } = gridPack(glyphs.length, cellSize);
 
   // The tight bounds of the packed cells. The exported texture is padded up to a
@@ -61,25 +68,53 @@ export function AtlasPreview({
   );
 
   /**
-   * Map a click on the CSS-scaled, `object-contain` canvas back to a Glyph index.
-   * The canvas is drawn at the content resolution but letterboxed to fit its box,
-   * so undo the fit-scale + centering offset before hit-testing.
+   * Resolve a pointer event to the cell under it. The canvas is drawn at the
+   * content resolution but letterboxed by `object-contain` to fit its box, so
+   * undo the fit-scale + centering offset before hit-testing. Returns the cell's
+   * index plus its box in CSS pixels relative to the canvas (for the highlight),
+   * or `null` when the pointer is in a gutter or the letterbox margin.
    */
-  function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
+  function hitTest(e: React.MouseEvent<HTMLCanvasElement>): Hover | null {
     const canvas = canvasRef.current;
-    if (!canvas || !onSelectGlyph) return;
+    if (!canvas) return null;
     const box = canvas.getBoundingClientRect();
     const scale = Math.min(
       box.width / content.width,
       box.height / content.height,
     );
-    if (scale <= 0) return;
-    const drawnW = content.width * scale;
-    const drawnH = content.height * scale;
-    const x = (e.clientX - box.left - (box.width - drawnW) / 2) / scale;
-    const y = (e.clientY - box.top - (box.height - drawnH) / 2) / scale;
+    if (scale <= 0) return null;
+    const offsetX = (box.width - content.width * scale) / 2;
+    const offsetY = (box.height - content.height * scale) / 2;
+    const x = (e.clientX - box.left - offsetX) / scale;
+    const y = (e.clientY - box.top - offsetY) / scale;
     const index = findPlacementIndexAt(placements, x, y);
-    if (index !== null) onSelectGlyph(index);
+    if (index === null) return null;
+    const { rect } = placements[index];
+    return {
+      index,
+      rect: {
+        left: offsetX + rect.x * scale,
+        top: offsetY + rect.y * scale,
+        width: rect.w * scale,
+        height: rect.h * scale,
+      },
+    };
+  }
+
+  function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (!onSelectGlyph) return;
+    const hit = hitTest(e);
+    if (hit) onSelectGlyph(hit.index);
+  }
+
+  function handleMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (!onSelectGlyph) return;
+    const hit = hitTest(e);
+    // Only re-render when the hovered cell changes, not on every pixel of motion.
+    // (Returning `prev` when the index is unchanged lets React bail out.)
+    setHover((prev) =>
+      hit === null ? null : prev?.index === hit.index ? prev : hit,
+    );
   }
 
   useGlyphCanvas(
@@ -110,16 +145,28 @@ export function AtlasPreview({
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={content.width}
-      height={content.height}
-      role="img"
-      aria-label={`${deviceName} Sprite Atlas preview`}
-      className={className}
-      onClick={onSelectGlyph ? handleClick : undefined}
-      title={onSelectGlyph ? "Click a cell to edit that Glyph" : undefined}
-      style={onSelectGlyph ? { cursor: "pointer" } : undefined}
-    />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={canvasRef}
+        width={content.width}
+        height={content.height}
+        role="img"
+        aria-label={`${deviceName} Sprite Atlas preview`}
+        className={className}
+        onClick={onSelectGlyph ? handleClick : undefined}
+        onMouseMove={onSelectGlyph ? handleMove : undefined}
+        onMouseLeave={onSelectGlyph ? () => setHover(null) : undefined}
+        title={onSelectGlyph ? "Click a cell to edit that Glyph" : undefined}
+        style={onSelectGlyph ? { cursor: "pointer" } : undefined}
+      />
+      {onSelectGlyph && hover && (
+        <div
+          data-testid="glyph-hover-highlight"
+          aria-hidden
+          className="pointer-events-none absolute rounded-lg border-2 border-primary bg-primary/10 shadow-[0_0_0_2px_rgba(255,255,255,0.15)] transition-[left,top,width,height] duration-75"
+          style={hover.rect}
+        />
+      )}
+    </div>
   );
 }

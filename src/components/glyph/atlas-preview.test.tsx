@@ -110,6 +110,61 @@ describe("AtlasPreview", () => {
     expect(onSelectGlyph).toHaveBeenCalledWith(2);
   });
 
+  it("highlights the hovered cell and clears the highlight on leave", () => {
+    const glyphs = glyphsOf(["A", "B", "Space", "Enter", "Shift"]);
+    const cellSize = 128;
+    renderAtlas({ glyphs, cellSize, onSelectGlyph: vi.fn() });
+
+    const canvas = screen.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    }) as HTMLCanvasElement;
+    const { placements } = gridPack(glyphs.length, cellSize);
+    const content = contentBounds(placements);
+    canvas.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: content.width,
+        height: content.height,
+      }) as DOMRect;
+
+    // No highlight until the pointer is over a cell.
+    expect(
+      screen.queryByTestId("glyph-hover-highlight"),
+    ).not.toBeInTheDocument();
+
+    const cell = placements[2].rect;
+    fireEvent.mouseMove(canvas, {
+      clientX: cell.x + cell.w / 2,
+      clientY: cell.y + cell.h / 2,
+    });
+    // 1:1 mapping, so the highlight sits exactly over the hovered cell.
+    const highlight = screen.getByTestId("glyph-hover-highlight");
+    expect(highlight).toHaveStyle({
+      left: `${cell.x}px`,
+      top: `${cell.y}px`,
+      width: `${cell.w}px`,
+      height: `${cell.h}px`,
+    });
+
+    fireEvent.mouseLeave(canvas);
+    expect(
+      screen.queryByTestId("glyph-hover-highlight"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows no hover highlight when the preview isn't clickable", () => {
+    const glyphs = glyphsOf(["A", "B", "Space"]);
+    renderAtlas({ glyphs });
+    const canvas = screen.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    }) as HTMLCanvasElement;
+    fireEvent.mouseMove(canvas, { clientX: 10, clientY: 10 });
+    expect(
+      screen.queryByTestId("glyph-hover-highlight"),
+    ).not.toBeInTheDocument();
+  });
+
   it("ignores a click in the gutter (no cell selected)", () => {
     const onSelectGlyph = vi.fn();
     const glyphs = glyphsOf(["A", "B", "Space", "Enter", "Shift"]);
