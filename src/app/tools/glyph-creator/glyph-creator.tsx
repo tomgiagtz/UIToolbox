@@ -31,6 +31,7 @@ import {
   saveFont,
 } from "@/lib/glyph/project-store";
 import {
+  GlyphStylePopover,
   StyleControls,
   StyleScopeSwitcher,
   type SelectedGlyph,
@@ -221,7 +222,9 @@ export function GlyphCreator() {
   const scopeStyle = resolveScopeStyle(project, validScope);
   const scopeOverride = overrideAt(project, validScope);
 
-  // Select the Glyph in cell `index` of the active Device and focus Glyph scope.
+  // Select the Glyph in cell `index` of the active Device, opening its floating
+  // editor over the preview. The sidebar scope is left untouched — the popover is
+  // the Glyph-scope surface, so the two don't fight over the same target.
   function onSelectGlyph(index: number) {
     const input = activeInputs[index];
     if (!input) return;
@@ -230,12 +233,16 @@ export function GlyphCreator() {
       glyphId: input.id,
       label: input.label,
     });
-    setStyleScope({
-      tier: "glyph",
-      deviceIndex: activeIndex,
-      glyphId: input.id,
-    });
   }
+
+  // The selected Glyph's cascade scope + resolved/raw style, feeding the popover.
+  const selectedGlyphScope: StyleScope | null = validSelectedGlyph
+    ? {
+        tier: "glyph",
+        deviceIndex: validSelectedGlyph.deviceIndex,
+        glyphId: validSelectedGlyph.glyphId,
+      }
+    : null;
 
   async function onFontChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -490,6 +497,17 @@ export function GlyphCreator() {
                 ? "Loading font…"
                 : "Select a Device to preview its Sprite Atlas."}
             </p>
+          )}
+
+          {validSelectedGlyph && selectedGlyphScope && (
+            <GlyphStylePopover
+              project={project}
+              dispatch={dispatch}
+              glyph={validSelectedGlyph}
+              style={resolveScopeStyle(project, selectedGlyphScope)}
+              override={overrideAt(project, selectedGlyphScope)}
+              onClose={() => setSelectedGlyph(null)}
+            />
           )}
         </section>
       </div>

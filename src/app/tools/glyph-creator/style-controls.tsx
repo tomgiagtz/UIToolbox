@@ -1,7 +1,8 @@
 "use client";
 
-import type { Dispatch } from "react";
+import { useEffect, type Dispatch } from "react";
 import { Button, Tooltip, TooltipTrigger } from "react-aria-components";
+import { X } from "lucide-react";
 import type { ProjectAction } from "@/lib/glyph/project";
 import { isOverrideFieldSet } from "@/lib/glyph/style";
 import type {
@@ -128,6 +129,7 @@ export function StyleControls({
   scope,
   style,
   override,
+  showCellSize = true,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -136,6 +138,11 @@ export function StyleControls({
   style: GlyphStyle;
   /** Raw sparse override at `scope` (`{}` at Project scope). */
   override: StyleOverride;
+  /**
+   * Show the Project-global Cell size control. On by default; the per-Glyph
+   * popover hides it since cell size never cascades (ADR-0006).
+   */
+  showCellSize?: boolean;
 }) {
   const bg = style.background;
 
@@ -185,27 +192,32 @@ export function StyleControls({
         </div>
       </fieldset>
 
-      <Field
-        label="Cell size (px)"
-        hint="Output resolution per Glyph — applies to the whole project."
-      >
-        {(id) => (
-          <select
-            id={id}
-            className={inputClass}
-            value={project.cellSize}
-            onChange={(e) =>
-              dispatch({ type: "set-cell-size", size: Number(e.target.value) })
-            }
-          >
-            {CELL_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n}×{n}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
+      {showCellSize && (
+        <Field
+          label="Cell size (px)"
+          hint="Output resolution per Glyph — applies to the whole project."
+        >
+          {(id) => (
+            <select
+              id={id}
+              className={inputClass}
+              value={project.cellSize}
+              onChange={(e) =>
+                dispatch({
+                  type: "set-cell-size",
+                  size: Number(e.target.value),
+                })
+              }
+            >
+              {CELL_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}×{n}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
 
       {bg.shape !== "none" && (
         <ColorField
@@ -268,6 +280,77 @@ export function StyleControls({
           />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * A floating editor for a single Glyph, hovering over the preview (center-bottom)
+ * once the user clicks that Glyph's cell. It edits the Glyph tier of the Style
+ * Cascade — the same `patch-style`/`clear-style` flow as the sidebar — so
+ * overrides here win over the Project and Device defaults. Cell size is hidden
+ * because it never cascades. Dismiss with the close button or Escape.
+ */
+export function GlyphStylePopover({
+  project,
+  dispatch,
+  glyph,
+  style,
+  override,
+  onClose,
+}: {
+  project: Project;
+  dispatch: Dispatch<ProjectAction>;
+  glyph: SelectedGlyph;
+  /** Effective style for the Glyph (resolved through the cascade). */
+  style: GlyphStyle;
+  /** Raw sparse override stored on the Glyph. */
+  override: StyleOverride;
+  onClose: () => void;
+}) {
+  const scope: StyleScope = {
+    tier: "glyph",
+    deviceIndex: glyph.deviceIndex,
+    glyphId: glyph.glyphId,
+  };
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-label={`Edit Glyph ${glyph.label}`}
+      className="absolute bottom-4 left-1/2 z-20 max-h-[calc(100%-2rem)] w-[min(42rem,calc(100%-2rem))] -translate-x-1/2 overflow-y-auto rounded-lg border bg-background/95 p-4 shadow-lg backdrop-blur"
+    >
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">
+          Editing Glyph:{" "}
+          <span className="text-muted-foreground">{glyph.label}</span>
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close Glyph editor"
+          title="Close (Esc)"
+          className="flex size-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X aria-hidden className="size-4" />
+        </button>
+      </div>
+      <StyleControls
+        project={project}
+        dispatch={dispatch}
+        scope={scope}
+        style={style}
+        override={override}
+        showCellSize={false}
+      />
     </div>
   );
 }
