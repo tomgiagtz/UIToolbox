@@ -19,6 +19,20 @@ function glyphsOf(labels: string[]): PreviewGlyph[] {
   return labels.map((label) => ({ label, style }));
 }
 
+/**
+ * The tight content bounds of the packed cells — the size the preview canvas is
+ * drawn at (the exported texture's power-of-two padding is dropped for preview).
+ */
+function contentBounds(placements: ReturnType<typeof gridPack>["placements"]) {
+  return placements.reduce(
+    (acc, { rect }) => ({
+      width: Math.max(acc.width, rect.x + rect.w),
+      height: Math.max(acc.height, rect.y + rect.h),
+    }),
+    { width: 1, height: 1 },
+  );
+}
+
 function renderAtlas(
   props: Partial<React.ComponentProps<typeof AtlasPreview>> = {},
 ) {
@@ -34,7 +48,7 @@ function renderAtlas(
 }
 
 describe("AtlasPreview", () => {
-  it("renders a canvas sized to the packed power-of-two atlas", () => {
+  it("renders a canvas sized to the packed content bounds (no POT padding)", () => {
     const glyphs = glyphsOf(["A", "B", "Space", "Enter", "Shift"]);
     const cellSize = 128;
     renderAtlas({ glyphs, cellSize });
@@ -42,10 +56,11 @@ describe("AtlasPreview", () => {
     const canvas = screen.getByRole("img", {
       name: /Keyboard Sprite Atlas preview/i,
     }) as HTMLCanvasElement;
-    const { atlasSize } = gridPack(glyphs.length, cellSize);
+    const { placements } = gridPack(glyphs.length, cellSize);
+    const content = contentBounds(placements);
 
-    expect(canvas.width).toBe(atlasSize.width);
-    expect(canvas.height).toBe(atlasSize.height);
+    expect(canvas.width).toBe(content.width);
+    expect(canvas.height).toBe(content.height);
   });
 
   it("shows a placeholder instead of a canvas when there are no inputs", () => {
@@ -74,16 +89,17 @@ describe("AtlasPreview", () => {
     const canvas = screen.getByRole("img", {
       name: /Keyboard Sprite Atlas preview/i,
     }) as HTMLCanvasElement;
-    const { atlasSize, placements } = gridPack(glyphs.length, cellSize);
+    const { placements } = gridPack(glyphs.length, cellSize);
+    const content = contentBounds(placements);
 
-    // Render the canvas 1:1 with the atlas (no object-contain scaling) so a click
-    // at a placement's center maps straight back to that cell's index.
+    // Render the canvas 1:1 with the content (no object-contain scaling) so a
+    // click at a placement's center maps straight back to that cell's index.
     canvas.getBoundingClientRect = () =>
       ({
         left: 0,
         top: 0,
-        width: atlasSize.width,
-        height: atlasSize.height,
+        width: content.width,
+        height: content.height,
       }) as DOMRect;
 
     const cell = placements[2].rect;
@@ -103,13 +119,14 @@ describe("AtlasPreview", () => {
     const canvas = screen.getByRole("img", {
       name: /Keyboard Sprite Atlas preview/i,
     }) as HTMLCanvasElement;
-    const { atlasSize } = gridPack(glyphs.length, cellSize);
+    const { placements } = gridPack(glyphs.length, cellSize);
+    const content = contentBounds(placements);
     canvas.getBoundingClientRect = () =>
       ({
         left: 0,
         top: 0,
-        width: atlasSize.width,
-        height: atlasSize.height,
+        width: content.width,
+        height: content.height,
       }) as DOMRect;
 
     // 129px lands in the 2px gutter just past the first cell's far edge.

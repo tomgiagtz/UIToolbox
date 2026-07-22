@@ -46,24 +46,36 @@ export function AtlasPreview({
   onSelectGlyph,
 }: AtlasPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { atlasSize, placements } = gridPack(glyphs.length, cellSize);
+  const { placements } = gridPack(glyphs.length, cellSize);
+
+  // The tight bounds of the packed cells. The exported texture is padded up to a
+  // power of two, but that padding is empty — showing it here would letterbox the
+  // glyphs off toward the top-left, so the preview canvas is sized to the content
+  // instead, keeping the glyphs centered in the pane.
+  const content = placements.reduce(
+    (acc, { rect }) => ({
+      width: Math.max(acc.width, rect.x + rect.w),
+      height: Math.max(acc.height, rect.y + rect.h),
+    }),
+    { width: 1, height: 1 },
+  );
 
   /**
    * Map a click on the CSS-scaled, `object-contain` canvas back to a Glyph index.
-   * The canvas is drawn at the full power-of-two atlas resolution but letterboxed
-   * to fit its box, so undo the fit-scale + centering offset before hit-testing.
+   * The canvas is drawn at the content resolution but letterboxed to fit its box,
+   * so undo the fit-scale + centering offset before hit-testing.
    */
   function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas || !onSelectGlyph) return;
     const box = canvas.getBoundingClientRect();
     const scale = Math.min(
-      box.width / atlasSize.width,
-      box.height / atlasSize.height,
+      box.width / content.width,
+      box.height / content.height,
     );
     if (scale <= 0) return;
-    const drawnW = atlasSize.width * scale;
-    const drawnH = atlasSize.height * scale;
+    const drawnW = content.width * scale;
+    const drawnH = content.height * scale;
     const x = (e.clientX - box.left - (box.width - drawnW) / 2) / scale;
     const y = (e.clientY - box.top - (box.height - drawnH) / 2) / scale;
     const index = findPlacementIndexAt(placements, x, y);
@@ -75,7 +87,7 @@ export function AtlasPreview({
     fontFamily,
     cellSize,
     (ctx) => {
-      ctx.clearRect(0, 0, atlasSize.width, atlasSize.height);
+      ctx.clearRect(0, 0, content.width, content.height);
       for (const { index, rect } of placements) {
         renderGlyph(ctx, rect.x, rect.y, {
           label: glyphs[index].label,
@@ -100,8 +112,8 @@ export function AtlasPreview({
   return (
     <canvas
       ref={canvasRef}
-      width={atlasSize.width}
-      height={atlasSize.height}
+      width={content.width}
+      height={content.height}
       role="img"
       aria-label={`${deviceName} Sprite Atlas preview`}
       className={className}
