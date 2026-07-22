@@ -285,13 +285,13 @@ export function StyleControls({
 }
 
 /**
- * A floating editor for a single Glyph, hovering over the preview (center-bottom)
- * once the user clicks that Glyph's cell. It edits the Glyph tier of the Style
- * Cascade — the same `patch-style`/`clear-style` flow as the sidebar — so
- * overrides here win over the Project and Device defaults. Cell size is hidden
- * because it never cascades. Dismiss with the close button or Escape.
+ * A docked editor for a single Glyph, shown below the Editor sidebar once the
+ * user clicks that Glyph's cell. It edits the Glyph tier of the Style Cascade —
+ * the same `patch-style`/`clear-style` flow as the sidebar — so overrides here
+ * win over the Project and Device defaults. Cell size is hidden because it never
+ * cascades. Dismiss with the close button or Escape.
  */
-export function GlyphStylePopover({
+export function GlyphStylePanel({
   project,
   dispatch,
   glyph,
@@ -323,16 +323,15 @@ export function GlyphStylePopover({
   }, [onClose]);
 
   return (
-    <div
-      role="dialog"
+    <section
       aria-label={`Edit Glyph ${glyph.label}`}
-      className="absolute bottom-4 left-1/2 z-20 max-h-[calc(100%-2rem)] w-[min(42rem,calc(100%-2rem))] -translate-x-1/2 overflow-y-auto rounded-lg border bg-background/95 p-4 shadow-lg backdrop-blur"
+      className="flex max-h-[45%] shrink-0 flex-col overflow-hidden rounded-lg border"
     >
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-2.5">
+        <h2 className="text-sm font-semibold">
           Editing Glyph:{" "}
           <span className="text-muted-foreground">{glyph.label}</span>
-        </h3>
+        </h2>
         <button
           type="button"
           onClick={onClose}
@@ -343,14 +342,16 @@ export function GlyphStylePopover({
           <X aria-hidden className="size-4" />
         </button>
       </div>
-      <StyleControls
-        project={project}
-        dispatch={dispatch}
-        scope={scope}
-        style={style}
-        override={override}
-        showCellSize={false}
-      />
-    </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <StyleControls
+          project={project}
+          dispatch={dispatch}
+          scope={scope}
+          style={style}
+          override={override}
+          showCellSize={false}
+        />
+      </div>
+    </section>
   );
 }

@@ -31,7 +31,7 @@ import {
   saveFont,
 } from "@/lib/glyph/project-store";
 import {
-  GlyphStylePopover,
+  GlyphStylePanel,
   StyleControls,
   StyleScopeSwitcher,
   type SelectedGlyph,
@@ -388,87 +388,103 @@ export function GlyphCreator() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex min-h-0 flex-1 gap-4">
-        <aside
-          aria-label="Editor controls"
-          className="flex w-160 shrink-0 flex-col overflow-hidden rounded-lg border"
-        >
-          <div className="border-b px-4 py-2.5">
-            <h2 className="text-sm font-semibold">Editor</h2>
-          </div>
+        <div className="flex min-h-0 w-160 shrink-0 flex-col gap-4">
+          <aside
+            aria-label="Editor controls"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border"
+          >
+            <div className="border-b px-4 py-2.5">
+              <h2 className="text-sm font-semibold">Editor</h2>
+            </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4">
-            <DisclosureGroup
-              defaultExpandedKeys={["devices"]}
-              allowsMultipleExpanded={true}
-            >
-              <PanelSection
-                id="devices"
-                title="Devices"
-                help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
+            <div className="min-h-0 flex-1 overflow-y-auto px-4">
+              <DisclosureGroup
+                defaultExpandedKeys={["devices"]}
+                allowsMultipleExpanded={true}
               >
-                <DeviceControls
-                  project={project}
-                  dispatch={dispatch}
-                  activeIndex={activeIndex}
-                  onSelectDevice={setActiveDeviceIndex}
-                />
-              </PanelSection>
-
-              <PanelSection
-                id="inputs"
-                title="Inputs"
-                help="Add, rename, or remove the controls for the selected Device."
-              >
-                {activeDevice ? (
-                  <InputEditor
-                    device={activeDevice}
-                    deviceIndex={activeIndex}
-                    dispatch={dispatch}
-                  />
-                ) : (
-                  <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                    Select at least one Device to edit its Inputs.
-                  </p>
-                )}
-              </PanelSection>
-
-              <PanelSection
-                id="style"
-                title="Style"
-                help="Set the font (Inter by default) and the tile background, colors, and cell size."
-              >
-                <div className="space-y-5">
-                  <FontUpload fontName={fontName} onFontChange={onFontChange} />
-                  <StyleScopeSwitcher
-                    project={project}
-                    scope={validScope}
-                    selectedGlyph={validSelectedGlyph}
-                    onScopeChange={onScopeChange}
-                  />
-                  <StyleControls
+                <PanelSection
+                  id="devices"
+                  title="Devices"
+                  help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
+                >
+                  <DeviceControls
                     project={project}
                     dispatch={dispatch}
-                    scope={validScope}
-                    style={scopeStyle}
-                    override={scopeOverride}
+                    activeIndex={activeIndex}
+                    onSelectDevice={setActiveDeviceIndex}
                   />
-                </div>
-              </PanelSection>
+                </PanelSection>
 
-              <PanelSection
-                id="naming"
-                title="Naming"
-                help="Control Sprite Names and the exported file names."
-              >
-                <NamingControls
-                  project={project}
-                  dispatch={dispatch}
-                  activeIndex={activeIndex}
-                />
-              </PanelSection>
-            </DisclosureGroup>
-          </div>
-        </aside>
+                <PanelSection
+                  id="inputs"
+                  title="Inputs"
+                  help="Add, rename, or remove the controls for the selected Device."
+                >
+                  {activeDevice ? (
+                    <InputEditor
+                      device={activeDevice}
+                      deviceIndex={activeIndex}
+                      dispatch={dispatch}
+                    />
+                  ) : (
+                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      Select at least one Device to edit its Inputs.
+                    </p>
+                  )}
+                </PanelSection>
+
+                <PanelSection
+                  id="style"
+                  title="Style"
+                  help="Set the font (Inter by default) and the tile background, colors, and cell size."
+                >
+                  <div className="space-y-5">
+                    <FontUpload
+                      fontName={fontName}
+                      onFontChange={onFontChange}
+                    />
+                    <StyleScopeSwitcher
+                      project={project}
+                      scope={validScope}
+                      selectedGlyph={validSelectedGlyph}
+                      onScopeChange={onScopeChange}
+                    />
+                    <StyleControls
+                      project={project}
+                      dispatch={dispatch}
+                      scope={validScope}
+                      style={scopeStyle}
+                      override={scopeOverride}
+                    />
+                  </div>
+                </PanelSection>
+
+                <PanelSection
+                  id="naming"
+                  title="Naming"
+                  help="Control Sprite Names and the exported file names."
+                >
+                  <NamingControls
+                    project={project}
+                    dispatch={dispatch}
+                    activeIndex={activeIndex}
+                  />
+                </PanelSection>
+              </DisclosureGroup>
+            </div>
+          </aside>
+
+          {validSelectedGlyph && selectedGlyphScope && (
+            <GlyphStylePanel
+              project={project}
+              dispatch={dispatch}
+              glyph={validSelectedGlyph}
+              style={resolveScopeStyle(project, selectedGlyphScope)}
+              override={overrideAt(project, selectedGlyphScope)}
+              onClose={() => setSelectedGlyph(null)}
+            />
+          )}
+        </div>
 
         <section
           ref={preview.ref}
@@ -506,7 +522,7 @@ export function GlyphCreator() {
                 glyphs={activeInputs}
                 cellSize={project.cellSize}
                 fontFamily={project.font.family}
-                className="h-full w-full rounded-md object-contain"
+                className="h-full w-full object-contain"
                 onSelectGlyph={onSelectGlyph}
               />
             </div>
@@ -516,17 +532,6 @@ export function GlyphCreator() {
                 ? "Loading font…"
                 : "Select a Device to preview its Sprite Atlas."}
             </p>
-          )}
-
-          {validSelectedGlyph && selectedGlyphScope && (
-            <GlyphStylePopover
-              project={project}
-              dispatch={dispatch}
-              glyph={validSelectedGlyph}
-              style={resolveScopeStyle(project, selectedGlyphScope)}
-              override={overrideAt(project, selectedGlyphScope)}
-              onClose={() => setSelectedGlyph(null)}
-            />
           )}
         </section>
       </div>

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { GlyphStylePopover, type SelectedGlyph } from "./style-controls";
+import { GlyphStylePanel, type SelectedGlyph } from "./style-controls";
 import { createDefaultProject } from "@/lib/glyph/presets";
 import { projectBaseStyle } from "@/lib/glyph/generate";
 
@@ -10,10 +10,10 @@ const glyph: SelectedGlyph = {
   label: "A",
 };
 
-function renderPopover(onClose = vi.fn(), dispatch = vi.fn()) {
+function renderPanel(onClose = vi.fn(), dispatch = vi.fn()) {
   const project = createDefaultProject();
   render(
-    <GlyphStylePopover
+    <GlyphStylePanel
       project={project}
       dispatch={dispatch}
       glyph={glyph}
@@ -25,11 +25,11 @@ function renderPopover(onClose = vi.fn(), dispatch = vi.fn()) {
   return { dispatch, onClose };
 }
 
-describe("GlyphStylePopover", () => {
+describe("GlyphStylePanel", () => {
   it("names the selected Glyph and hides the Project-global cell size", () => {
-    renderPopover();
+    renderPanel();
     expect(
-      screen.getByRole("dialog", { name: /edit glyph a/i }),
+      screen.getByRole("region", { name: /edit glyph a/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("A")).toBeInTheDocument();
     // Cell size never cascades, so it stays out of the per-Glyph editor.
@@ -37,7 +37,7 @@ describe("GlyphStylePopover", () => {
   });
 
   it("edits store a sparse Glyph-scope patch", () => {
-    const { dispatch } = renderPopover();
+    const { dispatch } = renderPanel();
     fireEvent.change(screen.getByLabelText("Text color"), {
       target: { value: "#00ff00" },
     });
@@ -49,7 +49,7 @@ describe("GlyphStylePopover", () => {
   });
 
   it("closes via the close button and Escape", () => {
-    const { onClose } = renderPopover();
+    const { onClose } = renderPanel();
     fireEvent.click(
       screen.getByRole("button", { name: /close glyph editor/i }),
     );
