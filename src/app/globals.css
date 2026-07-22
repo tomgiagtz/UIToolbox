@@ -32,8 +32,8 @@
   /* Preview click-highlight drawn over the hovered Glyph cell. It always sits on
      the dark atlas tiles, so it's a fixed bright accent independent of app
      theme (the fill carries its own translucency). */
-  --glyph-highlight-border: oklch(0.72 0.17 240);
-  --glyph-highlight-fill: oklch(0.72 0.17 240 / 0.18);
+  --glyph-highlight-border: oklch(0.347 0.008 255.548);
+  --glyph-highlight-fill: oklch(1 0 0 / 0.4);
 }
 
 .dark {
