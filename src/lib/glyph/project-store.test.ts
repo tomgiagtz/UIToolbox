@@ -9,9 +9,12 @@ function edited(): Project {
   // faithful round-trip has to carry each one.
   return [
     { type: "set-font", family: "UITBFont-restored" } as const,
-    { type: "set-text-color", color: "#ff0000" } as const,
+    {
+      type: "patch-style",
+      scope: { tier: "project" },
+      patch: { textColor: "#ff0000", background: { shape: "circle" } },
+    } as const,
     { type: "set-cell-size", size: 256 } as const,
-    { type: "set-bg-shape", shape: "circle" } as const,
     { type: "toggle-device", catalogId: "xbox" } as const,
     { type: "add-custom-input", deviceIndex: 0, label: "F5" } as const,
     { type: "set-naming-template", template: "btn_{input}" } as const,

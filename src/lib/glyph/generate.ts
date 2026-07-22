@@ -2,7 +2,11 @@ import { catalogIndex, getCatalog } from "@/lib/glyph/catalog";
 import { applyTemplate, caseSeparator } from "@/lib/glyph/naming";
 import { gridPack } from "@/lib/glyph/packer";
 import { slugify } from "@/lib/glyph/slugify";
-import { resolveStyle, type GlyphStyle } from "@/lib/glyph/style";
+import {
+  resolveStyle,
+  type GlyphStyle,
+  type StyleScope,
+} from "@/lib/glyph/style";
 import type {
   CaseStyle,
   DeviceConfig,
@@ -14,8 +18,38 @@ import type {
 } from "@/lib/glyph/types";
 
 /** The Project tier of the Style Cascade: the project's base style. */
-function projectBaseStyle(project: Project): GlyphStyle {
+export function projectBaseStyle(project: Project): GlyphStyle {
   return { textColor: project.textColor, background: project.background };
+}
+
+/**
+ * The effective {@link GlyphStyle} the Style-tab controls should display at a
+ * given {@link StyleScope} — Project shows the base, Device folds in the Device
+ * override, Glyph folds the whole chain (Device → Catalog per-Input default →
+ * Glyph) exactly as {@link resolveDeviceInputs} does for that Input. A scope that
+ * points at a missing Device falls back to the Project base.
+ */
+export function resolveScopeStyle(
+  project: Project,
+  scope: StyleScope,
+): GlyphStyle {
+  const base = projectBaseStyle(project);
+  if (scope.tier === "project") return base;
+
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return base;
+  if (scope.tier === "device") return resolveStyle(base, device.style);
+
+  const catalog = getCatalog(device.catalogId);
+  const defaultStyle = catalog
+    ? catalogIndex(catalog).get(scope.glyphId)?.defaultStyle
+    : undefined;
+  return resolveStyle(
+    base,
+    device.style,
+    defaultStyle,
+    device.glyphStyles[scope.glyphId],
+  );
 }
 
 /**

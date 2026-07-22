@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveStyle } from "@/lib/glyph/style";
+import {
+  clearOverrideField,
+  isOverrideFieldSet,
+  mergeOverride,
+  resolveStyle,
+} from "@/lib/glyph/style";
 import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
 
 function base(): GlyphStyle {
@@ -69,5 +74,101 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     const snapshot = JSON.parse(JSON.stringify(b));
     resolveStyle(b, { background: { border: { width: 99 } } });
     expect(b).toEqual(snapshot);
+  });
+});
+
+describe("mergeOverride", () => {
+  it("returns an empty override when both sides are empty", () => {
+    expect(mergeOverride({}, {})).toEqual({});
+  });
+
+  it("layers text color and background from the patch", () => {
+    const out = mergeOverride({}, { textColor: "#f00" });
+    expect(out).toEqual({ textColor: "#f00" });
+  });
+
+  it("deep-merges background so the patch keeps the base's other fields", () => {
+    const base: StyleOverride = {
+      background: { shape: "circle", fill: "#111" },
+    };
+    const out = mergeOverride(base, { background: { fill: "#222" } });
+    expect(out.background).toEqual({ shape: "circle", fill: "#222" });
+  });
+
+  it("deep-merges the border, keeping the base's unset border field", () => {
+    const base: StyleOverride = { background: { border: { width: 4 } } };
+    const out = mergeOverride(base, {
+      background: { border: { color: "#0f0" } },
+    });
+    expect(out.background?.border).toEqual({ width: 4, color: "#0f0" });
+  });
+
+  it("does not mutate either input", () => {
+    const base: StyleOverride = { background: { border: { width: 4 } } };
+    const snapshot = JSON.parse(JSON.stringify(base));
+    mergeOverride(base, { background: { border: { color: "#0f0" } } });
+    expect(base).toEqual(snapshot);
+  });
+});
+
+describe("isOverrideFieldSet", () => {
+  it("detects a set top-level and nested field", () => {
+    expect(isOverrideFieldSet({ textColor: "#f00" }, "textColor")).toBe(true);
+    expect(
+      isOverrideFieldSet(
+        { background: { border: { width: 2 } } },
+        "borderWidth",
+      ),
+    ).toBe(true);
+  });
+
+  it("returns false for an unset field", () => {
+    expect(isOverrideFieldSet({}, "fill")).toBe(false);
+    expect(isOverrideFieldSet({ background: { fill: "#111" } }, "shape")).toBe(
+      false,
+    );
+  });
+});
+
+describe("clearOverrideField", () => {
+  it("removes the text color, collapsing to empty", () => {
+    expect(clearOverrideField({ textColor: "#f00" }, "textColor")).toEqual({});
+  });
+
+  it("removes a background sub-property but keeps the rest", () => {
+    const out = clearOverrideField(
+      { background: { shape: "circle", fill: "#111" } },
+      "fill",
+    );
+    expect(out).toEqual({ background: { shape: "circle" } });
+  });
+
+  it("collapses the background when its last property is cleared", () => {
+    expect(
+      clearOverrideField({ background: { fill: "#111" } }, "fill"),
+    ).toEqual({});
+  });
+
+  it("removes one border field but keeps the other", () => {
+    const out = clearOverrideField(
+      { background: { border: { width: 4, color: "#0f0" } } },
+      "borderWidth",
+    );
+    expect(out).toEqual({ background: { border: { color: "#0f0" } } });
+  });
+
+  it("collapses background and border when the last border field is cleared", () => {
+    expect(
+      clearOverrideField(
+        { background: { border: { color: "#0f0" } } },
+        "borderColor",
+      ),
+    ).toEqual({});
+  });
+
+  it("is a no-op when the field is not set", () => {
+    expect(clearOverrideField({ textColor: "#f00" }, "fill")).toEqual({
+      textColor: "#f00",
+    });
   });
 });

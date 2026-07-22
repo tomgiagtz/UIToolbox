@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findPlacementIndexAt,
   gridPack,
   GUTTER,
   isPowerOfTwo,
@@ -79,5 +80,29 @@ describe("gridPack", () => {
     expect(placements).toHaveLength(0);
     expect(isPowerOfTwo(atlasSize.width)).toBe(true);
     expect(isPowerOfTwo(atlasSize.height)).toBe(true);
+  });
+});
+
+describe("findPlacementIndexAt", () => {
+  const { placements } = gridPack(5, 128);
+
+  it("returns the index of the cell containing the point", () => {
+    // Cell 0 sits at the origin; a point inside it hits index 0.
+    expect(findPlacementIndexAt(placements, 10, 10)).toBe(0);
+  });
+
+  it("hits the correct cell for a point in a later column", () => {
+    const step = 128 + GUTTER;
+    // Just inside the second column's cell → index 1.
+    expect(findPlacementIndexAt(placements, step + 5, 5)).toBe(1);
+  });
+
+  it("returns null for a point in the gutter between cells", () => {
+    // The 2px gutter starts right at the first cell's far edge.
+    expect(findPlacementIndexAt(placements, 129, 10)).toBeNull();
+  });
+
+  it("returns null for a point outside every cell", () => {
+    expect(findPlacementIndexAt(placements, 100000, 100000)).toBeNull();
   });
 });

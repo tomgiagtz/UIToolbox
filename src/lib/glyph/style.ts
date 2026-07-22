@@ -45,6 +45,105 @@ export interface StyleOverride {
 export const NO_OVERRIDE: StyleOverride = {};
 
 /**
+ * Which tier of the cascade the UI is currently editing. The Project tier is the
+ * base style; the Device and Glyph tiers store sparse {@link StyleOverride}s (the
+ * Glyph tier keyed by Catalog id or custom id on its Device).
+ */
+export type StyleScope =
+  | { tier: "project" }
+  | { tier: "device"; deviceIndex: number }
+  | { tier: "glyph"; deviceIndex: number; glyphId: string };
+
+/**
+ * One cascade-editable property, as addressed by the reset ("fall back up")
+ * control. Background sub-properties are flattened so a single field names
+ * exactly one setting the user can override or clear.
+ */
+export type StyleField =
+  | "textColor"
+  | "shape"
+  | "fill"
+  | "cornerRadius"
+  | "borderWidth"
+  | "borderColor";
+
+/**
+ * Deep-merge two sparse overrides, `patch` winning. Background and its border are
+ * merged property-by-property so a patch can set just one setting without dropping
+ * the rest of an existing override. Never mutates its inputs.
+ */
+export function mergeOverride(
+  base: StyleOverride,
+  patch: StyleOverride,
+): StyleOverride {
+  const next: StyleOverride = { ...base };
+  if (patch.textColor !== undefined) next.textColor = patch.textColor;
+  if (patch.background) {
+    const border = { ...base.background?.border, ...patch.background.border };
+    next.background = {
+      ...base.background,
+      ...patch.background,
+      ...(Object.keys(border).length > 0 ? { border } : {}),
+    };
+  }
+  return next;
+}
+
+/** Whether `field` is explicitly set on this sparse override. */
+export function isOverrideFieldSet(
+  override: StyleOverride,
+  field: StyleField,
+): boolean {
+  switch (field) {
+    case "textColor":
+      return override.textColor !== undefined;
+    case "shape":
+      return override.background?.shape !== undefined;
+    case "fill":
+      return override.background?.fill !== undefined;
+    case "cornerRadius":
+      return override.background?.cornerRadius !== undefined;
+    case "borderWidth":
+      return override.background?.border?.width !== undefined;
+    case "borderColor":
+      return override.background?.border?.color !== undefined;
+  }
+}
+
+/**
+ * Return a copy of `override` with the one {@link StyleField} removed, so that
+ * property falls back up the cascade again. Empty `border`/`background` objects
+ * are dropped so clearing the last set property collapses the override to `{}`.
+ */
+export function clearOverrideField(
+  override: StyleOverride,
+  field: StyleField,
+): StyleOverride {
+  const next: StyleOverride = { ...override };
+  if (field === "textColor") {
+    delete next.textColor;
+    return next;
+  }
+  if (!next.background) return next;
+  const bg: BackgroundOverride = { ...next.background };
+  if (field === "shape") delete bg.shape;
+  else if (field === "fill") delete bg.fill;
+  else if (field === "cornerRadius") delete bg.cornerRadius;
+  else if (field === "borderWidth" || field === "borderColor") {
+    if (bg.border) {
+      const border = { ...bg.border };
+      if (field === "borderWidth") delete border.width;
+      else delete border.color;
+      if (Object.keys(border).length > 0) bg.border = border;
+      else delete bg.border;
+    }
+  }
+  if (Object.keys(bg).length > 0) next.background = bg;
+  else delete next.background;
+  return next;
+}
+
+/**
  * Fold `base` and `overrides` (in ascending precedence) into one effective
  * {@link GlyphStyle}. Later overrides win; Background and its border are merged
  * property-by-property so a tier can set just `fill` or just the border width

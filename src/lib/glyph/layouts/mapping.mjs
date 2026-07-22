@@ -35,8 +35,22 @@ export const LAYOUT_MAPPINGS = {
     DPad_Left: "xbox-dpad-left",
     DPad_Right: "xbox-dpad-right",
   },
-  // playstation: {
-  //   "Cross": "ps-cross",
-  //   ...
-  // },
+  playstation: {
+    Cross: "ps-cross",
+    Circle: "ps-circle",
+    Square: "ps-square",
+    Triangle: "ps-triangle",
+    L1: "ps-l1",
+    R1: "ps-r1",
+    L2: "ps-l2",
+    R2: "ps-r2",
+    Share: "ps-share",
+    Options: "ps-options",
+    LS: "ps-left-stick",
+    RS: "ps-right-stick",
+    DPad_Up: "ps-dpad-up",
+    DPad_Down: "ps-dpad-down",
+    DPad_Left: "ps-dpad-left",
+    DPad_Right: "ps-dpad-right",
+  },
 };
