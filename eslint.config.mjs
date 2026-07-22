@@ -22,6 +22,8 @@ const eslintConfig = [
       "playwright-report/**",
       "test-results/**",
       "node_modules/**",
+      // Vendored agent skills & tooling — matches .prettierignore.
+      ".claude/**",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
