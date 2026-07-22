@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { generateTilesets } from "@/lib/glyph/generate";
+import { generateTilesets, resolveScopeStyle } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
+import { projectReducer } from "@/lib/glyph/project";
 import { createDefaultProject } from "@/lib/glyph/presets";
 import type { DeviceConfig, Project } from "@/lib/glyph/types";
 
@@ -221,5 +222,52 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
       // so pixels are byte-identical to the pre-cascade output.
       expect(placement.style).toEqual(base);
     }
+  });
+});
+
+describe("resolveScopeStyle", () => {
+  it("returns the Project base at Project scope", () => {
+    const proj = createDefaultProject("TestFont");
+    expect(resolveScopeStyle(proj, { tier: "project" })).toEqual({
+      textColor: proj.textColor,
+      background: proj.background,
+    });
+  });
+
+  it("folds the Device override in at Device scope", () => {
+    const proj = projectReducer(createDefaultProject("TestFont"), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { shape: "circle" } },
+    });
+    const style = resolveScopeStyle(proj, { tier: "device", deviceIndex: 0 });
+    expect(style.background.shape).toBe("circle");
+    // Unset fields fall up to the Project base.
+    expect(style.background.fill).toBe(proj.background.fill);
+  });
+
+  it("folds Device then Glyph overrides in at Glyph scope", () => {
+    const scope = { tier: "glyph", deviceIndex: 0, glyphId: "key-w" } as const;
+    const proj = [
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 0 },
+        patch: { background: { shape: "circle" } },
+      } as const,
+      { type: "patch-style", scope, patch: { textColor: "#0f0" } } as const,
+    ].reduce(projectReducer, createDefaultProject("TestFont"));
+    const style = resolveScopeStyle(proj, scope);
+    expect(style.textColor).toBe("#0f0"); // Glyph tier
+    expect(style.background.shape).toBe("circle"); // Device tier
+  });
+
+  it("falls back to the Project base for a missing Device", () => {
+    const proj = createDefaultProject("TestFont");
+    expect(resolveScopeStyle(proj, { tier: "device", deviceIndex: 9 })).toEqual(
+      {
+        textColor: proj.textColor,
+        background: proj.background,
+      },
+    );
   });
 });

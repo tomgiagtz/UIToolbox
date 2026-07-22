@@ -13,9 +13,15 @@ import {
   loadFontFromFile,
   registerFont,
 } from "@/lib/glyph/font";
-import { generateTilesets, resolveDeviceInputs } from "@/lib/glyph/generate";
+import {
+  generateTilesets,
+  resolveDeviceInputs,
+  resolveScopeStyle,
+} from "@/lib/glyph/generate";
 import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
+import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
+import type { Project } from "@/lib/glyph/types";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import {
   clear as clearPersisted,
@@ -24,7 +30,12 @@ import {
   saveConfig,
   saveFont,
 } from "@/lib/glyph/project-store";
-import { StyleControls } from "./style-controls";
+import {
+  GlyphStylePanel,
+  StyleControls,
+  StyleScopeSwitcher,
+  type SelectedGlyph,
+} from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
 import { NamingControls } from "./naming-controls";
 import { ProjectMenuBar } from "./project-menu-bar";
@@ -63,6 +74,34 @@ function useSquareSize() {
   return { ref, size };
 }
 
+/** The sparse override stored at `scope` — `{}` at Project scope or if missing. */
+function overrideAt(project: Project, scope: StyleScope): StyleOverride {
+  if (scope.tier === "project") return {};
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return {};
+  if (scope.tier === "device") return device.style;
+  return device.glyphStyles[scope.glyphId] ?? {};
+}
+
+/** True when `scope` still points at a Device (and Glyph) that resolves today. */
+function isScopeValid(scope: StyleScope, project: Project): boolean {
+  if (scope.tier === "project") return true;
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return false;
+  if (scope.tier === "device") return true;
+  return resolveDeviceInputs(device, project).some(
+    (i) => i.id === scope.glyphId,
+  );
+}
+
+/** True when a selected Glyph still resolves on its Device. */
+function isGlyphValid(glyph: SelectedGlyph, project: Project): boolean {
+  return isScopeValid(
+    { tier: "glyph", deviceIndex: glyph.deviceIndex, glyphId: glyph.glyphId },
+    project,
+  );
+}
+
 export function GlyphCreator() {
   // The whole editor is a thin shell over the project state + reducer; every
   // control dispatches a ProjectAction (see project.ts).
@@ -77,6 +116,12 @@ export function GlyphCreator() {
   const [hasUploadedFont, setHasUploadedFont] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
+  // Which cascade tier the Style tab edits, plus the Glyph the user last picked
+  // in the preview (kept so the switcher can offer "Glyph: <label>" as a target).
+  const [styleScope, setStyleScope] = useState<StyleScope>({ tier: "project" });
+  const [selectedGlyph, setSelectedGlyph] = useState<SelectedGlyph | null>(
+    null,
+  );
   const preview = useSquareSize();
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
@@ -159,6 +204,64 @@ export function GlyphCreator() {
     Math.max(0, project.devices.length - 1),
   );
   const activeDevice = project.devices[activeIndex] ?? null;
+  // The active Device's Glyphs, resolved through the cascade — shared by the
+  // preview and by cell-click → Glyph selection so both index the same list.
+  const activeInputs = activeDevice
+    ? resolveDeviceInputs(activeDevice, project)
+    : [];
+
+  // Devices/Glyphs can disappear (delete, toggled off). Drop a scope or selected
+  // Glyph that no longer resolves so the Style tab never edits a phantom target.
+  const validScope = isScopeValid(styleScope, project)
+    ? styleScope
+    : ({ tier: "project" } as StyleScope);
+  const validSelectedGlyph =
+    selectedGlyph && isGlyphValid(selectedGlyph, project)
+      ? selectedGlyph
+      : null;
+  const scopeStyle = resolveScopeStyle(project, validScope);
+  const scopeOverride = overrideAt(project, validScope);
+
+  // Select the Glyph in cell `index` of the active Device, opening its floating
+  // editor over the preview. The sidebar scope is left untouched — the popover is
+  // the Glyph-scope surface, so the two don't fight over the same target.
+  function onSelectGlyph(index: number) {
+    const input = activeInputs[index];
+    if (!input) return;
+    setSelectedGlyph({
+      deviceIndex: activeIndex,
+      glyphId: input.id,
+      label: input.label,
+    });
+  }
+
+  // The selected Glyph's cascade scope + resolved/raw style, feeding the popover.
+  const selectedGlyphScope: StyleScope | null = validSelectedGlyph
+    ? {
+        tier: "glyph",
+        deviceIndex: validSelectedGlyph.deviceIndex,
+        glyphId: validSelectedGlyph.glyphId,
+      }
+    : null;
+
+  // The previewed Device and the edited Style scope share their Device: changing
+  // one moves the other so the two selects never disagree. Project stays Project
+  // (it's Device-agnostic); a Device/Glyph scope always previews its own Device.
+  function onScopeChange(scope: StyleScope) {
+    setStyleScope(scope);
+    if (scope.tier !== "project") setActiveDeviceIndex(scope.deviceIndex);
+  }
+
+  function onPreviewDeviceChange(index: number) {
+    setActiveDeviceIndex(index);
+    setStyleScope((prev) =>
+      prev.tier === "project" ? prev : { tier: "device", deviceIndex: index },
+    );
+    // A Glyph popover from the previously previewed Device no longer applies.
+    setSelectedGlyph((prev) =>
+      prev && prev.deviceIndex !== index ? null : prev,
+    );
+  }
 
   async function onFontChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -269,6 +372,8 @@ export function GlyphCreator() {
     // The bundled Inter stays registered, so the reset preview keeps rendering.
     markDefaultFontReady();
     setActiveDeviceIndex(0);
+    setStyleScope({ tier: "project" });
+    setSelectedGlyph(null);
   }
 
   const isBusy = status.kind === "loading-font" || status.kind === "generating";
@@ -283,75 +388,103 @@ export function GlyphCreator() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex min-h-0 flex-1 gap-4">
-        <aside
-          aria-label="Editor controls"
-          className="flex w-160 shrink-0 flex-col overflow-hidden rounded-lg border"
-        >
-          <div className="border-b px-4 py-2.5">
-            <h2 className="text-sm font-semibold">Editor</h2>
-          </div>
+        <div className="flex min-h-0 w-160 shrink-0 flex-col gap-4">
+          <aside
+            aria-label="Editor controls"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border"
+          >
+            <div className="border-b px-4 py-2.5">
+              <h2 className="text-sm font-semibold">Editor</h2>
+            </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4">
-            <DisclosureGroup
-              defaultExpandedKeys={["devices"]}
-              allowsMultipleExpanded={true}
-            >
-              <PanelSection
-                id="devices"
-                title="Devices"
-                help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
+            <div className="min-h-0 flex-1 overflow-y-auto px-4">
+              <DisclosureGroup
+                defaultExpandedKeys={["devices"]}
+                allowsMultipleExpanded={true}
               >
-                <DeviceControls
-                  project={project}
-                  dispatch={dispatch}
-                  activeIndex={activeIndex}
-                  onSelectDevice={setActiveDeviceIndex}
-                />
-              </PanelSection>
-
-              <PanelSection
-                id="inputs"
-                title="Inputs"
-                help="Add, rename, or remove the controls for the selected Device."
-              >
-                {activeDevice ? (
-                  <InputEditor
-                    device={activeDevice}
-                    deviceIndex={activeIndex}
+                <PanelSection
+                  id="devices"
+                  title="Devices"
+                  help="Pick which input Devices to generate. Each selected Device makes one Sprite Atlas."
+                >
+                  <DeviceControls
+                    project={project}
                     dispatch={dispatch}
+                    activeIndex={activeIndex}
+                    onSelectDevice={setActiveDeviceIndex}
                   />
-                ) : (
-                  <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                    Select at least one Device to edit its Inputs.
-                  </p>
-                )}
-              </PanelSection>
+                </PanelSection>
 
-              <PanelSection
-                id="style"
-                title="Style"
-                help="Set the font (Inter by default) and the tile background, colors, and cell size."
-              >
-                <div className="space-y-5">
-                  <FontUpload fontName={fontName} onFontChange={onFontChange} />
-                  <StyleControls project={project} dispatch={dispatch} />
-                </div>
-              </PanelSection>
+                <PanelSection
+                  id="inputs"
+                  title="Inputs"
+                  help="Add, rename, or remove the controls for the selected Device."
+                >
+                  {activeDevice ? (
+                    <InputEditor
+                      device={activeDevice}
+                      deviceIndex={activeIndex}
+                      dispatch={dispatch}
+                    />
+                  ) : (
+                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      Select at least one Device to edit its Inputs.
+                    </p>
+                  )}
+                </PanelSection>
 
-              <PanelSection
-                id="naming"
-                title="Naming"
-                help="Control Sprite Names and the exported file names."
-              >
-                <NamingControls
-                  project={project}
-                  dispatch={dispatch}
-                  activeIndex={activeIndex}
-                />
-              </PanelSection>
-            </DisclosureGroup>
-          </div>
-        </aside>
+                <PanelSection
+                  id="style"
+                  title="Style"
+                  help="Set the font (Inter by default) and the tile background, colors, and cell size."
+                >
+                  <div className="space-y-5">
+                    <FontUpload
+                      fontName={fontName}
+                      onFontChange={onFontChange}
+                    />
+                    <StyleScopeSwitcher
+                      project={project}
+                      scope={validScope}
+                      selectedGlyph={validSelectedGlyph}
+                      onScopeChange={onScopeChange}
+                    />
+                    <StyleControls
+                      project={project}
+                      dispatch={dispatch}
+                      scope={validScope}
+                      style={scopeStyle}
+                      override={scopeOverride}
+                    />
+                  </div>
+                </PanelSection>
+
+                <PanelSection
+                  id="naming"
+                  title="Naming"
+                  help="Control Sprite Names and the exported file names."
+                >
+                  <NamingControls
+                    project={project}
+                    dispatch={dispatch}
+                    activeIndex={activeIndex}
+                  />
+                </PanelSection>
+              </DisclosureGroup>
+            </div>
+          </aside>
+
+          {validSelectedGlyph && selectedGlyphScope && (
+            <GlyphStylePanel
+              project={project}
+              dispatch={dispatch}
+              glyph={validSelectedGlyph}
+              style={resolveScopeStyle(project, selectedGlyphScope)}
+              override={overrideAt(project, selectedGlyphScope)}
+              onClose={() => setSelectedGlyph(null)}
+            />
+          )}
+        </div>
 
         <section
           ref={preview.ref}
@@ -366,7 +499,7 @@ export function GlyphCreator() {
               <select
                 id="preview-device"
                 value={activeIndex}
-                onChange={(e) => setActiveDeviceIndex(Number(e.target.value))}
+                onChange={(e) => onPreviewDeviceChange(Number(e.target.value))}
                 className="rounded-md border border-input bg-background/95 px-2.5 py-1.5 text-sm shadow-sm backdrop-blur"
               >
                 {project.devices.map((d, i) => (
@@ -386,10 +519,11 @@ export function GlyphCreator() {
             >
               <AtlasPreview
                 deviceName={activeDevice.name}
-                glyphs={resolveDeviceInputs(activeDevice, project)}
+                glyphs={activeInputs}
                 cellSize={project.cellSize}
                 fontFamily={project.font.family}
-                className="h-full w-full rounded-md object-contain"
+                className="h-full w-full object-contain"
+                onSelectGlyph={onSelectGlyph}
               />
             </div>
           ) : (
