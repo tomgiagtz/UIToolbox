@@ -244,6 +244,25 @@ export function GlyphCreator() {
       }
     : null;
 
+  // The previewed Device and the edited Style scope share their Device: changing
+  // one moves the other so the two selects never disagree. Project stays Project
+  // (it's Device-agnostic); a Device/Glyph scope always previews its own Device.
+  function onScopeChange(scope: StyleScope) {
+    setStyleScope(scope);
+    if (scope.tier !== "project") setActiveDeviceIndex(scope.deviceIndex);
+  }
+
+  function onPreviewDeviceChange(index: number) {
+    setActiveDeviceIndex(index);
+    setStyleScope((prev) =>
+      prev.tier === "project" ? prev : { tier: "device", deviceIndex: index },
+    );
+    // A Glyph popover from the previously previewed Device no longer applies.
+    setSelectedGlyph((prev) =>
+      prev && prev.deviceIndex !== index ? null : prev,
+    );
+  }
+
   async function onFontChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -424,7 +443,7 @@ export function GlyphCreator() {
                     project={project}
                     scope={validScope}
                     selectedGlyph={validSelectedGlyph}
-                    onScopeChange={setStyleScope}
+                    onScopeChange={onScopeChange}
                   />
                   <StyleControls
                     project={project}
@@ -464,7 +483,7 @@ export function GlyphCreator() {
               <select
                 id="preview-device"
                 value={activeIndex}
-                onChange={(e) => setActiveDeviceIndex(Number(e.target.value))}
+                onChange={(e) => onPreviewDeviceChange(Number(e.target.value))}
                 className="rounded-md border border-input bg-background/95 px-2.5 py-1.5 text-sm shadow-sm backdrop-blur"
               >
                 {project.devices.map((d, i) => (

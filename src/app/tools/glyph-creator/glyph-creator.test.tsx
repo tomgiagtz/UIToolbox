@@ -95,3 +95,55 @@ describe("GlyphCreator — Style Cascade scope switcher (#19)", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("GlyphCreator — preview Device ↔ Style scope sync (#19)", () => {
+  beforeEach(() => localStorage.clear());
+
+  /** Add Xbox so a second Device (index 1) and the preview switcher exist. */
+  function addSecondDevice() {
+    fireEvent.click(screen.getByLabelText("Xbox"));
+  }
+
+  it("focusing a Device scope moves the previewed Device to match", () => {
+    render(<GlyphCreator />);
+    addSecondDevice();
+    openStyle();
+    fireEvent.change(screen.getByLabelText("Editing style for"), {
+      target: { value: "device:1" },
+    });
+    const preview = screen.getByLabelText(
+      "Device to preview",
+    ) as HTMLSelectElement;
+    expect(preview.value).toBe("1");
+  });
+
+  it("switching the previewed Device moves the edited Device scope to match", () => {
+    render(<GlyphCreator />);
+    addSecondDevice();
+    openStyle();
+    // Focus a Device scope first — Project is Device-agnostic and stays put.
+    fireEvent.change(screen.getByLabelText("Editing style for"), {
+      target: { value: "device:0" },
+    });
+    fireEvent.change(screen.getByLabelText("Device to preview"), {
+      target: { value: "1" },
+    });
+    const scope = screen.getByLabelText(
+      "Editing style for",
+    ) as HTMLSelectElement;
+    expect(scope.value).toBe("device:1");
+  });
+
+  it("keeps Project scope when the previewed Device changes", () => {
+    render(<GlyphCreator />);
+    addSecondDevice();
+    openStyle();
+    fireEvent.change(screen.getByLabelText("Device to preview"), {
+      target: { value: "1" },
+    });
+    const scope = screen.getByLabelText(
+      "Editing style for",
+    ) as HTMLSelectElement;
+    expect(scope.value).toBe("project");
+  });
+});
