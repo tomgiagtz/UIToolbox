@@ -29,6 +29,11 @@
   --input-fill-muted: oklch(0.776 0 0);
   --input-border-primary: oklch(0.776 0 0);
   --input-border-muted: oklch(0.876 0 0);
+  /* Preview click-highlight drawn over the hovered Glyph cell. It always sits on
+     the dark atlas tiles, so it's a fixed bright accent independent of app
+     theme (the fill carries its own translucency). */
+  --glyph-highlight-border: oklch(0.72 0.17 240);
+  --glyph-highlight-fill: oklch(0.72 0.17 240 / 0.18);
 }
 
 .dark {
@@ -79,6 +84,8 @@
   --color-input-fill-muted: var(--input-fill-muted);
   --color-input-border-primary: var(--input-border-primary);
   --color-input-border-muted: var(--input-border-muted);
+  --color-glyph-highlight-border: var(--glyph-highlight-border);
+  --color-glyph-highlight-fill: var(--glyph-highlight-fill);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

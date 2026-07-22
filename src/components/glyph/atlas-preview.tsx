@@ -163,7 +163,7 @@ export function AtlasPreview({
         <div
           data-testid="glyph-hover-highlight"
           aria-hidden
-          className="pointer-events-none absolute rounded-lg border-2 border-primary bg-primary/10 shadow-[0_0_0_2px_rgba(255,255,255,0.15)] transition-[left,top,width,height] duration-75"
+          className="pointer-events-none absolute rounded-lg border-2 border-glyph-highlight-border bg-glyph-highlight-fill transition-[left,top,width,height] duration-75"
           style={hover.rect}
         />
       )}
