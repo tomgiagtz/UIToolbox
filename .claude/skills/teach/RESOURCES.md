@@ -1,22 +1,38 @@
-# Continuous Integration (GitHub Actions) Resources
+# Adopting third-party React components — Resources
 
 ## Knowledge
 
-- [Understanding GitHub Actions — GitHub Docs](https://docs.github.com/en/actions/get-started/understanding-github-actions)
-  The canonical primary source. Defines the five components (workflows, events, jobs, actions, runners) in GitHub's own words. Use for: the core vocabulary and mental model.
-- [About workflows — GitHub Docs](https://docs.github.com/en/actions/concepts/workflows-and-actions/about-workflows)
-  How workflows are structured and triggered; jobs-on-runners, steps-in-jobs. Use for: reading a workflow file top to bottom.
-- [Workflow syntax for GitHub Actions — GitHub Docs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
-  Exhaustive reference for every key (`on`, `jobs`, `steps`, `uses`, `run`, `needs`, `if`, …). Use for: looking up what a specific line in a YAML file means.
-- [Martin Fowler — "Continuous Integration"](https://martinfowler.com/articles/continuousIntegration.html)
-  The foundational essay on _why_ CI exists (the practice, not the tool). Use for: understanding what "green means safe to merge" is really promising, and what it isn't.
+- [React Aria — ColorPicker](https://react-aria.adobe.com/ColorPicker)
+  The container that owns the color state and shares it with child components.
+  Primary source for the state model and the "Channel Fields" composition Tom
+  asked about. Use for: how one `Color` drives many child views.
+- [React Aria — ColorField](https://react-aria.adobe.com/ColorField)
+  A single field editing either the whole color (hex) or one channel. Documents
+  `value`/`defaultValue`/`onChange` (onChange gives a `Color | null`), plus the
+  `colorSpace` and `channel` props. Use for: the leaf component Tom is replacing.
+- [React Aria — Color (the value type)](https://react-aria.adobe.com/Color)
+  The `Color` object itself: `parseColor()`, `getChannelValue()`,
+  `toString(format)`, `toFormat()`. Use for: the string↔object boundary adapter.
+- [React Aria Components — Styling](https://react-aria.adobe.com/styling)
+  How `react-aria-components` expose state for CSS: `data-*` attributes, render
+  props, and className functions. Use for: the styling lesson (matching Tailwind).
+- [React docs — "Passing Data Deeply with Context"](https://react.dev/learn/passing-data-deeply-with-context)
+  The React primitive under compound components like `ColorPicker`. Use for:
+  understanding how a parent shares state with children without prop-drilling.
+- [Kent C. Dodds — "Compound Components"](https://kentcdodds.com/blog/compound-components-with-react-hooks)
+  The pattern name for `<ColorPicker><ColorField/></ColorPicker>`. Use for:
+  recognising the shape when reading any modern component library's docs.
 
 ## Wisdom (Communities)
 
-- [GitHub Community — Actions & Packages](https://github.com/orgs/community/discussions/categories/actions-and-packages)
-  Official discussion space; GitHub staff and power users. Use for: "why did my workflow do X" questions grounded in real runs.
-- [Stack Overflow — `github-actions` tag](https://stackoverflow.com/questions/tagged/github-actions)
-  High-volume, high-signal Q&A. Use for: specific error messages and syntax puzzles.
+- [React Spectrum Discussions (GitHub)](https://github.com/adobe/react-spectrum/discussions)
+  Where the React Aria maintainers and users talk. Use for: "is this the intended
+  way to compose X" questions grounded in real code.
+- [Reactiflux Discord](https://www.reactiflux.com/)
+  Large, fast React community. Use for: general "which library / which pattern"
+  gut-checks.
 
 ## Gaps
-- No resource yet specifically on _reading a run's UI_ (the checks list, expanding jobs, finding the first red step). Currently taught directly in lessons; find a good visual walkthrough if one exists.
+- No single great walkthrough of *migrating* a native input to a React Aria
+  component while keeping app state string-based. Taught directly in lessons for
+  now; watch for one.

@@ -1,50 +1,56 @@
-# Continuous Integration (GitHub Actions) Glossary
+# Adopting third-party React components — Glossary
 
-The vocabulary for reading a GitHub Actions CI pipeline and judging whether a green
-run means "safe to merge." Terms use GitHub's own wording where it exists.
+Vocabulary for reading a React Aria component's docs and wiring it into a
+string-based app. Terms use React Aria / React's own wording where it exists.
 
 ## Terms
 
-**Continuous Integration (CI)**:
-The practice of merging work frequently and having an automated build verify each
-change, so problems surface early. GitHub Actions is one _tool_ for it.
-_Avoid_: "the build", "the pipeline" (those are parts, not the practice)
+**Controlled component**:
+A component whose value lives in *your* state; you pass it down via `value` and
+update it in `onChange`. The existing `ColorField` is controlled on a `string`.
+_Avoid_: "stateful component" (the state is yours, not the component's)
 
-**Workflow**:
-A configurable automated process that runs one or more jobs, defined in a YAML file
-under `.github/workflows/`.
-_Avoid_: "the action", "the script", "the CI file"
+**`Color` object**:
+React Aria's value type for a color — an immutable object (not a string) that
+knows its channels and can convert between formats. Created with `parseColor()`.
+_Avoid_: "the color string", "the hex" (the whole point is that it isn't one)
 
-**Event (trigger)**:
-A specific activity in a repository that starts a workflow run — e.g. a push or a
-pull request. Declared under the `on:` key.
-_Avoid_: "the hook"
+**`parseColor(str)`**:
+The adapter that turns a CSS color string into a `Color` object. The *entry* to
+the boundary: string in your app → object at the component.
+_Avoid_: "convert", "cast" (it parses and validates)
 
-**Job**:
-A set of steps that execute on the same runner. Jobs run in parallel by default;
-one job can wait for another with `needs:`.
-_Avoid_: "task", "stage"
+**`toString(format)` / `toFormat(space)`**:
+Methods on a `Color` that serialise it back to a string (`'hex'`, `'rgb'`, …) or
+re-express it in another color space. The *exit* of the boundary.
+_Avoid_: "format the color" (be specific: serialise vs. re-express)
 
-**Step**:
-A single unit inside a job that either runs a script (`run:`) or invokes an action
-(`uses:`). Steps run in order, top to bottom.
-_Avoid_: "command" (a step may be more than one command), "line"
+**Channel**:
+One scalar component of a color — `red`, `hue`, `saturation`, `alpha`. A `Color`
+holds several; a `ColorField` with a `channel` prop edits exactly one.
+_Avoid_: "value", "field" (a channel is data; a field is the UI editing it)
 
-**Action**:
-A reusable, pre-packaged unit of work invoked by a step with `uses:` — e.g.
-`actions/checkout@v4`.
-_Avoid_: "plugin", "package"
+**Color space**:
+The coordinate system a color is expressed in — `rgb`, `hsl`, `hsb`. The same
+`Color` can be *read* in any space; `colorSpace` on a field picks which.
+_Avoid_: "format", "mode"
 
-**Runner**:
-The server that executes a job when triggered — e.g. `ubuntu-latest`.
-_Avoid_: "machine", "container", "the CI server"
+**`ColorPicker`**:
+The React Aria container that owns one `Color` and shares it with its children.
+Has no visual of its own — it's the state hub. Takes `value`/`onChange`.
+_Avoid_: "the widget", "the input" (it renders nothing itself)
 
-**Green / Red (a check)**:
-Green = every step in the run exited successfully (exit code 0). Red = at least one
-step failed. A check reports back onto the pull request.
-_Avoid_: "passing/failing" used loosely — tie it to exit status
+**Subcomponent (of a compound component)**:
+A child like `ColorField`, `ColorSlider`, `ColorArea` that reads and writes the
+shared color from its parent `ColorPicker` — no props threaded between them.
+_Avoid_: "child prop", "nested input"
 
-**Gate**:
-A step whose failure blocks the run (and, by policy, the merge). The set of gates is
-exactly what a green tick is vouching for — no more.
-_Avoid_: "test" (a gate may be a lint or typecheck, not a test)
+**Compound component**:
+The pattern where a parent and its children cooperate through React Context, used
+as `<ColorPicker><ColorField/></ColorPicker>`. State is shared implicitly.
+_Avoid_: "wrapper component", "HOC"
+
+**Boundary adapter**:
+The `parseColor` / `toString` pair you place where a string-based app meets an
+object-based component, so neither side has to change to accommodate the other.
+_Avoid_: "glue", "hack" (it's a deliberate seam)

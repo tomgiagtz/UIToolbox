@@ -38,13 +38,15 @@ describe("GlyphStylePanel", () => {
 
   it("edits store a sparse Glyph-scope patch", () => {
     const { dispatch } = renderPanel();
-    fireEvent.change(screen.getByLabelText("Text color"), {
-      target: { value: "#00ff00" },
-    });
+    // The hex field is a React Aria ColorField: it commits on blur, not on
+    // each keystroke, and serialises to 8-digit hexa.
+    const input = screen.getByLabelText("Text color");
+    fireEvent.change(input, { target: { value: "#00ff00" } });
+    fireEvent.blur(input);
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { textColor: "#00ff00" },
+      patch: { textColor: "#00ff00ff" },
     });
   });
 
