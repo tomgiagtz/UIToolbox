@@ -11,6 +11,8 @@
     "start": "next start",
     "lint": "eslint .",
     "layouts": "node src/lib/glyph/layouts/build-layouts.mjs",
+    "symbols": "node src/lib/glyph/symbols/build-symbols.mjs",
+    "symbols:preview": "npm run symbols && node src/lib/glyph/symbols/preview-symbols.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",

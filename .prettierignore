@@ -18,6 +18,8 @@ next-env.d.ts
 
 # Codegen output (see src/lib/glyph/layouts/build-layouts.mjs)
 src/lib/glyph/layouts/pad-layouts.generated.ts
+# Codegen output (see src/lib/glyph/symbols/build-symbols.mjs)
+src/lib/glyph/symbols/symbols.generated.ts
 
 # Vendored agent skills & tooling
 .claude/
