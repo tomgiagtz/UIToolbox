@@ -18,7 +18,7 @@ import {
   PAINT_ROLE_PALETTE,
   SENTINEL_HEX_BY_ROLE,
   normalizeHex,
-  classifyPaint,
+  inspectPaint,
 } from "./paint-roles.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -91,8 +91,9 @@ const html = `<!doctype html><meta charset="utf8"><title>Symbol preview</title>
   const ROLE_BY_HEX = Object.fromEntries(
     PAINT_ROLE_PALETTE.map((p) => [p.hex, p.role]),
   );
+  const IGNORED_PAINTS = new Set(["", "none", "transparent"]);
   const normalizeHex = ${normalizeHex.toString()};
-  const classifyPaint = ${classifyPaint.toString()};
+  const inspectPaint = ${inspectPaint.toString()};
 
   const shapeSel = "path,circle,ellipse,rect,line,polygon,polyline";
 
@@ -103,24 +104,40 @@ const html = `<!doctype html><meta charset="utf8"><title>Symbol preview</title>
     return "rgba(" + r + "," + g + "," + b + "," + pct / 100 + ")";
   };
 
-  // Read an authored paint ("fill"/"stroke") off an element: inline style wins,
-  // then the presentation attribute; unspecified fill defaults to black.
+  // Read a declared paint ("fill"/"stroke") off an element: inline style wins,
+  // then the presentation attribute; "" when unspecified (we only classify what's
+  // actually authored, so a stroke-only shape's absent fill isn't mis-flagged).
   const paint = (el, prop) => {
     const style = el.getAttribute("style") || "";
-    const m = new RegExp(prop + "\\\\s*:\\\\s*([^;]+)").exec(style);
-    const v = (m ? m[1] : el.getAttribute(prop) || "").trim().toLowerCase();
-    if (v) return v;
-    return prop === "fill" ? "#000" : "none"; // SVG defaults
+    const m = new RegExp("(?:^|;)\\\\s*" + prop + "\\\\s*:\\\\s*([^;]+)").exec(style);
+    return (m ? m[1] : el.getAttribute(prop) || "").trim().toLowerCase();
   };
+  const hidden = (el, prop) =>
+    paint(el, prop + "-opacity") === "0" || paint(el, "opacity") === "0";
 
   // Tag each shape with the roles it carries, from its authored sentinel colour.
-  // A shape can carry a role on its fill and/or its stroke; non-sentinel colours
-  // (the black art) and the invisible fill-opacity:0 bounding boxes stay unroled.
+  // A shape can carry a role on its fill and/or its stroke; ignore paints render
+  // nothing; unknown (non-sentinel) paints keep their authored colour and are
+  // flagged below — nothing is silently dropped (ADR-0007).
   const shapes = [...document.querySelectorAll(".art " + shapeSel)];
+  const flags = [];
+  const roleFor = (el, prop) => {
+    if (hidden(el, prop)) return "";
+    const res = inspectPaint(paint(el, prop));
+    if (res.kind === "role") return res.role;
+    if (res.kind === "unknown") {
+      const id = el.closest("figure")?.querySelector("code")?.textContent || "?";
+      flags.push(id + " <" + (el.id || el.tagName) + "> " + prop + ": " + res.value);
+    }
+    return "";
+  };
   for (const el of shapes) {
-    const hiddenFill = paint(el, "fill-opacity") === "0";
-    el.dataset.fillRole = hiddenFill ? "" : classifyPaint(paint(el, "fill")) || "";
-    el.dataset.strokeRole = classifyPaint(paint(el, "stroke")) || "";
+    el.dataset.fillRole = roleFor(el, "fill");
+    el.dataset.strokeRole = roleFor(el, "stroke");
+  }
+  if (flags.length) {
+    console.warn("⚠ " + flags.length + " non-sentinel paint(s) — kept as authored, not role-configurable:");
+    for (const f of flags) console.warn("   " + f);
   }
 
   const recolor = () => {
@@ -150,7 +167,9 @@ const html = `<!doctype html><meta charset="utf8"><title>Symbol preview</title>
     [fillA, borderA, secondaryA].forEach((a) => (a.value = 100));
   };
   recolor();
-  count.textContent = ${authored} + " / " + ${assets.length} + " authored";
+  count.textContent =
+    ${authored} + " / " + ${assets.length} + " authored" +
+    (flags.length ? " · ⚠ " + flags.length + " non-sentinel (see console)" : "");
 </script>`;
 
 const out = join(tmpdir(), "uitoolbox-symbols-preview.html");

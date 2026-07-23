@@ -16,6 +16,7 @@ import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { SYMBOL_MANIFEST } from "./manifest.mjs";
+import { inspectPaint } from "./paint-roles.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "symbols.generated.ts");
@@ -27,6 +28,52 @@ const manifestById = new Map(SYMBOL_MANIFEST.map((a) => [a.id, a]));
 const isDerived = (a) => a.rotateOf != null;
 
 const SVG_OPEN = '<svg xmlns="http://www.w3.org/2000/svg"';
+
+// --- Sentinel validation ("don't fail silently", ADR-0007) -------------------
+
+const SHAPE_SEL = "path,circle,ellipse,rect,line,polygon,polyline";
+
+/** Non-sentinel visible paints found while parsing — reported after the run. */
+const nonSentinel = [];
+
+/** A declared style/presentation prop off an element ("" when unspecified). */
+function readProp(el, name) {
+  const style = el.getAttribute?.("style") || "";
+  const m = new RegExp("(?:^|;)\\s*" + name + "\\s*:\\s*([^;]+)").exec(style);
+  return (m ? m[1] : el.getAttribute?.(name) || "").trim();
+}
+
+/** Whether a paint channel is switched off by opacity (renders nothing). */
+function paintHidden(el, prop) {
+  return (
+    readProp(el, `${prop}-opacity`) === "0" || readProp(el, "opacity") === "0"
+  );
+}
+
+/**
+ * Record every visible non-sentinel fill/stroke under a cell. These aren't an
+ * error (the shape keeps its authored colour), but they won't be role-colorable,
+ * so we surface them — the usual cause is an off-primary export (e.g. `#f20d0d`
+ * instead of the `#f00` fill sentinel).
+ */
+function collectNonSentinel(cellEl, assetId) {
+  const shapes = [cellEl, ...cellEl.querySelectorAll(SHAPE_SEL)].filter((el) =>
+    el.matches?.(SHAPE_SEL),
+  );
+  for (const el of shapes) {
+    for (const prop of ["fill", "stroke"]) {
+      if (paintHidden(el, prop)) continue;
+      const res = inspectPaint(readProp(el, prop));
+      if (res.kind === "unknown")
+        nonSentinel.push({
+          assetId,
+          shapeId: el.getAttribute("id") || el.tagName,
+          prop,
+          value: res.value,
+        });
+    }
+  }
+}
 
 // --- Bounding box (approximate, enough to snap art to its grid cell) ---------
 
@@ -239,6 +286,7 @@ function parseAtlas(atlasId, svgText, file) {
 
     const origin = cellOrigin(el, cell);
     if (!origin) continue; // empty group — treated as not-yet-authored (pending)
+    collectNonSentinel(el, id);
     sources[key] = {
       markup: serializer.serializeToString(el),
       cell,
@@ -313,6 +361,16 @@ for (const scope of scopes) {
 const pending = SYMBOL_MANIFEST.filter((a) => !svgs[a.id]).map((a) => a.id);
 if (pending.length)
   console.warn(`  pending (not authored yet): ${pending.join(", ")}`);
+
+// Non-sentinel paints keep their authored colour but can't be role-colorized —
+// flag them so an off-primary export never slips through unnoticed (ADR-0007).
+if (nonSentinel.length) {
+  console.warn(
+    `  ⚠ ${nonSentinel.length} non-sentinel paint(s) — kept as authored, not role-configurable:`,
+  );
+  for (const w of nonSentinel)
+    console.warn(`      ${w.assetId} <${w.shapeId}> ${w.prop}: ${w.value}`);
+}
 
 const banner =
   "// GENERATED FILE — do not edit by hand.\n" +

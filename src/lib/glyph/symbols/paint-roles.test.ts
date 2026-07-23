@@ -3,13 +3,14 @@ import {
   PAINT_ROLE_PALETTE,
   SENTINEL_HEX_BY_ROLE,
   classifyPaint,
+  inspectPaint,
   normalizeHex,
 } from "./paint-roles.mjs";
 
 /**
- * The sentinel palette is the shared contract between the preview and the tool
- * (issue #14). These pin the mapping and the classifier's matching rules so the
- * two can't drift.
+ * The sentinel palette is the shared contract between the codegen, the preview,
+ * and the in-app import (ADR-0007). These pin the mapping and the classifier's
+ * matching rules so they can't drift.
  */
 describe("paint-roles sentinel palette", () => {
   it("maps the three RGB sentinels to their roles", () => {
@@ -41,5 +42,36 @@ describe("paint-roles sentinel palette", () => {
       expect(SENTINEL_HEX_BY_ROLE[role]).toBe(hex);
       expect(normalizeHex(hex)).toBe(hex);
     }
+  });
+});
+
+/**
+ * inspectPaint is the "don't fail silently" core (ADR-0007): every paint is
+ * exactly one of role / ignore / unknown, so callers can flag non-sentinel art.
+ */
+describe("inspectPaint three-outcome classification", () => {
+  it("returns a role for exact sentinels", () => {
+    expect(inspectPaint("#f00")).toEqual({ kind: "role", role: "fill" });
+    expect(inspectPaint("#00F")).toEqual({ kind: "role", role: "border" });
+    expect(inspectPaint("#0f0")).toEqual({ kind: "role", role: "secondary" });
+  });
+
+  it("ignores paints that render nothing", () => {
+    for (const paint of ["none", "transparent", "", "  ", null, undefined]) {
+      expect(inspectPaint(paint)).toEqual({ kind: "ignore" });
+    }
+  });
+
+  it("flags any visible non-sentinel colour as unknown, keeping its value", () => {
+    // The off-primary red a design tool exported before the atlas was corrected.
+    expect(inspectPaint("#f20d0d")).toEqual({
+      kind: "unknown",
+      value: "#f20d0d",
+    });
+    expect(inspectPaint("#000")).toEqual({ kind: "unknown", value: "#000" });
+    expect(inspectPaint("currentColor")).toEqual({
+      kind: "unknown",
+      value: "currentcolor",
+    });
   });
 });

@@ -43,18 +43,22 @@ same authored-SVG → codegen pattern as `../layouts/`.
   the rotation source overrides its rotations too. Only shared assets can be
   overridden — re-authoring a device-specific id elsewhere is an error.
 - **Colour = paint role (RGB sentinels).** Don't author with `currentColor` or
-  real colours. Paint each shape in the **sentinel primary for the role it plays**,
-  and the classifier keys on that colour (independent of fill vs. stroke):
-  - **red `#ff0000` → fill** (primary ink)
-  - **blue `#0000ff` → border** (outline)
-  - **green `#00ff00` → secondary** (highlight)
+  real colours. Paint each shape in the **exact sentinel primary for the role it
+  plays**, and the classifier keys on that colour (independent of fill vs. stroke):
+  - **red `#f00` → fill** (primary ink)
+  - **blue `#00f` → border** (outline)
+  - **green `#0f0` → secondary** (highlight)
 
-  Matching is exact after normalization, so any non-sentinel paint is left unroled
-  and passes through as authored. Draw invisible guide/bounding boxes with
-  `fill-opacity:0`; they're ignored. The role→appearance mapping (e.g. an Xbox A
-  rendered green) is the tool's job, not the atlas's. Background tiles
-  (`kind: "background"`) are tinted by the Style Cascade fill. The palette lives in
-  `paint-roles.mjs`, shared by the preview and the tool so they never diverge.
+  Matching is **exact** (after `#rgb`/`rgb()` normalization), with three outcomes:
+  a sentinel is a **role** (the tool recolours it); `none`/`transparent` (and
+  `fill-opacity:0` guide boxes) are **ignored**; **any other visible colour is
+  flagged** — kept as authored but reported by `npm run symbols` and the preview,
+  so an off-primary export (e.g. `#f20d0d` instead of `#f00`) never slips through
+  silently. The role→appearance mapping (e.g. an Xbox A rendered green) is the
+  tool's job, not the atlas's. Background tiles (`kind: "background"`) are tinted
+  by the Style Cascade fill. The palette + classifier live in `paint-roles.mjs`,
+  shared by the codegen, preview, and app so they never diverge. See
+  `docs/adr/0007-*`.
 
 ## Files
 

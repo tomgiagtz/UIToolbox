@@ -44,15 +44,41 @@ same Background tile.
 
 ### Symbol
 
-A bundled default artwork asset the tool ships for a well-known Input (Triangle,
-Space, Enter, D-pad Up, Shift…). A Symbol is an **SVG** keyed by a stable `id`,
-and is either **tintable** (single-color, drawn with `currentColor`, so it
-follows the label text color) or **fixed-color** (brand art like PlayStation
-shapes, ignoring text color). Well-known Inputs default to their Symbol; the user
-can toggle back to the label. Distinct from a **custom image**, which the user
-supplies themselves.
+A default artwork asset for a well-known Input (Triangle, Space, Enter, D-pad Up,
+Shift…). A Symbol is an **SVG** keyed by a stable `id`, drawn from a **Symbol
+Set**. Its shapes are painted in **Paint Role** sentinels, not real colours, so
+the tool recolours each role (fill / border / secondary) through the Style
+Cascade; a Symbol's appearance is never baked into its art. Well-known Inputs
+default to their Symbol; the user can toggle back to the label. Distinct from a
+**custom image**, which the user supplies as a single per-Glyph graphic.
 
-_Avoid:_ "icon", "default image" — use Symbol for shipped artwork.
+_Avoid:_ "icon", "default image" — use Symbol for artwork; "tintable" /
+"fixed-color" (the retired ADR-0004 model — see ADR-0007).
+
+### Symbol Set
+
+A self-contained atlas of Symbols — one SVG whose id'd cells sit on a fixed
+square grid, each painted in **Paint Role** sentinels. The tool ships a default
+Set (e.g. the Xbox pad); users can **author and import** their own. On import,
+each cell `id` is matched against the base **Catalog** first, and an
+unrecognized id becomes a new **custom Input**. By the _structure-only
+invariant_, the SVG carries only ids + role sentinels — never labels, kind,
+rotation, or appearance; those live in configuration, so an imported Set's
+default colours travel in the ZIP project save file, not the bare `.svg`.
+
+_Avoid:_ "sprite sheet" (that's the exported **Sprite Atlas**), "icon pack".
+
+### Paint Role
+
+The job a Symbol shape's colour encodes, via an exact **RGB sentinel**: `#f00` →
+**fill** (primary ink), `#00f` → **border** (outline), `#0f0` → **secondary**
+(highlight). The classifier keys on colour, not fill-vs-stroke, with three
+outcomes: a sentinel is a **role** (recoloured via the Style Cascade); `none` /
+`transparent` is **ignored**; any other visible colour is **unknown** — kept as
+authored (literal pass-through) and **flagged** (a non-blocking warning), so an
+off-primary export never fails silently. See ADR-0007.
+
+_Avoid:_ "tint" — a role is a slot the cascade fills, not a single wash colour.
 
 ### Device
 
@@ -169,3 +195,9 @@ See `docs/adr/`:
   Storybook, Vitest + Playwright, fully client-side).
 - **ADR-0002** — Glyphs are font-rendered, not device artwork.
 - **ADR-0003** — TexturePacker-format JSON as the single metadata format.
+- **ADR-0004** — Symbols + custom images as Glyph Render Sources (colour model
+  amended by ADR-0007).
+- **ADR-0005** — Device layout selection model.
+- **ADR-0006** — Glyph style resolves through a Project → Device → Glyph cascade
+  (extended by ADR-0007).
+- **ADR-0007** — Sentinel paint roles and importable Symbol Sets.
