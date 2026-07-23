@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lesson 2 — One color, many editors</title>
+  <link rel="stylesheet" href="../assets/lesson.css" />
+</head>
+<body>
+<main class="lesson">
+
+  <p class="eyebrow">Third-party components · Lesson 2</p>
+  <h1>One color, many editors</h1>
+  <p class="lede">
+    How <code>ColorPicker</code> hands the same color to a hex box, three number
+    fields, and a slider — without you threading a single prop between them.
+  </p>
+
+  <p>
+    In <a href="0001-the-color-object.html">Lesson&nbsp;1</a> you nailed questions
+    1&nbsp;&amp;&nbsp;2 of the reading method: the state is <em>one immutable
+    <code>Color</code> object</em>. This lesson is <strong>question&nbsp;4</strong>
+    — <em>how do the subcomponents share that state?</em> — which is exactly the
+    “Channel Fields” example you originally pointed at.
+  </p>
+
+  <h2>The puzzle in that example</h2>
+  <p>
+    Look closely at the docs example. The children carry <strong>no
+    <code>value</code> and no <code>onChange</code></strong>. Yet edit the hue
+    slider and every number field updates. Where does the state come from?
+  </p>
+<pre><code>&lt;ColorPicker value={color} onChange={setColor}&gt;   {/* the value lives HERE, once */}
+  &lt;ColorArea  colorSpace="hsb" xChannel="saturation" yChannel="brightness" /&gt;
+  &lt;ColorSlider colorSpace="hsb" channel="hue" /&gt;
+  {getColorChannels(space).map((channel) =&gt; (   {/* e.g. ["red","green","blue"] */}
+    &lt;ColorField key={channel} colorSpace={space} channel={channel} /&gt;
+  ))}
+&lt;/ColorPicker&gt;</code></pre>
+  <p>
+    None of those children are wired to <code>color</code>. They don't need to be.
+  </p>
+
+  <h2>The answer: a compound component</h2>
+  <p>
+    <code>ColorPicker</code> is a <strong>compound component</strong>. It holds
+    the one <code>Color</code> and publishes it through
+    <strong>React Context</strong>; every child reads from and writes to that
+    context. No props travel between siblings — the parent is the shared hub.
+  </p>
+
+  <div class="callout key">
+    <span class="tag">You can verify this yourself</span>
+    The context is a real, named export:
+    <code>ColorPickerStateContext</code> (and the hook
+    <code>useColorPickerState</code>) ship from
+    <code>react-aria-components</code>. “Shares state via context” isn't a
+    metaphor here — it's literally the API. A <code>ColorField</code> with a
+    <code>channel</code> is just a consumer of that context that writes back one
+    channel.
+  </div>
+
+  <p>
+    Contrast with what you'd do by hand: pass <code>value</code>/<code>onChange</code>
+    to each field, and write merge logic so editing “red” rebuilds the whole
+    color. The compound component does that plumbing internally. That's the trade
+    you're evaluating this whole mission — <em>less control, less boilerplate</em>.
+  </p>
+
+  <div class="ledger">
+    <div class="row">
+      <span class="mark gate">◆</span>
+      <span class="what">
+        <span class="name">&lt;ColorPicker value onChange&gt;</span>
+        <span class="gloss">Owns the one Color. Renders nothing itself — it's the state hub, put into context.</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="mark ok">↳</span>
+      <span class="what">
+        <span class="name">&lt;ColorField channel="red"&gt;</span>
+        <span class="gloss">Reads context, shows red as a number, writes a <em>new</em> Color back on edit.</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="mark ok">↳</span>
+      <span class="what">
+        <span class="name">&lt;ColorSlider channel="hue"&gt;</span>
+        <span class="gloss">Same context, different slice + different UI. Stays in sync for free.</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="mark ok">↳</span>
+      <span class="what">
+        <span class="name">&lt;ColorArea xChannel yChannel&gt;</span>
+        <span class="gloss">Same context, two channels at once as a 2-D pad.</span>
+      </span>
+    </div>
+  </div>
+
+  <h2>What <code>channel</code> and <code>colorSpace</code> actually do</h2>
+  <p>
+    Recall from Lesson&nbsp;1: one <code>Color</code> can be <em>read</em> in any
+    color space. That's what these two props exploit. A child says “I edit
+    <strong>this slice</strong> of the shared color”:
+  </p>
+  <ul>
+    <li><code>colorSpace</code> — <em>which coordinate system</em> to view the
+      color in: <code>"rgb"</code>, <code>"hsl"</code>, or <code>"hsb"</code>.</li>
+    <li><code>channel</code> — <em>which axis</em> of that space this field edits:
+      <code>"red"</code>, <code>"hue"</code>, <code>"lightness"</code>&hellip;</li>
+  </ul>
+  <p>
+    And <code>getColorChannels(space)</code> just tells you the axes a space has,
+    so you can render one field per channel with a <code>.map()</code> instead of
+    hard-coding three. It's a lookup, nothing more:
+  </p>
+<pre><code>getColorChannels("rgb")  // ["red", "green", "blue"]
+getColorChannels("hsl")  // ["hue", "saturation", "lightness"]</code></pre>
+
+  <div class="callout watch">
+    <span class="tag">Watch</span>
+    A <code>ColorField</code> with <strong>no</strong> <code>channel</code> edits
+    the <em>whole</em> color as a hex string — that's the drop-in replacement for
+    your current field. Add <code>channel</code>/<code>colorSpace</code> only when
+    you want per-channel editing. You get to choose how much of this to adopt.
+  </div>
+
+  <h2>What this means for your swap</h2>
+  <p>
+    Your <code>controls-ui.tsx</code> replacement can stay tiny — one whole-color
+    field inside a picker, with the Lesson&nbsp;1 boundary seam:
+  </p>
+<pre><code>&lt;ColorPicker
+  value={parseColor(project.textColor)}
+  onChange={(c) =&gt; dispatch({ type: "set-text-color", color: c.toString("hex") })}
+&gt;
+  &lt;ColorField&gt;&lt;Label&gt;Text color&lt;/Label&gt;&lt;Input /&gt;&lt;/ColorField&gt;
+&lt;/ColorPicker&gt;</code></pre>
+  <p>
+    The payoff of understanding the compound pattern: the day you want RGB number
+    fields or a hue slider in the glyph editor, you drop them <em>inside</em> the
+    same <code>ColorPicker</code> and they just work. You've bought optionality,
+    not just a fancier input.
+  </p>
+
+  <hr class="rule" />
+
+  <h2>Check yourself</h2>
+  <p>Answer from memory before re-reading.</p>
+
+  <div class="quiz">
+    <div class="qblock" data-answer="2">
+      <p class="q">In the channel-fields example, the child fields get the color from&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">their own value prop</button></li>
+        <li><button class="opt">a shared sibling ref</button></li>
+        <li><button class="opt">the parent's React context</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Yes — ColorPickerStateContext; the children are context consumers."
+         data-wrong="It's the parent's context — the children carry no value prop at all."></p>
+    </div>
+
+    <div class="qblock" data-answer="0">
+      <p class="q">A <code>ColorField</code> with <strong>no</strong> <code>channel</code> prop edits&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">the whole color hex</button></li>
+        <li><button class="opt">only the red channel</button></li>
+        <li><button class="opt">the current color space</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Right — no channel means the full color as hex: your drop-in field."
+         data-wrong="No channel means the whole color as hex — channel is what narrows it."></p>
+    </div>
+
+    <div class="qblock" data-answer="1">
+      <p class="q"><code>getColorChannels("hsl")</code> exists mainly so you can&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">convert between color spaces</button></li>
+        <li><button class="opt">map over each channel</button></li>
+        <li><button class="opt">validate the picker value</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Exactly — it lists the axes so you render one field per channel."
+         data-wrong="It's a lookup of a space's channels, so you can .map() over them."></p>
+    </div>
+  </div>
+
+  <h2>Predict the output</h2>
+  <p>You want RGB fields today, HSL tomorrow. What has to change?</p>
+<pre><code>const [space, setSpace] = useState("rgb");
+// ...
+{getColorChannels(space).map((ch) =&gt;
+  &lt;ColorField key={ch} colorSpace={space} channel={ch} /&gt;
+)}
+// setSpace("hsl") runs. What do the rendered fields become?</code></pre>
+  <details>
+    <summary>Reveal</summary>
+    <p>
+      The three fields switch from
+      <code>red / green / blue</code> to
+      <code>hue / saturation / lightness</code> — automatically, because the
+      <code>.map()</code> is driven by <code>getColorChannels(space)</code>. The
+      underlying <code>Color</code> in the <code>ColorPicker</code> <em>does not
+      change</em>; you're only changing which <em>view</em> of it the fields show.
+      That's Lesson&nbsp;1's “one color, read in any space” doing the work.
+    </p>
+  </details>
+
+  <hr class="rule" />
+
+  <h2>Read next</h2>
+  <p>
+    Primary source: <a href="https://react-aria.adobe.com/ColorPicker">React Aria
+    — ColorPicker</a> (the “Channel Fields” example). Now read it asking only
+    “where's the context, and what slice does each child claim?” — the rest is
+    detail. For the pattern itself, <a href="https://react.dev/learn/passing-data-deeply-with-context">React
+    docs — Passing Data Deeply with Context</a> is the primitive underneath.
+  </p>
+  <p>
+    Words we used are pinned in the <a href="../GLOSSARY.md">glossary</a>
+    (<em>compound component</em>, <em>subcomponent</em>, <em>channel</em>,
+    <em>color space</em>).
+  </p>
+
+  <div class="footer">
+    <div class="ask">
+      <strong>I'm your teacher — ask me anything.</strong> Want to actually
+      <code>useContext(ColorPickerStateContext)</code> and see what's inside?
+      Curious when a compound component is the <em>wrong</em> choice? Want to
+      wire the RGB-fields variant into glyph-creator as a spike? Ask before
+      Lesson&nbsp;3.
+    </div>
+    <div class="nav">
+      <span>← Lesson 1: the Color object</span>
+      <span><a href="0003-styling-to-match.html">Next → Lesson 3: styling it to match UIToolbox</a></span>
+    </div>
+  </div>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

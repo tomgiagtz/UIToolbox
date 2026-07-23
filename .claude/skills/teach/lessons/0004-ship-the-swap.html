@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lesson 4 — Ship the swap</title>
+  <link rel="stylesheet" href="../assets/lesson.css" />
+</head>
+<body>
+<main class="lesson">
+
+  <p class="eyebrow">Third-party components · Lesson 4 · capstone</p>
+  <h1>Ship the swap</h1>
+  <p class="lede">
+    Everything so far, turned into a real replacement in <code>controls-ui.tsx</code>
+    — with the whole change confined to one file.
+  </p>
+
+  <p>
+    You have the model: state is a <a href="0001-the-color-object.html"><code>Color</code></a>,
+    subcomponents share it via <a href="0002-one-color-many-editors.html">context</a>,
+    you <a href="0003-styling-to-match.html">style</a> its states with your tokens.
+    Now the engineering question the mission is really about:
+    <strong>where do you let this change ripple, and where do you stop it?</strong>
+  </p>
+
+  <h2>The decision that makes or breaks the swap</h2>
+  <p>
+    Your <code>ColorField</code> has three callers in
+    <code>style-controls.tsx</code> (text color, background fill, border color),
+    and each dispatches a reducer action whose payload is a
+    <strong><code>string</code></strong>. The reducer and its tests speak strings.
+    So the winning move is <em>not</em> to spread React Aria outward — it's to
+    <strong>keep the exact same external API</strong>:
+  </p>
+<pre><code>// unchanged — the contract every caller and the reducer already rely on
+{ label: string; value: string; onChange: (value: string) =&gt; void }</code></pre>
+
+  <div class="callout key">
+    <span class="tag">Contain the blast radius</span>
+    Rebuild <code>ColorField</code> <em>internally</em> on React Aria while its
+    props stay identical. Then <code>style-controls.tsx</code> doesn't change, the
+    reducer doesn't change, the tests don't change. The
+    <a href="../reference/context-boundaries.html">boundary seam</a> lives
+    <em>inside</em> the component — exactly where it belongs.
+  </div>
+
+  <h2>Two guards you can't skip</h2>
+  <p>Crossing the string↔Color seam has two failure modes. Name them first:</p>
+  <div class="ledger">
+    <div class="row">
+      <span class="mark gate">1</span>
+      <span class="what">
+        <span class="name">parseColor(value) can throw</span>
+        <span class="gloss">If <code>value</code> is ever malformed (a loaded project, an empty string), <code>parseColor</code> throws and takes the render down. Wrap it in a <code>safeParse</code> with a fallback.</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="mark gate">2</span>
+      <span class="what">
+        <span class="name">the casing round-trips</span>
+        <span class="gloss"><code>onChange</code> emits <code>toString("hex")</code> → uppercase (<code>"#F8FAFC"</code>). Same color, different string than the stored <code>"#f8fafc"</code>. Harmless here (reducer just stores it), but <em>know</em> it happens.</span>
+      </span>
+    </div>
+  </div>
+  <p>
+    (There's a would-be third — <code>onChange</code> giving <code>Color | null</code>
+    — but that's for a <em>bare</em> <code>ColorField</code> that can be cleared.
+    Wrapped in a <code>ColorPicker</code> that always holds a value, you get a
+    non-null <code>Color</code>. A small reward for using the compound form.)
+  </p>
+
+  <h2>The replacement, annotated</h2>
+  <p>
+    This reuses the Lesson&nbsp;2 compound pattern to rebuild your old look — a
+    swatch beside a hex field — where <code>ColorSwatch</code> and the input both
+    read the one color from the picker's context:
+  </p>
+<pre><code>"use client";
+
+import {
+  ColorPicker,
+  ColorSwatch,
+  ColorField as AriaColorField,
+  Input,
+  parseColor,
+  type Color,
+} from "react-aria-components";
+import { cn } from "@/lib/utils";
+
+/** Malformed strings must never crash the panel — fall back to black. */
+function safeParse(value: string): Color {
+  try {
+    return parseColor(value);
+  } catch {
+    return parseColor("#000000");
+  }
+}
+
+/** Same props as before — callers and the reducer are untouched. */
+export function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) =&gt; void;
+}) {
+  return (
+    &lt;ColorPicker
+      value={safeParse(value)}                        {/* string → Color, in  */}
+      onChange={(c) =&gt; onChange(c.toString("hex"))}    {/* Color → string, out */}
+    &gt;
+      &lt;div className="flex flex-col gap-1.5"&gt;
+        &lt;span className="text-sm font-medium"&gt;{label}&lt;/span&gt;
+        &lt;div className="flex items-center gap-2"&gt;
+          &lt;ColorSwatch className="h-9 w-12 rounded-md border border-input" /&gt;
+          &lt;AriaColorField aria-label={label} className="flex-1"&gt;
+            &lt;Input className={cn(inputClass, "w-full font-mono")} /&gt;
+          &lt;/AriaColorField&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/ColorPicker&gt;
+  );
+}</code></pre>
+  <p>
+    Note two reuse wins: <code>inputClass</code> comes straight from the same file,
+    and its existing <code>focus-visible:ring-2</code> works because
+    <code>&lt;Input&gt;</code> is a native input — no <code>data-[focused]:</code>
+    rewrite needed here (Lesson&nbsp;3's nuance, paying off). The seam —
+    <code>safeParse</code> in, <code>toString("hex")</code> out — is those two
+    lines and nothing more.
+  </p>
+
+  <div class="callout watch">
+    <span class="tag">Watch — a real UX trade</span>
+    The old field was a native OS color <em>well</em> you clicked to open the
+    system picker. This new one is a <strong>typeable hex field</strong> plus a
+    read-only swatch — better for precise hex, but it drops the OS popover. If you
+    want a visual picker back, that's a <code>ColorArea</code> +
+    <code>ColorSlider</code> in a popover — more UI, same
+    <code>ColorPicker</code> context. A deliberate choice, not an accident. Decide
+    it on purpose.
+  </div>
+
+  <h2>Your turn — and how to know it worked</h2>
+  <p>
+    Don't paste blindly. Type it, and make each line earn its place. Then verify
+    against the safety nets already in the repo:
+  </p>
+  <div class="ledger">
+    <div class="row"><span class="mark ok">☐</span><span class="what"><span class="name">Replace only ColorField in controls-ui.tsx</span><span class="gloss">Leave <code>Field</code>, <code>inputClass</code>, and every prop signature alone.</span></span></div>
+    <div class="row"><span class="mark ok">☐</span><span class="what"><span class="name">style-controls.tsx has zero changes</span><span class="gloss">If you had to touch a caller, your API drifted — pull the change back inside.</span></span></div>
+    <div class="row"><span class="mark ok">☐</span><span class="what"><span class="name">npm run test stays green</span><span class="gloss">The reducer tests dispatch strings directly; a contained swap can't break them.</span></span></div>
+    <div class="row"><span class="mark ok">☐</span><span class="what"><span class="name">npm run dev → open the glyph-creator tool</span><span class="gloss">Edit each of the three colors; the live preview updates and the swatch tracks the hex.</span></span></div>
+    <div class="row"><span class="mark gate">☐</span><span class="what"><span class="name">Type garbage into the hex field</span><span class="gloss">The panel must not crash — that's <code>safeParse</code> (and React Aria's own input validation) earning their keep.</span></span></div>
+  </div>
+
+  <hr class="rule" />
+
+  <h2>Defend each line</h2>
+  <p>The mission's bar: you can justify every choice. Test yourself.</p>
+
+  <div class="quiz">
+    <div class="qblock" data-answer="2">
+      <p class="q">Keeping <code>ColorField</code>'s props identical means the change touches&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">the reducer and callers</button></li>
+        <li><button class="opt">every color-using file</button></li>
+        <li><button class="opt">just the one file</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Right — the seam is internal, so blast radius is controls-ui.tsx alone."
+         data-wrong="Same props = one file changes; the callers and reducer stay untouched."></p>
+    </div>
+
+    <div class="qblock" data-answer="0">
+      <p class="q">You wrap <code>parseColor</code> in <code>safeParse</code> because it&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">throws on bad input</button></li>
+        <li><button class="opt">returns null sometimes</button></li>
+        <li><button class="opt">runs a bit slowly</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Yes — an invalid string throws, which would crash the render without a fallback."
+         data-wrong="It throws on malformed input; safeParse catches that and falls back."></p>
+    </div>
+
+    <div class="qblock" data-answer="1">
+      <p class="q">No <code>null</code> guard is needed here because the color lives in&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">a plain useState hook</button></li>
+        <li><button class="opt">the ColorPicker's context</button></li>
+        <li><button class="opt">the reducer's action payload</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Exactly — a ColorPicker always holds a value, so onChange gives a non-null Color."
+         data-wrong="It's the ColorPicker context — it always holds a value, so onChange is non-null."></p>
+    </div>
+  </div>
+
+  <h2>You've closed the loop</h2>
+  <p>
+    That's the whole mission in miniature: read the docs → model the state → see
+    the composition → style it → contain the change and ship. The
+    <strong>method</strong> (the five questions, the canonical/working seam) is
+    what transfers — next time it's a Radix dropdown or a TanStack table, you'll
+    run the same play.
+  </p>
+
+  <h2>Read next</h2>
+  <p>
+    Primary source for going further: <a href="https://react-aria.adobe.com/ColorSwatchPicker">React
+    Aria — ColorSwatchPicker</a> (preset swatches) and
+    <a href="https://react-aria.adobe.com/ColorArea">ColorArea</a> /
+    <a href="https://react-aria.adobe.com/ColorSlider">ColorSlider</a> if you want
+    the visual picker back. Keep the
+    <a href="../reference/context-boundaries.html">boundaries reference</a> for
+    the next library you adopt.
+  </p>
+
+  <div class="footer">
+    <div class="ask">
+      <strong>I'm your teacher — ask me anything.</strong> Want to add the
+      click-to-open visual picker popover? Wondering whether to promote this into
+      <code>components/ui/</code> as a <code>cva</code> variant like
+      <code>button.tsx</code>? Want me to review your version line by line before
+      you commit? Bring it here.
+    </div>
+    <div class="nav">
+      <span><a href="0003-styling-to-match.html">← Lesson 3: styling to match</a></span>
+      <span>Mission complete — pick the next library</span>
+    </div>
+  </div>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

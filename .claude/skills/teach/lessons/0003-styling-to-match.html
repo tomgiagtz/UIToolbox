@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lesson 3 — Styling it to match UIToolbox</title>
+  <link rel="stylesheet" href="../assets/lesson.css" />
+</head>
+<body>
+<main class="lesson">
+
+  <p class="eyebrow">Third-party components · Lesson 3</p>
+  <h1>Styling it to match UIToolbox</h1>
+  <p class="lede">
+    React Aria ships almost no CSS on purpose. That's not a gap — it's the seam
+    where your Tailwind goes in.
+  </p>
+
+  <p>
+    You've done questions 1, 2, and 4 of the reading method — state shape and how
+    subcomponents share it. This is <strong>question&nbsp;5: how is it
+    styled?</strong> The surprising answer: <em>it isn't</em>, until you style it.
+    <code>react-aria-components</code> give you behaviour, accessibility, and
+    <em>state</em>, and leave every pixel to you. Your job is to attach your
+    existing look — the same tokens in your
+    <code>inputClass</code> — to their markup.
+  </p>
+
+  <h2>Two ways state reaches your CSS</h2>
+  <p>
+    A styled input needs to react to focus, hover, disabled, etc. React Aria hands
+    you those states in <strong>two</strong> forms
+    (<a href="https://react-aria.adobe.com/styling">docs</a>). Same information,
+    two shapes:
+  </p>
+
+  <div class="ledger">
+    <div class="row">
+      <span class="mark gate">A</span>
+      <span class="what">
+        <span class="name">data-* attributes</span>
+        <span class="gloss">Every state is a DOM attribute: <code>data-focused</code>, <code>data-hovered</code>, <code>data-pressed</code>, <code>data-disabled</code>, <code>data-focus-visible</code>. Style them like pseudo-classes — perfect for Tailwind.</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="mark gate">B</span>
+      <span class="what">
+        <span class="name">className / style as a function</span>
+        <span class="gloss"><code>className</code> can be a <em>function</em> of the state object: <code>className={({isFocused}) =&gt; …}</code>. Use when a class depends on JS logic, not just one flag.</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="callout key">
+    <span class="tag">The rule of thumb</span>
+    Reach for <strong>data-attributes</strong> first — they keep styling
+    declarative and Tailwind-native. Drop to the <strong>function</strong> form
+    only when the class depends on something a single attribute can't express
+    (combining states, a computed value, a variant).
+  </div>
+
+  <h2>Data-attributes in your Tailwind</h2>
+  <p>
+    You're on Tailwind v4 with <em>no</em> React-Aria plugin, so use the built-in
+    <strong>arbitrary variant</strong> syntax — <code>data-[focused]:…</code>.
+    It targets the attribute directly; no plugin needed:
+  </p>
+<pre><code>&lt;Input
+  className="h-9 rounded-md border border-input bg-background px-3 text-sm
+             data-[focused]:outline-none
+             data-[focused]:ring-2 data-[focused]:ring-ring
+             data-[disabled]:opacity-50 data-[disabled]:pointer-events-none" /&gt;</code></pre>
+  <p>
+    Look familiar? Those are the <em>same tokens</em> as your existing
+    <code>inputClass</code> in <code>controls-ui.tsx</code> — <code>border-input</code>,
+    <code>bg-background</code>, <code>ring-ring</code>. You are not inventing a new
+    look; you're re-pointing your look at React Aria's states. The only real
+    change: your old field used the CSS pseudo-class
+    <code>focus-visible:ring-2</code>; here the equivalent state arrives as
+    <code>data-[focus-visible]:ring-2</code>.
+  </p>
+
+  <div class="callout watch">
+    <span class="tag">Watch — the naming gotcha</span>
+    React Aria's states are <strong>past-tense adjectives</strong>:
+    <code>data-hovered</code>, <code>data-focused</code>, <code>data-pressed</code>
+    — not the CSS <code>:hover</code>/<code>:focus</code>/<code>:active</code> you're
+    used to. Write <code>data-[hovered]:bg-accent</code>, not
+    <code>hover:bg-accent</code>, if you want React Aria's (more correct) notion of
+    the state. (Plain <code>hover:</code> still works — it's just the browser's
+    version, which ignores things like touch.)
+  </div>
+
+  <h2>The function form, when you need it</h2>
+  <p>
+    Sometimes one attribute isn't enough — you want a class only when
+    <em>focus-visible AND selected</em>, or you're computing something. Then
+    <code>className</code> as a function earns its keep
+    (<a href="https://react-aria.adobe.com/styling">docs</a>):
+  </p>
+<pre><code>&lt;Radio className={({ isFocusVisible, isSelected }) =&gt; cn(
+  "flex rounded-lg p-4 border",
+  isSelected     && "bg-primary text-primary-foreground",
+  isFocusVisible && "ring-2 ring-ring ring-offset-1",
+)} /&gt;</code></pre>
+  <p>
+    Note <code>cn(...)</code> — your own helper from <code>@/lib/utils</code>
+    (<code>clsx</code> + <code>tailwind-merge</code>). It belongs here for the same
+    reason it's in <code>button.tsx</code>: it merges conditional classes and
+    resolves Tailwind conflicts. The static-string and function forms can mix
+    freely — plain string on the simple parts, function only where logic bites.
+  </p>
+
+  <h2>Putting it together — your field, restyled</h2>
+  <p>
+    Everything from Lessons 1–3 in one component: the boundary seam (state), one
+    <code>ColorField</code> in a <code>ColorPicker</code> (subcomponents), and your
+    tokens on React Aria's states (styling):
+  </p>
+<pre><code>import { ColorPicker, ColorField, Label, Input, parseColor } from "react-aria-components";
+import { cn } from "@/lib/utils";
+
+&lt;ColorPicker
+  value={parseColor(project.textColor)}                       {/* string → Color */}
+  onChange={(c) =&gt; dispatch({ type: "set-text-color", color: c.toString("hex") })}
+&gt;
+  &lt;ColorField className="flex flex-col gap-1.5"&gt;
+    &lt;Label className="text-sm font-medium"&gt;Text color&lt;/Label&gt;
+    &lt;Input className={cn(
+      "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm",
+      "data-[focused]:outline-none data-[focused]:ring-2 data-[focused]:ring-ring data-[focused]:ring-offset-2",
+      "data-[disabled]:opacity-50",
+    )} /&gt;
+  &lt;/ColorField&gt;
+&lt;/ColorPicker&gt;</code></pre>
+  <p>
+    That's the whole replacement — recognisably UIToolbox, but now accessible,
+    Color-object-backed, and ready to grow channels/sliders inside the same
+    picker whenever you want them.
+  </p>
+
+  <hr class="rule" />
+
+  <h2>Check yourself</h2>
+  <p>From memory.</p>
+
+  <div class="quiz">
+    <div class="qblock" data-answer="1">
+      <p class="q">By default, <code>react-aria-components</code> ship with&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">a full default theme</button></li>
+        <li><button class="opt">almost no visual styling</button></li>
+        <li><button class="opt">inline style objects only</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Right — behaviour and state, but the pixels are yours to add."
+         data-wrong="They're essentially unstyled — you attach the look via className."></p>
+    </div>
+
+    <div class="qblock" data-answer="2">
+      <p class="q">On Tailwind v4 with no plugin, style the focused state with&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">the focus: css variant</button></li>
+        <li><button class="opt">a focused className string</button></li>
+        <li><button class="opt">the data-[focused]: variant</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Yes — the arbitrary variant targets the data-focused attribute directly."
+         data-wrong="Use data-[focused]: — it targets React Aria's data attribute with no plugin."></p>
+    </div>
+
+    <div class="qblock" data-answer="0">
+      <p class="q">Prefer <code>className</code> as a function only when the class&hellip;</p>
+      <ul class="opts">
+        <li><button class="opt">depends on combined logic</button></li>
+        <li><button class="opt">targets a single state</button></li>
+        <li><button class="opt">sets a static border</button></li>
+      </ul>
+      <p class="feedback"
+         data-correct="Exactly — single flags stay declarative as data-attributes; logic goes in the function."
+         data-wrong="Single states use data-attributes; the function is for combined/computed logic."></p>
+    </div>
+  </div>
+
+  <h2>Predict the output</h2>
+  <p>You port your old class over verbatim. Spot the bug.</p>
+<pre><code>// old field used:  focus-visible:ring-2
+&lt;Input className="border border-input focus-visible:ring-2 ring-ring" /&gt;
+// You tab to the input. Does the ring appear via React Aria's state?</code></pre>
+  <details>
+    <summary>Reveal</summary>
+    <p>
+      The ring <em>does</em> appear — but through the <strong>browser's</strong>
+      <code>:focus-visible</code>, not React Aria's state. Usually identical, so it
+      looks fine. The subtle point: to bind to React Aria's own, more consistent
+      notion (which it also sets on non-input elements that have no native focus
+      pseudo-class), you'd write <code>data-[focus-visible]:ring-2</code>. On a
+      plain <code>&lt;Input&gt;</code> either works; on composed elements
+      (<code>ColorSwatch</code>, a custom trigger) only the data-attribute does.
+    </p>
+  </details>
+
+  <hr class="rule" />
+
+  <h2>Read next</h2>
+  <p>
+    Primary source: <a href="https://react-aria.adobe.com/styling">React Aria —
+    Styling</a>. Skim the full list of <code>data-*</code> states a component
+    exposes; each component's own page lists its states near the bottom. For the
+    state/boundary reasoning behind all this, keep the
+    <a href="../reference/context-boundaries.html">boundaries reference card</a>
+    handy.
+  </p>
+
+  <div class="footer">
+    <div class="ask">
+      <strong>I'm your teacher — ask me anything.</strong> Want the full
+      <code>data-*</code> list for <code>ColorField</code> specifically? Wondering
+      whether to wrap this as a reusable styled component (like
+      <code>button.tsx</code> does with <code>cva</code>)? That's a great question
+      for Lesson&nbsp;4, where you ship the real swap.
+    </div>
+    <div class="nav">
+      <span><a href="0002-one-color-many-editors.html">← Lesson 2: one color, many editors</a></span>
+      <span><a href="0004-ship-the-swap.html">Next → Lesson 4: ship the swap in controls-ui</a></span>
+    </div>
+  </div>
+
+</main>
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,20 +1,32 @@
-# Starting point: reads YAML roughly, goal is "read & trust" CI
+# Starting point: fluent in React, new to React Aria's value model
 
-Tom came in with **some exposure** to GitHub Actions — can roughly follow a
-workflow YAML file, has used CI others set up, but can't yet confidently write or
-debug one. His stated mission is narrow and concrete: look at a CI run (or its
-workflow file) and know what it does and whether **green means safe to merge**.
+Tom pivoted this workspace from CI to a new mission (2026-07-20): adopting
+third-party React components with confidence, using React Aria's ColorPicker /
+ColorField as the vehicle, with the concrete goal of replacing the hand-rolled
+`ColorField` in `glyph-creator/controls-ui.tsx`.
 
-Implications for future sessions:
-- Skip YAML-syntax basics; he can read it. Teach the _model_ (event → workflow →
-  job → runner → step) and _judgement_ (trust = gate coverage), not syntax.
-- Authoring workflows and debugging red builds are explicitly **out of scope for
-  now** — deferred until "read & trust" is fluent. The mission may extend to them
-  later; confirm before widening.
-- Ground everything in his live UIToolbox repo (PR #8, `ci.yml`) — he prefers real
-  runs over toy examples.
+## What he brings
+- Strong React/TS. Controlled components are second nature — the field being
+  replaced is his own (`<input type="color">`, `value: string`).
+- New to React Aria specifically, and (likely) to naming the compound-component /
+  render-prop patterns it uses, though he'll recognise Context once pointed at it.
 
-Lesson 1 (`0001-reading-a-ci-run.html`) covered the five-word model, decoded his
-actual `verify` job, and introduced "green = declared gates passed, nothing more."
-No demonstrated mastery yet — reassess after he completes the retrieval quiz or
-brings questions.
+## The key terrain
+- The load-bearing insight is the **state shape shift**: his app speaks hex
+  **strings**; React Aria speaks immutable **`Color` objects**. Surrounding
+  glyph-creator state (`project.textColor`, dispatched `{ color }`) is string-based
+  and should *stay* string-based — so the real skill is placing a **boundary
+  adapter** (`parseColor` in, `toString('hex')` out), not rewriting app state.
+- Subcomponents (`ColorField`/`Slider`/`Area` sharing one `ColorPicker`'s color
+  via Context) and styling `react-aria-components` are the next two layers, but
+  they only make sense *after* the Color-object model lands.
+
+## Implications for sessions
+- Don't teach controlled-component basics. Start at the string→object reframe.
+- Frame the whole mission as a reusable **reading method** for any library, so it
+  transfers beyond React Aria.
+- No copy-paste: teach the model, then have him predict/write code.
+
+Lesson 1 (`0001-the-color-object.html`) covers the `Color` object as single
+source of truth and the string↔object boundary. No mastery demonstrated yet —
+reassess after the retrieval quiz or when he brings the swap back to discuss.
