@@ -63,9 +63,9 @@ describe("GlyphCreator — Style Cascade scope switcher (#19)", () => {
   it("editing at Project scope shows no reset affordance (nothing overridden)", () => {
     render(<GlyphCreator />);
     openStyle();
-    fireEvent.change(screen.getByLabelText("Background fill"), {
-      target: { value: "#123456" },
-    });
+    const fill = screen.getByLabelText("Background fill");
+    fireEvent.change(fill, { target: { value: "#123456" } });
+    fireEvent.blur(fill);
     expect(
       screen.queryByRole("button", { name: /reset background fill/i }),
     ).not.toBeInTheDocument();
@@ -78,9 +78,9 @@ describe("GlyphCreator — Style Cascade scope switcher (#19)", () => {
     fireEvent.change(screen.getByLabelText("Editing style for"), {
       target: { value: "device:0" },
     });
-    fireEvent.change(screen.getByLabelText("Background fill"), {
-      target: { value: "#abcdef" },
-    });
+    const fill = screen.getByLabelText("Background fill");
+    fireEvent.change(fill, { target: { value: "#abcdef" } });
+    fireEvent.blur(fill);
     // The reset circle-arrow appears only because that property is now overridden
     // at the Device scope.
     const reset = screen.getByRole("button", {
