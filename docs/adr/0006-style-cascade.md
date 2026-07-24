@@ -1,7 +1,9 @@
 # ADR-0006: Glyph style resolves through a Project → Device → Glyph cascade
 
-- **Status:** Accepted
+- **Status:** Accepted (extended by ADR-0007)
 - **Date:** 2026-07-17
+- **Amended by:** ADR-0007 — adds a `symbolPaints { fill, border, secondary }`
+  group (Symbol paint roles) to the cascade.
 
 ## Context
 

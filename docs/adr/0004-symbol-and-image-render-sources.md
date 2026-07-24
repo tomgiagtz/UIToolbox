@@ -1,8 +1,10 @@
 # ADR-0004: Symbols and custom images as Glyph Render Sources
 
-- **Status:** Accepted
+- **Status:** Accepted (colour model amended by ADR-0007)
 - **Date:** 2026-07-17
 - **Amends:** ADR-0002 (font-rendered glyphs)
+- **Amended by:** ADR-0007 — the tintable / fixed-colour / `tint` model below is
+  superseded by sentinel paint roles and importable Symbol Sets.
 
 ## Context
 
