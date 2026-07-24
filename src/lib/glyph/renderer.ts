@@ -18,6 +18,12 @@ export interface RenderGlyphOptions {
   style: GlyphStyle;
   /** Registered FontFace family name. */
   fontFamily: string;
+  /**
+   * The Glyph's **Symbol** Render Source, already rasterized to its resolved
+   * appearance (see `symbol-render.ts`). When present it is drawn on the tile in
+   * place of the label; when absent the label is drawn (issue #17).
+   */
+  symbol?: CanvasImageSource;
 }
 
 const MAX_FONT_FRACTION = 0.5;
@@ -37,7 +43,7 @@ export function renderGlyph(
   oy: number,
   opts: RenderGlyphOptions,
 ): void {
-  const { cellSize, style, fontFamily, label } = opts;
+  const { cellSize, style, fontFamily, label, symbol } = opts;
   const { background, textColor } = style;
 
   ctx.save();
@@ -45,16 +51,49 @@ export function renderGlyph(
   ctx.clearRect(0, 0, cellSize, cellSize);
 
   drawBackground(ctx, cellSize, background);
-  drawLabel(
-    ctx,
-    cellSize,
-    label,
-    textColor,
-    fontFamily,
-    background.border.width,
-  );
+  // A Symbol Render Source replaces the label; both share the same content box.
+  if (symbol) {
+    drawSymbol(ctx, cellSize, symbol, background.border.width);
+  } else {
+    drawLabel(
+      ctx,
+      cellSize,
+      label,
+      textColor,
+      fontFamily,
+      background.border.width,
+    );
+  }
 
   ctx.restore();
+}
+
+/**
+ * The inner box a Render Source draws in: the padding that keeps a Symbol or label
+ * clear of the border and cell edge, and the resulting square edge length. Shared
+ * so a Symbol and its fallback label occupy the exact same footprint.
+ */
+function contentBox(
+  cellSize: number,
+  borderWidth: number,
+): { padding: number; size: number } {
+  const padding = Math.max(borderWidth + 4, cellSize * 0.12);
+  return { padding, size: cellSize - padding * 2 };
+}
+
+/**
+ * Draw a rasterized Symbol centred in the tile's content box, preserving its
+ * square aspect.
+ */
+function drawSymbol(
+  ctx: Canvas2DContext,
+  cellSize: number,
+  symbol: CanvasImageSource,
+  borderWidth: number,
+): void {
+  const { padding, size } = contentBox(cellSize, borderWidth);
+  if (size <= 0) return;
+  ctx.drawImage(symbol, padding, padding, size, size);
 }
 
 function drawBackground(
@@ -109,9 +148,8 @@ function drawLabel(
 ): void {
   if (!label) return;
 
-  // Keep the label clear of the border and cell edge.
-  const padding = Math.max(borderWidth + 4, cellSize * 0.12);
-  const available = cellSize - padding * 2;
+  // Keep the label clear of the border and cell edge (same box as a Symbol).
+  const { size: available } = contentBox(cellSize, borderWidth);
 
   ctx.fillStyle = color;
   ctx.textAlign = "center";

@@ -76,6 +76,7 @@ export function resolveDeviceInputs(
     resolved.push({
       id,
       label: entry.label,
+      symbolId: entry.symbolId,
       style: resolveStyle(
         base,
         device.style,
@@ -130,7 +131,7 @@ function buildDeviceOutput(
 
   const glyphPlacements: GlyphPlacement[] = placements.map(
     ({ index, rect }) => {
-      const { label, style } = inputs[index];
+      const { label, style, symbolId } = inputs[index];
       const spriteName = uniqueName(
         applyTemplate(
           project.naming.template,
@@ -144,7 +145,7 @@ function buildDeviceOutput(
         used,
         project.naming.case,
       );
-      return { label, spriteName, rect, style };
+      return { label, spriteName, rect, style, symbolId };
     },
   );
 
@@ -162,6 +163,7 @@ function buildDeviceOutput(
 
   return {
     device: device.name,
+    catalogId: device.catalogId,
     atlasSize,
     cellSize,
     placements: glyphPlacements,

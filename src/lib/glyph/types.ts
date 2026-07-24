@@ -80,6 +80,12 @@ export interface ResolvedInput {
   id: string;
   label: string;
   style: GlyphStyle;
+  /**
+   * Render Source: the shipped Symbol id to draw in place of the label, or
+   * unset to render the label (issue #17). Well-known Catalog Inputs default to
+   * their Symbol via the Catalog per-Input tier.
+   */
+  symbolId?: string;
 }
 
 /**
@@ -126,6 +132,8 @@ export interface GlyphPlacement {
   spriteName: string;
   rect: Rect;
   style: GlyphStyle;
+  /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
+  symbolId?: string;
 }
 
 /** The result of packing one Device's Glyphs. */
@@ -164,6 +172,8 @@ export interface TexturePackerDoc {
  */
 export interface DeviceOutput {
   device: string;
+  /** The Device's Catalog id, so the compositor can resolve Symbol overrides. */
+  catalogId: string;
   atlasSize: AtlasSize;
   cellSize: number;
   placements: GlyphPlacement[];

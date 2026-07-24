@@ -56,4 +56,22 @@ describe("DeviceLayout", () => {
     // The outline + any backers render as a non-interactive layer behind them.
     expect(container.querySelector("[data-decoration]")).toBeInTheDocument();
   });
+
+  it("draws a pad Input's real Symbol in place of the label placeholder", () => {
+    const device = createDeviceFromCatalog(getCatalog("xbox")!);
+    const { container } = render(
+      <DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />,
+    );
+    // The A button has a Symbol (xbox-a), so it embeds a nested <svg> whose
+    // sentinels have been recoloured to currentColor — no bare-label glyph.
+    const a = screen.getByRole("button", { name: "A" });
+    const symbol = a.querySelector("svg");
+    expect(symbol).toBeInTheDocument();
+    expect(symbol?.innerHTML).toContain("currentColor");
+    // The decoration layer is the only other <svg>; the button's own text
+    // placeholder is gone now that a Symbol renders.
+    expect(a.querySelector("text")).not.toBeInTheDocument();
+    // The whole diagram still carries currentColor'd symbol art.
+    expect(container.innerHTML).toContain("currentColor");
+  });
 });

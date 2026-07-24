@@ -142,27 +142,41 @@ const KEYBOARD_PRESET: string[] = [
 // The pads enable their whole Catalog by default, so each entry list doubles as
 // the Preset. Order matches the labels the tool generated pre-Catalog.
 
-function pad(prefix: string, entries: [string, string][]): CatalogInput[] {
-  return entries.map(([slug, label]) => ({ id: `${prefix}-${slug}`, label }));
+/**
+ * Build a pad Catalog. Each entry is `[slug, label, symbolId?]`; a `symbolId`
+ * makes that Input default to its shipped Symbol as Render Source (issue #17).
+ * Bumper/trigger tiles carry no Symbol — they default to an Authored Background
+ * instead (issue #18) — and face buttons the shipped atlases don't yet author
+ * (the PlayStation shapes) simply stay label-rendered.
+ */
+function pad(
+  prefix: string,
+  entries: [string, string, string?][],
+): CatalogInput[] {
+  return entries.map(([slug, label, symbolId]) => ({
+    id: `${prefix}-${slug}`,
+    label,
+    ...(symbolId ? { symbolId } : {}),
+  }));
 }
 
 const XBOX_INPUTS = pad("xbox", [
-  ["a", "A"],
-  ["b", "B"],
-  ["x", "X"],
-  ["y", "Y"],
+  ["a", "A", "xbox-a"],
+  ["b", "B", "xbox-b"],
+  ["x", "X", "xbox-x"],
+  ["y", "Y", "xbox-y"],
   ["lb", "LB"],
   ["rb", "RB"],
   ["lt", "LT"],
   ["rt", "RT"],
-  ["view", "View"],
-  ["menu", "Menu"],
-  ["left-stick", "Left Stick"],
-  ["right-stick", "Right Stick"],
-  ["dpad-up", "D-Pad Up"],
-  ["dpad-down", "D-Pad Down"],
-  ["dpad-left", "D-Pad Left"],
-  ["dpad-right", "D-Pad Right"],
+  ["view", "View", "xbox-view"],
+  ["menu", "Menu", "xbox-menu"],
+  ["left-stick", "Left Stick", "stick"],
+  ["right-stick", "Right Stick", "stick"],
+  ["dpad-up", "D-Pad Up", "dpad-up"],
+  ["dpad-down", "D-Pad Down", "dpad-down"],
+  ["dpad-left", "D-Pad Left", "dpad-left"],
+  ["dpad-right", "D-Pad Right", "dpad-right"],
 ]);
 
 const PLAYSTATION_INPUTS = pad("ps", [
@@ -176,12 +190,12 @@ const PLAYSTATION_INPUTS = pad("ps", [
   ["r2", "R2"],
   ["share", "Share"],
   ["options", "Options"],
-  ["left-stick", "Left Stick"],
-  ["right-stick", "Right Stick"],
-  ["dpad-up", "D-Pad Up"],
-  ["dpad-down", "D-Pad Down"],
-  ["dpad-left", "D-Pad Left"],
-  ["dpad-right", "D-Pad Right"],
+  ["left-stick", "Left Stick", "stick"],
+  ["right-stick", "Right Stick", "stick"],
+  ["dpad-up", "D-Pad Up", "dpad-up"],
+  ["dpad-down", "D-Pad Down", "dpad-down"],
+  ["dpad-left", "D-Pad Left", "dpad-left"],
+  ["dpad-right", "D-Pad Right", "dpad-right"],
 ]);
 
 /** The Catalogs the tool ships, in picker order. */

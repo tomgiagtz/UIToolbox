@@ -1,4 +1,5 @@
 import { renderGlyph } from "@/lib/glyph/renderer";
+import { ensureSymbolBitmap } from "@/lib/glyph/symbol-render";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
 export interface AtlasRenderInputs {
@@ -26,11 +27,22 @@ export async function renderAtlasBlob(
   }
 
   for (const placement of output.placements) {
+    // Rasterize the Symbol Render Source (if any) to the resolved appearance
+    // before drawing, so the exported atlas matches the live preview exactly.
+    const symbol = placement.symbolId
+      ? ((await ensureSymbolBitmap(
+          placement.symbolId,
+          placement.style,
+          output.cellSize,
+          output.catalogId,
+        )) ?? undefined)
+      : undefined;
     renderGlyph(ctx, placement.rect.x, placement.rect.y, {
       label: placement.label,
       cellSize: output.cellSize,
       style: placement.style,
       fontFamily: inputs.fontFamily,
+      symbol,
     });
   }
 

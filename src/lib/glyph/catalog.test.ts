@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEVICE_CATALOGS,
+  catalogIndex,
   catalogPresetLabels,
   getCatalog,
   getCatalogByName,
 } from "@/lib/glyph/catalog";
+import { SYMBOLS } from "@/lib/glyph/symbols";
 
 /**
  * The label lists the tool shipped before the Catalog model. The migrated model
@@ -125,6 +127,45 @@ describe("Presets seed the legacy default-enabled subset", () => {
     const ps = getCatalog("playstation")!;
     expect(ps.preset.length).toBe(ps.inputs.length);
     expect(catalogPresetLabels(ps)).toEqual(LEGACY_PLAYSTATION);
+  });
+});
+
+describe("Well-known Inputs default to a Symbol (issue #17)", () => {
+  function symbolOf(catalogId: string, inputId: string) {
+    return catalogIndex(getCatalog(catalogId)!).get(inputId)?.symbolId;
+  }
+
+  it("maps Xbox face buttons and the menu cluster to their Symbols", () => {
+    expect(symbolOf("xbox", "xbox-a")).toBe("xbox-a");
+    expect(symbolOf("xbox", "xbox-y")).toBe("xbox-y");
+    expect(symbolOf("xbox", "xbox-view")).toBe("xbox-view");
+    expect(symbolOf("xbox", "xbox-menu")).toBe("xbox-menu");
+  });
+
+  it("points both sticks at the shared stick Symbol", () => {
+    expect(symbolOf("xbox", "xbox-left-stick")).toBe("stick");
+    expect(symbolOf("xbox", "xbox-right-stick")).toBe("stick");
+    expect(symbolOf("playstation", "ps-left-stick")).toBe("stick");
+  });
+
+  it("maps each d-pad direction to its rotated Symbol", () => {
+    expect(symbolOf("xbox", "xbox-dpad-up")).toBe("dpad-up");
+    expect(symbolOf("xbox", "xbox-dpad-right")).toBe("dpad-right");
+    expect(symbolOf("playstation", "ps-dpad-left")).toBe("dpad-left");
+  });
+
+  it("leaves bumper/trigger tiles Symbol-less (they default to a Background)", () => {
+    expect(symbolOf("xbox", "xbox-lb")).toBeUndefined();
+    expect(symbolOf("xbox", "xbox-rt")).toBeUndefined();
+  });
+
+  it("only references Symbol ids the manifest actually ships", () => {
+    const shipped = new Set(SYMBOLS.map((s) => s.id));
+    for (const catalog of DEVICE_CATALOGS) {
+      for (const input of catalog.inputs) {
+        if (input.symbolId) expect(shipped.has(input.symbolId)).toBe(true);
+      }
+    }
   });
 });
 

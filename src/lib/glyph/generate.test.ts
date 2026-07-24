@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { generateTilesets, resolveScopeStyle } from "@/lib/glyph/generate";
+import {
+  generateTilesets,
+  resolveDeviceInputs,
+  resolveScopeStyle,
+} from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
 import { projectReducer } from "@/lib/glyph/project";
 import { createDefaultProject } from "@/lib/glyph/presets";
@@ -43,6 +47,33 @@ function project(over: Partial<Project> = {}): Project {
     ...over,
   };
 }
+
+describe("Symbol Render Source threads through the cascade (issue #17)", () => {
+  const xbox: DeviceConfig = {
+    name: "Xbox",
+    catalogId: "xbox",
+    enabled: ["xbox-a", "xbox-lb"],
+    custom: [{ id: "c0", label: "Paddle" }],
+    style: {},
+    glyphStyles: {},
+  };
+
+  it("resolves each Input's default Symbol id (label-only when unset)", () => {
+    const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
+    expect(a.symbolId).toBe("xbox-a"); // well-known → its Symbol
+    expect(lb.symbolId).toBeUndefined(); // bumper → Authored Background (#18)
+    expect(paddle.symbolId).toBeUndefined(); // custom → label
+  });
+
+  it("carries the Symbol id onto the packed placements for the compositor", () => {
+    const [out] = generateTilesets(project({ devices: [xbox] }));
+    expect(out.placements.map((p) => p.symbolId)).toEqual([
+      "xbox-a",
+      undefined,
+      undefined,
+    ]);
+  });
+});
 
 describe("generateTilesets", () => {
   it("returns one DeviceOutput per Device", () => {
