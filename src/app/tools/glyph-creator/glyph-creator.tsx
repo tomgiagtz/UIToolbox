@@ -522,6 +522,7 @@ export function GlyphCreator() {
                 glyphs={activeInputs}
                 cellSize={project.cellSize}
                 fontFamily={project.font.family}
+                catalogId={activeDevice.catalogId}
                 className="h-full w-full object-contain"
                 onSelectGlyph={onSelectGlyph}
               />

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import {
+  DEFAULT_SYMBOL_PAINTS,
+  createDefaultProject,
+} from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
 
@@ -66,6 +69,54 @@ describe("ProjectStore — config (localStorage)", () => {
   });
 });
 
+describe("ProjectStore — v2 → v3 migration (symbolPaints)", () => {
+  // A v2 config: the Catalog + Style Cascade shape, but before the Project gained
+  // its `symbolPaints` base tier (ADR-0007 §3).
+  function v2(): string {
+    return JSON.stringify({
+      version: 2,
+      project: {
+        name: "pre-symbol-paints",
+        font: { family: "Inter" },
+        textColor: "#f8fafc",
+        background: {
+          shape: "rounded-rect",
+          fill: "#1e293b",
+          cornerRadius: 18,
+          border: { width: 4, color: "#475569" },
+        },
+        cellSize: 128,
+        devices: [
+          {
+            name: "Keyboard",
+            catalogId: "keyboard",
+            enabled: ["key-w"],
+            custom: [],
+            style: {},
+            glyphStyles: {},
+          },
+        ],
+        naming: { template: "{device}_{input}", case: "snake" },
+        filenameTemplate: "{device}_atlas",
+      },
+    });
+  }
+
+  it("backfills the default Symbol Paint Role colours", () => {
+    const project = parseConfig(v2());
+    expect(project).not.toBeNull();
+    expect(project!.symbolPaints).toEqual(DEFAULT_SYMBOL_PAINTS);
+    // The rest of the project is carried through untouched.
+    expect(project!.devices[0].enabled).toEqual(["key-w"]);
+  });
+
+  it("produces a config that passes current-version validation on re-save", () => {
+    const migrated = parseConfig(v2())!;
+    saveConfig(migrated);
+    expect(loadConfig()).toEqual(migrated);
+  });
+});
+
 describe("ProjectStore — v1 → v2 migration", () => {
   // A v1 config: Devices were a flat list of Input label strings.
   function v1(devices: { name: string; inputs: string[] }[]): string {
@@ -100,6 +151,8 @@ describe("ProjectStore — v1 → v2 migration", () => {
     expect(kb.custom).toEqual([{ id: "custom-1", label: "MyKey" }]);
     expect(kb.style).toEqual({});
     expect(kb.glyphStyles).toEqual({});
+    // v1 → v2 → v3 also backfills the Symbol Paint Role defaults.
+    expect(project!.symbolPaints).toEqual(DEFAULT_SYMBOL_PAINTS);
   });
 
   it("migrates a full pad Device to its enabled Catalog ids", () => {

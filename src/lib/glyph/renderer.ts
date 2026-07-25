@@ -18,6 +18,20 @@ export interface RenderGlyphOptions {
   style: GlyphStyle;
   /** Registered FontFace family name. */
   fontFamily: string;
+  /**
+   * The Glyph's **Symbol** Render Source, already rasterized to its resolved
+   * appearance (see `symbol-render.ts`). When present it is drawn on the tile in
+   * place of the label; when absent the label is drawn (issue #17).
+   */
+  symbol?: CanvasImageSource;
+  /**
+   * The Glyph's **Authored Background** tile, already rasterized to its resolved
+   * Background colours (see `symbol-render.ts`). When present it is drawn across the
+   * whole cell in place of the plain `shape` — the tile carries its own shape +
+   * outline — with the label/Symbol composited on top (issue #18). Falls back to the
+   * plain `shape` while the bitmap is still warming.
+   */
+  backgroundImage?: CanvasImageSource;
 }
 
 const MAX_FONT_FRACTION = 0.5;
@@ -37,24 +51,74 @@ export function renderGlyph(
   oy: number,
   opts: RenderGlyphOptions,
 ): void {
-  const { cellSize, style, fontFamily, label } = opts;
+  const { cellSize, style, fontFamily, label, symbol, backgroundImage } = opts;
   const { background, textColor } = style;
 
   ctx.save();
   ctx.translate(ox, oy);
   ctx.clearRect(0, 0, cellSize, cellSize);
 
-  drawBackground(ctx, cellSize, background);
-  drawLabel(
-    ctx,
-    cellSize,
-    label,
-    textColor,
-    fontFamily,
-    background.border.width,
-  );
+  // An Authored Background tile replaces the plain shape and carries its own outline.
+  // Until its bitmap warms, fall back to the plain shape so there's no blank flash.
+  if (backgroundImage) {
+    // Mirror left-side tiles horizontally so they face opposite the right-side
+    // ones that share the same right-facing art (issue #18). The flip wraps only
+    // the tile draw, so the label below stays upright.
+    if (background.flipX) {
+      ctx.save();
+      ctx.translate(cellSize, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(backgroundImage, 0, 0, cellSize, cellSize);
+      ctx.restore();
+    } else {
+      ctx.drawImage(backgroundImage, 0, 0, cellSize, cellSize);
+    }
+  } else {
+    drawBackground(ctx, cellSize, background);
+  }
+  // A Symbol Render Source replaces the label; both share the same content box.
+  if (symbol) {
+    drawSymbol(ctx, cellSize, symbol, background.border.width);
+  } else {
+    drawLabel(
+      ctx,
+      cellSize,
+      label,
+      textColor,
+      fontFamily,
+      background.border.width,
+    );
+  }
 
   ctx.restore();
+}
+
+/**
+ * The inner box a Render Source draws in: the padding that keeps a Symbol or label
+ * clear of the border and cell edge, and the resulting square edge length. Shared
+ * so a Symbol and its fallback label occupy the exact same footprint.
+ */
+function contentBox(
+  cellSize: number,
+  borderWidth: number,
+): { padding: number; size: number } {
+  const padding = Math.max(borderWidth + 4, cellSize * 0.12);
+  return { padding, size: cellSize - padding * 2 };
+}
+
+/**
+ * Draw a rasterized Symbol centred in the tile's content box, preserving its
+ * square aspect.
+ */
+function drawSymbol(
+  ctx: Canvas2DContext,
+  cellSize: number,
+  symbol: CanvasImageSource,
+  borderWidth: number,
+): void {
+  const { padding, size } = contentBox(cellSize, borderWidth);
+  if (size <= 0) return;
+  ctx.drawImage(symbol, padding, padding, size, size);
 }
 
 function drawBackground(
@@ -109,9 +173,8 @@ function drawLabel(
 ): void {
   if (!label) return;
 
-  // Keep the label clear of the border and cell edge.
-  const padding = Math.max(borderWidth + 4, cellSize * 0.12);
-  const available = cellSize - padding * 2;
+  // Keep the label clear of the border and cell edge (same box as a Symbol).
+  const { size: available } = contentBox(cellSize, borderWidth);
 
   ctx.fillStyle = color;
   ctx.textAlign = "center";

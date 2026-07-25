@@ -14,6 +14,8 @@
  * to "start fresh" rather than throwing.
  */
 import { getCatalogByName } from "@/lib/glyph/catalog";
+import { DEFAULT_SYMBOL_PAINTS } from "@/lib/glyph/presets";
+import type { SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,
   CustomInput,
@@ -28,8 +30,10 @@ const CONFIG_KEY = "uitoolbox.glyph-creator.project";
  * - v1: Devices were `{ name, inputs: string[] }`.
  * - v2: Devices are `{ name, catalogId, enabled, custom, style, glyphStyles }`
  *   (the Catalog + Style Cascade model, #15). v1 saves are migrated on load.
+ * - v3: Project gains the `symbolPaints` base tier (ADR-0007 §3). v1/v2 saves are
+ *   migrated forward by backfilling the default Symbol Paint Role colours.
  */
-const CONFIG_VERSION = 2;
+const CONFIG_VERSION = 3;
 
 interface PersistedConfig {
   version: number;
@@ -77,8 +81,11 @@ function migrateConfig(version: number, project: unknown): Project | null {
   if (version === CONFIG_VERSION) {
     return isProject(project) ? project : null;
   }
+  if (version === 2) {
+    return isProjectV2(project) ? migrateV2(project) : null;
+  }
   if (version === 1) {
-    return isProjectV1(project) ? migrateV1(project) : null;
+    return isProjectV1(project) ? migrateV2(migrateV1(project)) : null;
   }
   return null;
 }
@@ -225,6 +232,15 @@ function isBackground(value: unknown): value is Background {
   );
 }
 
+function isSymbolPaints(value: unknown): value is SymbolPaints {
+  return (
+    isRecord(value) &&
+    typeof value.fill === "string" &&
+    typeof value.border === "string" &&
+    typeof value.secondary === "string"
+  );
+}
+
 function isNaming(value: unknown): value is NamingConfig {
   return (
     isRecord(value) &&
@@ -280,8 +296,27 @@ function hasProjectCommonFields(
 function isProject(value: unknown): value is Project {
   return (
     hasProjectCommonFields(value) &&
+    isSymbolPaints(value.symbolPaints) &&
     (value.devices as unknown[]).every(isDevice)
   );
+}
+
+/**
+ * A v2 Project: the current shape minus the `symbolPaints` base tier (added in
+ * v3). `hasProjectCommonFields` already excludes `symbolPaints`, so this is the
+ * v2 validator; {@link migrateV2} backfills the default palette.
+ */
+type ProjectV2 = Omit<Project, "symbolPaints">;
+
+function isProjectV2(value: unknown): value is ProjectV2 {
+  return (
+    hasProjectCommonFields(value) &&
+    (value.devices as unknown[]).every(isDevice)
+  );
+}
+
+function migrateV2(project: ProjectV2): Project {
+  return { ...project, symbolPaints: DEFAULT_SYMBOL_PAINTS };
 }
 
 // --- v1 → v2 migration -----------------------------------------------------
@@ -308,14 +343,15 @@ function isDeviceV1(value: unknown): value is DeviceV1 {
 
 function isProjectV1(
   value: unknown,
-): value is Project & { devices: DeviceV1[] } {
+): value is ProjectV2 & { devices: DeviceV1[] } {
   return (
     hasProjectCommonFields(value) &&
     (value.devices as unknown[]).every(isDeviceV1)
   );
 }
 
-function migrateV1(project: Project & { devices: DeviceV1[] }): Project {
+/** v1 → v2: split flat Input label lists into Catalog `enabled` + custom Inputs. */
+function migrateV1(project: ProjectV2 & { devices: DeviceV1[] }): ProjectV2 {
   return { ...project, devices: project.devices.map(migrateV1Device) };
 }
 

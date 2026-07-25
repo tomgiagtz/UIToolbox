@@ -5,7 +5,11 @@
  * Background, Sprite Atlas, Sprite Name. Keep these terms; avoid the synonyms
  * noted in the glossary.
  */
-import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
+import type {
+  GlyphStyle,
+  StyleOverride,
+  SymbolPaints,
+} from "@/lib/glyph/style";
 
 /** The shape of a Glyph's Background tile. "none" yields a label-only Glyph. */
 export type BackgroundShape = "rounded-rect" | "square" | "circle" | "none";
@@ -22,6 +26,20 @@ export interface Background {
     width: number;
     color: string;
   };
+  /**
+   * An **Authored Background** tile id (a shipped SVG from the gallery). When set,
+   * the tile is drawn from that SVG — its fill/border sentinels recoloured to this
+   * Background's `fill` / `border.color` — in place of the `shape` primitive.
+   * Bumper/trigger Inputs default to one via the Catalog per-Input tier (issue #18).
+   */
+  backgroundId?: string;
+  /**
+   * Mirror the Authored Background tile horizontally when drawn. The shipped
+   * bumper/trigger tiles are right-facing, so the left-side Inputs (LB, LT) set
+   * this to face the shape the other way (issue #18). No effect without a
+   * {@link backgroundId}.
+   */
+  flipX?: boolean;
 }
 
 /** Case style applied when rendering a Sprite Name. */
@@ -80,6 +98,12 @@ export interface ResolvedInput {
   id: string;
   label: string;
   style: GlyphStyle;
+  /**
+   * Render Source: the shipped Symbol id to draw in place of the label, or
+   * unset to render the label (issue #17). Well-known Catalog Inputs default to
+   * their Symbol via the Catalog per-Input tier.
+   */
+  symbolId?: string;
 }
 
 /**
@@ -94,6 +118,11 @@ export interface Project {
   /** CSS color for the label text. */
   textColor: string;
   background: Background;
+  /**
+   * Project-tier Symbol Paint Role colours (fill / border / secondary) — the base
+   * of the `symbolPaints` cascade group (ADR-0007 §3). Independent of `textColor`.
+   */
+  symbolPaints: SymbolPaints;
   /** Square cell edge length in px (default 128). */
   cellSize: number;
   devices: DeviceConfig[];
@@ -126,6 +155,8 @@ export interface GlyphPlacement {
   spriteName: string;
   rect: Rect;
   style: GlyphStyle;
+  /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
+  symbolId?: string;
 }
 
 /** The result of packing one Device's Glyphs. */
@@ -164,6 +195,8 @@ export interface TexturePackerDoc {
  */
 export interface DeviceOutput {
   device: string;
+  /** The Device's Catalog id, so the compositor can resolve Symbol overrides. */
+  catalogId: string;
   atlasSize: AtlasSize;
   cellSize: number;
   placements: GlyphPlacement[];

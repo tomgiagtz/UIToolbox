@@ -1,4 +1,5 @@
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
+import type { SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,
   DeviceConfig,
@@ -27,6 +28,18 @@ export const DEFAULT_CELL_SIZE = 128;
 
 /** Default label color. */
 export const DEFAULT_TEXT_COLOR = "#f8fafc";
+
+/**
+ * Default Symbol Paint Role colours. `fill` (a Symbol's primary ink) follows the
+ * label colour so face buttons read like their legend; `border` is a dark grey
+ * outline and `secondary` a light grey highlight, giving multi-part symbols depth
+ * out of the box. The user can re-split any role through the cascade (ADR-0007).
+ */
+export const DEFAULT_SYMBOL_PAINTS: SymbolPaints = {
+  fill: DEFAULT_TEXT_COLOR,
+  border: "#cbd5e1",
+  secondary: "#334155",
+};
 
 /** Default rounded-rect Background. */
 export const DEFAULT_BACKGROUND: Background = {
@@ -69,6 +82,7 @@ export function createDefaultProject(
     font: { family: fontFamily },
     textColor: DEFAULT_TEXT_COLOR,
     background: DEFAULT_BACKGROUND,
+    symbolPaints: DEFAULT_SYMBOL_PAINTS,
     cellSize: DEFAULT_CELL_SIZE,
     devices: [createDeviceFromCatalog(DEVICE_CATALOGS[0])],
     naming: DEFAULT_NAMING,

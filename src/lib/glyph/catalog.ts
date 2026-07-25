@@ -142,27 +142,53 @@ const KEYBOARD_PRESET: string[] = [
 // The pads enable their whole Catalog by default, so each entry list doubles as
 // the Preset. Order matches the labels the tool generated pre-Catalog.
 
-function pad(prefix: string, entries: [string, string][]): CatalogInput[] {
-  return entries.map(([slug, label]) => ({ id: `${prefix}-${slug}`, label }));
+/**
+ * Build a pad Catalog. Each entry is `[slug, label, symbolId?, backgroundId?,
+ * flipX?]`; a `symbolId` makes that Input default to its shipped Symbol as Render
+ * Source (issue #17), and a `backgroundId` defaults it to a shipped Authored
+ * Background tile via the Catalog per-Input style tier (issue #18) — that's how
+ * bumper/trigger tiles keep their shape. `flipX` mirrors that tile horizontally, so
+ * the left-side bumper/trigger face the opposite way from the right-side ones that
+ * share the same right-facing art. Face buttons the shipped atlases don't yet author
+ * (the PlayStation shapes) simply stay label-rendered.
+ */
+function pad(
+  prefix: string,
+  entries: [string, string, string?, string?, boolean?][],
+): CatalogInput[] {
+  return entries.map(([slug, label, symbolId, backgroundId, flipX]) => ({
+    id: `${prefix}-${slug}`,
+    label,
+    ...(symbolId ? { symbolId } : {}),
+    ...(backgroundId
+      ? {
+          defaultStyle: {
+            background: { backgroundId, ...(flipX ? { flipX: true } : {}) },
+          },
+        }
+      : {}),
+  }));
 }
 
 const XBOX_INPUTS = pad("xbox", [
-  ["a", "A"],
-  ["b", "B"],
-  ["x", "X"],
-  ["y", "Y"],
-  ["lb", "LB"],
-  ["rb", "RB"],
-  ["lt", "LT"],
-  ["rt", "RT"],
-  ["view", "View"],
-  ["menu", "Menu"],
-  ["left-stick", "Left Stick"],
-  ["right-stick", "Right Stick"],
-  ["dpad-up", "D-Pad Up"],
-  ["dpad-down", "D-Pad Down"],
-  ["dpad-left", "D-Pad Left"],
-  ["dpad-right", "D-Pad Right"],
+  ["a", "A", "xbox-a"],
+  ["b", "B", "xbox-b"],
+  ["x", "X", "xbox-x"],
+  ["y", "Y", "xbox-y"],
+  // Both bumpers share one right-facing tile; the left one is mirrored. Same for
+  // the triggers.
+  ["lb", "LB", undefined, "xbox-bumper", true],
+  ["rb", "RB", undefined, "xbox-bumper"],
+  ["lt", "LT", undefined, "xbox-trigger", true],
+  ["rt", "RT", undefined, "xbox-trigger"],
+  ["view", "View", "xbox-view"],
+  ["menu", "Menu", "xbox-menu"],
+  ["left-stick", "Left Stick", "stick"],
+  ["right-stick", "Right Stick", "stick"],
+  ["dpad-up", "D-Pad Up", "dpad-up"],
+  ["dpad-down", "D-Pad Down", "dpad-down"],
+  ["dpad-left", "D-Pad Left", "dpad-left"],
+  ["dpad-right", "D-Pad Right", "dpad-right"],
 ]);
 
 const PLAYSTATION_INPUTS = pad("ps", [
@@ -176,12 +202,12 @@ const PLAYSTATION_INPUTS = pad("ps", [
   ["r2", "R2"],
   ["share", "Share"],
   ["options", "Options"],
-  ["left-stick", "Left Stick"],
-  ["right-stick", "Right Stick"],
-  ["dpad-up", "D-Pad Up"],
-  ["dpad-down", "D-Pad Down"],
-  ["dpad-left", "D-Pad Left"],
-  ["dpad-right", "D-Pad Right"],
+  ["left-stick", "Left Stick", "stick"],
+  ["right-stick", "Right Stick", "stick"],
+  ["dpad-up", "D-Pad Up", "dpad-up"],
+  ["dpad-down", "D-Pad Down", "dpad-down"],
+  ["dpad-left", "D-Pad Left", "dpad-left"],
+  ["dpad-right", "D-Pad Right", "dpad-right"],
 ]);
 
 /** The Catalogs the tool ships, in picker order. */

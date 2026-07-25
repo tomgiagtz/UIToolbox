@@ -9,7 +9,24 @@ import {
   type PadButtonShape,
 } from "@/lib/glyph/layout";
 import type { ProjectAction } from "@/lib/glyph/project";
+import {
+  recolorSymbolSvg,
+  symbolInner,
+  type RoleColors,
+  type SymbolInner,
+} from "@/lib/glyph/symbol-render";
+import { getSymbolSvg } from "@/lib/glyph/symbols";
 import type { DeviceConfig } from "@/lib/glyph/types";
+
+/**
+ * The Layout draws Symbols in the node's own text colour, so every paint role
+ * resolves to `currentColor` — the enabled/disabled theme token set on the node.
+ */
+const CURRENT_COLOR_ROLES: RoleColors = {
+  fill: "currentColor",
+  border: "currentColor",
+  secondary: "currentColor",
+};
 
 /**
  * The code-drawn **Device Layout** (ADR-0005): a Device's Catalog rendered as a
@@ -32,6 +49,12 @@ interface DeviceView {
   label: (id: string) => string;
   isEnabled: (id: string) => boolean;
   onToggle: (id: string) => void;
+  /**
+   * The node's Symbol Render Source, recoloured to `currentColor` and split for
+   * inline embedding — or `undefined` when the Input has no Symbol (it then shows
+   * its label placeholder). Issue #17.
+   */
+  symbol: (id: string) => SymbolInner | undefined;
 }
 
 export function DeviceLayout({
@@ -46,14 +69,22 @@ export function DeviceLayout({
   const catalog = getCatalog(device.catalogId);
   if (!catalog) return null;
 
-  const labels = catalogIndex(catalog);
+  const entries = catalogIndex(catalog);
   const enabled = new Set(device.enabled);
   const view: DeviceView = {
     deviceName: device.name,
-    label: (id) => labels.get(id)?.label ?? id,
+    label: (id) => entries.get(id)?.label ?? id,
     isEnabled: (id) => enabled.has(id),
     onToggle: (inputId) =>
       dispatch({ type: "toggle-input", deviceIndex, inputId }),
+    symbol: (id) => {
+      const symbolId = entries.get(id)?.symbolId;
+      if (!symbolId) return undefined;
+      const raw = getSymbolSvg(symbolId, device.catalogId);
+      return raw
+        ? (symbolInner(recolorSymbolSvg(raw, CURRENT_COLOR_ROLES)) ?? undefined)
+        : undefined;
+    },
   };
 
   const pad = getPadLayout(device.catalogId);
@@ -86,10 +117,13 @@ function nodeClasses(on: boolean) {
     ? {
         shape: "fill-input-fill-primary stroke-input-border-primary",
         text: "fill-primary-foreground",
+        // `text-*` sets CSS `color`, which the inline Symbol reads via currentColor.
+        symbol: "text-primary-foreground",
       }
     : {
         shape: "fill-input-fill-muted stroke-input-border-muted",
         text: "fill-muted-foreground",
+        symbol: "text-muted-foreground",
       };
 }
 
@@ -194,6 +228,7 @@ function PadDiagram({
           key={shape.id}
           shape={shape}
           label={label(shape.id)}
+          symbol={view.symbol(shape.id)}
           on={isEnabled(shape.id)}
           onToggle={() => onToggle(shape.id)}
         />
@@ -224,17 +259,20 @@ type GeomAttrs = Pick<
  * recoloured by enabled state. The Catalog's authored fill is stripped at ingest
  * so the whole footprint takes `fill-primary` (enabled) / `fill-muted` (disabled).
  * For this to be clickable across the button, author each shape **solid** (a
- * filled region), not as a hollow outline ring. A centred label placeholder shows
- * for the simple code-drawn shapes that report a centre (Symbols replace these).
+ * filled region), not as a hollow outline ring. When the Input has a Symbol it
+ * draws over the footprint in the node's text colour; otherwise a centred label
+ * placeholder shows for the shapes that report a centre (issue #17).
  */
 function PadButton({
   shape,
   label,
+  symbol,
   on,
   onToggle,
 }: {
   shape: PadButtonShape;
   label: string;
+  symbol: SymbolInner | undefined;
   on: boolean;
   onToggle: () => void;
 }) {
@@ -262,18 +300,30 @@ function PadButton({
         strokeWidth={1.5}
         className={cls.shape}
       />
-      {at && (
-        <text
-          x={at.x}
-          y={at.y}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={fitFontSize(glyph, at.r * 1.7, 9, 5)}
-          className={`${cls.text} pointer-events-none`}
-        >
-          {glyph}
-        </text>
-      )}
+      {at &&
+        (symbol ? (
+          <svg
+            x={at.x - at.r}
+            y={at.y - at.r}
+            width={at.r * 2}
+            height={at.r * 2}
+            viewBox={symbol.viewBox}
+            preserveAspectRatio="xMidYMid meet"
+            className={`${cls.symbol} pointer-events-none`}
+            dangerouslySetInnerHTML={{ __html: symbol.inner }}
+          />
+        ) : (
+          <text
+            x={at.x}
+            y={at.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={fitFontSize(glyph, at.r * 1.7, 9, 5)}
+            className={`${cls.text} pointer-events-none`}
+          >
+            {glyph}
+          </text>
+        ))}
     </g>
   );
 }

@@ -4,7 +4,12 @@ import { useRef, useState } from "react";
 import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
+import {
+  getBackgroundBitmap,
+  getSymbolBitmap,
+} from "@/lib/glyph/symbol-render";
 import { useGlyphCanvas } from "./use-glyph-canvas";
+import { useSymbolBitmaps } from "./use-symbol-bitmaps";
 
 /** A hovered cell + its box relative to the canvas, driving the click highlight. */
 interface Hover {
@@ -16,6 +21,8 @@ interface Hover {
 export interface PreviewGlyph {
   label: string;
   style: GlyphStyle;
+  /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
+  symbolId?: string;
 }
 
 export interface AtlasPreviewProps {
@@ -26,6 +33,8 @@ export interface AtlasPreviewProps {
   cellSize: number;
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
+  /** The Device's Catalog id, so a device-specific Symbol override resolves. */
+  catalogId?: string;
   className?: string;
   /**
    * Called with the index of the Glyph whose cell was clicked, so the editor can
@@ -48,12 +57,17 @@ export function AtlasPreview({
   glyphs,
   cellSize,
   fontFamily,
+  catalogId,
   className,
   onSelectGlyph,
 }: AtlasPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const { placements } = gridPack(glyphs.length, cellSize);
+
+  // Symbol Render Sources rasterize asynchronously; warm the shared cache and
+  // redraw once ready (see `useSymbolBitmaps`).
+  const symbolsVersion = useSymbolBitmaps(glyphs, cellSize, catalogId);
 
   // The tight bounds of the packed cells. The exported texture is padded up to a
   // power of two, but that padding is empty — showing it here would letterbox the
@@ -124,16 +138,29 @@ export function AtlasPreview({
     (ctx) => {
       ctx.clearRect(0, 0, content.width, content.height);
       for (const { index, rect } of placements) {
+        const glyph = glyphs[index];
         renderGlyph(ctx, rect.x, rect.y, {
-          label: glyphs[index].label,
+          label: glyph.label,
           cellSize,
-          style: glyphs[index].style,
+          style: glyph.style,
           fontFamily,
+          symbol: glyph.symbolId
+            ? getSymbolBitmap(glyph.symbolId, glyph.style, cellSize, catalogId)
+            : undefined,
+          backgroundImage: glyph.style.background.backgroundId
+            ? getBackgroundBitmap(
+                glyph.style.background.backgroundId,
+                glyph.style,
+                cellSize,
+                catalogId,
+              )
+            : undefined,
         });
       }
     },
-    // `placements`/`atlasSize` derive from glyphs + cellSize, so those cover them.
-    [glyphs, cellSize, fontFamily],
+    // `placements`/`atlasSize` derive from glyphs + cellSize, so those cover them;
+    // `symbolsVersion` re-runs the draw once async Symbol bitmaps are ready.
+    [glyphs, cellSize, fontFamily, catalogId, symbolsVersion],
   );
 
   if (glyphs.length === 0) {

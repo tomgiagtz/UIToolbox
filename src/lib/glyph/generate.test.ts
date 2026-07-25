@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { generateTilesets, resolveScopeStyle } from "@/lib/glyph/generate";
+import {
+  generateTilesets,
+  resolveDeviceInputs,
+  resolveScopeStyle,
+} from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
 import { projectReducer } from "@/lib/glyph/project";
 import { createDefaultProject } from "@/lib/glyph/presets";
@@ -36,6 +40,7 @@ function project(over: Partial<Project> = {}): Project {
       cornerRadius: 12,
       border: { width: 2, color: "#333333" },
     },
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
     cellSize: 128,
     devices: [device(["A", "Right Stick", "→"])],
     naming: { template: "{device}_{input}", case: "snake" },
@@ -43,6 +48,49 @@ function project(over: Partial<Project> = {}): Project {
     ...over,
   };
 }
+
+describe("Symbol Render Source threads through the cascade (issue #17)", () => {
+  const xbox: DeviceConfig = {
+    name: "Xbox",
+    catalogId: "xbox",
+    enabled: ["xbox-a", "xbox-lb"],
+    custom: [{ id: "c0", label: "Paddle" }],
+    style: {},
+    glyphStyles: {},
+  };
+
+  it("resolves each Input's default Symbol id (label-only when unset)", () => {
+    const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
+    expect(a.symbolId).toBe("xbox-a"); // well-known → its Symbol
+    expect(lb.symbolId).toBeUndefined(); // bumper → Authored Background (#18)
+    expect(paddle.symbolId).toBeUndefined(); // custom → label
+  });
+
+  it("carries the Symbol id onto the packed placements for the compositor", () => {
+    const [out] = generateTilesets(project({ devices: [xbox] }));
+    expect(out.placements.map((p) => p.symbolId)).toEqual([
+      "xbox-a",
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("threads the bumper's Authored Background id onto the placement style (#18)", () => {
+    const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
+    // The Catalog per-Input default rides in the resolved Background, not on a
+    // separate field like symbolId, so it flows to the compositor for free.
+    expect(lb.style.background.backgroundId).toBe("xbox-bumper");
+    expect(a.style.background.backgroundId).toBeUndefined();
+    expect(paddle.style.background.backgroundId).toBeUndefined();
+
+    const [out] = generateTilesets(project({ devices: [xbox] }));
+    expect(out.placements.map((p) => p.style.background.backgroundId)).toEqual([
+      undefined,
+      "xbox-bumper",
+      undefined,
+    ]);
+  });
+});
 
 describe("generateTilesets", () => {
   it("returns one DeviceOutput per Device", () => {
@@ -215,7 +263,11 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
 
   it("resolves every Glyph to the untouched Project style", () => {
     const proj = createDefaultProject("TestFont");
-    const base = { textColor: proj.textColor, background: proj.background };
+    const base = {
+      textColor: proj.textColor,
+      background: proj.background,
+      symbolPaints: proj.symbolPaints,
+    };
     const [kb] = generateTilesets(proj);
     for (const placement of kb.placements) {
       // Empty Device / Catalog / Glyph tiers ⇒ effective style === Project style,
@@ -231,6 +283,7 @@ describe("resolveScopeStyle", () => {
     expect(resolveScopeStyle(proj, { tier: "project" })).toEqual({
       textColor: proj.textColor,
       background: proj.background,
+      symbolPaints: proj.symbolPaints,
     });
   });
 
@@ -267,6 +320,7 @@ describe("resolveScopeStyle", () => {
       {
         textColor: proj.textColor,
         background: proj.background,
+        symbolPaints: proj.symbolPaints,
       },
     );
   });
