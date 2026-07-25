@@ -6,7 +6,7 @@ import {
   getCatalog,
   getCatalogByName,
 } from "@/lib/glyph/catalog";
-import { SYMBOLS } from "@/lib/glyph/symbols";
+import { AUTHORED_BACKGROUNDS, SYMBOLS } from "@/lib/glyph/symbols";
 
 /**
  * The label lists the tool shipped before the Catalog model. The migrated model
@@ -164,6 +164,52 @@ describe("Well-known Inputs default to a Symbol (issue #17)", () => {
     for (const catalog of DEVICE_CATALOGS) {
       for (const input of catalog.inputs) {
         if (input.symbolId) expect(shipped.has(input.symbolId)).toBe(true);
+      }
+    }
+  });
+});
+
+describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", () => {
+  function backgroundOf(catalogId: string, inputId: string) {
+    return catalogIndex(getCatalog(catalogId)!).get(inputId)?.defaultStyle
+      ?.background?.backgroundId;
+  }
+
+  it("defaults both Xbox bumpers to the shared bumper tile", () => {
+    expect(backgroundOf("xbox", "xbox-lb")).toBe("xbox-bumper");
+    expect(backgroundOf("xbox", "xbox-rb")).toBe("xbox-bumper");
+  });
+
+  it("defaults both Xbox triggers to the shared trigger tile", () => {
+    expect(backgroundOf("xbox", "xbox-lt")).toBe("xbox-trigger");
+    expect(backgroundOf("xbox", "xbox-rt")).toBe("xbox-trigger");
+  });
+
+  it("mirrors the left-side bumper/trigger so it faces opposite the right-side one", () => {
+    function flipOf(inputId: string) {
+      return catalogIndex(getCatalog("xbox")!).get(inputId)?.defaultStyle
+        ?.background?.flipX;
+    }
+    // Both sides share one right-facing tile; only the left ones are flipped.
+    expect(flipOf("xbox-lb")).toBe(true);
+    expect(flipOf("xbox-lt")).toBe(true);
+    expect(flipOf("xbox-rb")).toBeUndefined();
+    expect(flipOf("xbox-rt")).toBeUndefined();
+  });
+
+  it("leaves face buttons and PlayStation bumpers/triggers Background-less", () => {
+    expect(backgroundOf("xbox", "xbox-a")).toBeUndefined();
+    // PlayStation shapes aren't authored yet, so they stay label tiles.
+    expect(backgroundOf("playstation", "ps-l1")).toBeUndefined();
+    expect(backgroundOf("playstation", "ps-r2")).toBeUndefined();
+  });
+
+  it("only references Authored Background ids the manifest actually ships", () => {
+    const shipped = new Set(AUTHORED_BACKGROUNDS.map((b) => b.id));
+    for (const catalog of DEVICE_CATALOGS) {
+      for (const input of catalog.inputs) {
+        const id = input.defaultStyle?.background?.backgroundId;
+        if (id) expect(shipped.has(id)).toBe(true);
       }
     }
   });

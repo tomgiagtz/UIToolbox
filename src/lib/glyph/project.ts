@@ -148,13 +148,18 @@ function patchStyle(
 ): Project {
   if (scope.tier === "project") {
     const resolved = resolveStyle(
-      { textColor: project.textColor, background: project.background },
+      {
+        textColor: project.textColor,
+        background: project.background,
+        symbolPaints: project.symbolPaints,
+      },
       patch,
     );
     return {
       ...project,
       textColor: resolved.textColor,
       background: resolved.background,
+      symbolPaints: resolved.symbolPaints,
     };
   }
   return patchDeviceStyle(project, scope, (override) =>

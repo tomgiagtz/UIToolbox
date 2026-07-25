@@ -7,11 +7,9 @@
  * is rasterized to a bitmap the shared {@link renderGlyph} compositor can draw —
  * so live preview and the exported atlas stay pixel-identical.
  *
- * Colour model, this slice: every role resolves to the Glyph's `textColor` (a
- * Symbol "follows the resolved text colour"). Non-sentinel paints pass through as
- * authored. The per-role `symbolPaints` cascade group that splits fill / border /
- * secondary is follow-up work (issue #37, ADR-0007); {@link symbolRoleColors} is
- * the seam it will grow into.
+ * Colour model: each role resolves to its own colour from the Glyph's resolved
+ * `symbolPaints` cascade group — fill / border / secondary independently (ADR-0007
+ * §3). Non-sentinel paints pass through as authored.
  */
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { classifyPaint } from "@/lib/glyph/symbols/paint-roles.mjs";
@@ -24,13 +22,24 @@ export type PaintRole = "fill" | "border" | "secondary";
 export type RoleColors = Record<PaintRole, string>;
 
 /**
- * The colour each paint role resolves to for a Glyph. This slice maps all three
- * roles to the resolved `textColor`; issue #37 replaces this with the
- * `symbolPaints` cascade group (fill / border / secondary resolved separately).
+ * The colour each paint role resolves to for a Glyph's **Symbol**: the resolved
+ * `symbolPaints` group (fill / border / secondary), each cascaded independently
+ * of the label `textColor` (ADR-0007 §3).
  */
 export function symbolRoleColors(style: GlyphStyle): RoleColors {
-  const c = style.textColor;
-  return { fill: c, border: c, secondary: c };
+  const { fill, border, secondary } = style.symbolPaints;
+  return { fill, border, secondary };
+}
+
+/**
+ * The colour each paint role resolves to for an **Authored Background** tile
+ * (issue #18): its fill sentinel follows the Background `fill`, its border sentinel
+ * the Background `border.color` (secondary falls back to the fill). So the shipped
+ * bumper/trigger tiles restyle through the ordinary Background controls.
+ */
+export function backgroundRoleColors(style: GlyphStyle): RoleColors {
+  const { fill, border } = style.background;
+  return { fill, border: border.color, secondary: fill };
 }
 
 /**
@@ -76,12 +85,57 @@ const bitmapCache = new Map<string, ImageBitmap>();
 const inFlight = new Map<string, Promise<ImageBitmap | null>>();
 
 function cacheKey(
-  symbolId: string,
+  namespace: string,
+  id: string,
   colors: RoleColors,
   size: number,
   device?: string,
 ): string {
-  return `${device ?? ""}|${symbolId}|${colors.fill}|${colors.border}|${colors.secondary}|${size}`;
+  return `${namespace}|${device ?? ""}|${id}|${colors.fill}|${colors.border}|${colors.secondary}|${size}`;
+}
+
+/** The already-cached bitmap for an asset at a resolved appearance, or undefined. */
+function getBitmap(
+  namespace: string,
+  id: string,
+  colors: RoleColors,
+  size: number,
+  device?: string,
+): ImageBitmap | undefined {
+  return bitmapCache.get(cacheKey(namespace, id, colors, size, device));
+}
+
+/**
+ * Rasterize (and cache) an asset at a resolved appearance, resolving to the bitmap
+ * — or `null` when the asset is unknown or rasterization isn't available (SSR /
+ * test). Concurrent callers for the same appearance share one decode.
+ */
+function ensureBitmap(
+  namespace: string,
+  id: string,
+  colors: RoleColors,
+  size: number,
+  device?: string,
+): Promise<ImageBitmap | null> {
+  const key = cacheKey(namespace, id, colors, size, device);
+  const cached = bitmapCache.get(key);
+  if (cached) return Promise.resolve(cached);
+
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  const load = rasterize(id, colors, size, device)
+    .then((bitmap) => {
+      if (bitmap) bitmapCache.set(key, bitmap);
+      inFlight.delete(key);
+      return bitmap;
+    })
+    .catch(() => {
+      inFlight.delete(key);
+      return null;
+    });
+  inFlight.set(key, load);
+  return load;
 }
 
 /**
@@ -96,16 +150,14 @@ export function getSymbolBitmap(
   size: number,
   device?: string,
 ): ImageBitmap | undefined {
-  return bitmapCache.get(
-    cacheKey(symbolId, symbolRoleColors(style), size, device),
-  );
+  return getBitmap("sym", symbolId, symbolRoleColors(style), size, device);
 }
 
 /**
  * Rasterize (and cache) a Symbol at a Glyph's resolved appearance and size,
  * resolving to the bitmap — or `null` when the symbol is unknown or rasterization
- * isn't available (SSR / test). Concurrent callers for the same appearance share
- * one decode. `device` (a Catalog id) selects a device-specific Symbol override.
+ * isn't available (SSR / test). `device` (a Catalog id) selects a device-specific
+ * Symbol override.
  */
 export function ensureSymbolBitmap(
   symbolId: string,
@@ -113,26 +165,49 @@ export function ensureSymbolBitmap(
   size: number,
   device?: string,
 ): Promise<ImageBitmap | null> {
-  const colors = symbolRoleColors(style);
-  const key = cacheKey(symbolId, colors, size, device);
-  const cached = bitmapCache.get(key);
-  if (cached) return Promise.resolve(cached);
+  return ensureBitmap("sym", symbolId, symbolRoleColors(style), size, device);
+}
 
-  const pending = inFlight.get(key);
-  if (pending) return pending;
+/**
+ * The already-rasterized bitmap for an Authored Background tile at a Glyph's
+ * resolved Background colours and size, or `undefined` if it isn't loaded yet.
+ * Synchronous draw-path peer of {@link getSymbolBitmap}; warm with
+ * {@link ensureBackgroundBitmap} (issue #18).
+ */
+export function getBackgroundBitmap(
+  backgroundId: string,
+  style: GlyphStyle,
+  size: number,
+  device?: string,
+): ImageBitmap | undefined {
+  return getBitmap(
+    "bg",
+    backgroundId,
+    backgroundRoleColors(style),
+    size,
+    device,
+  );
+}
 
-  const load = rasterize(symbolId, colors, size, device)
-    .then((bitmap) => {
-      if (bitmap) bitmapCache.set(key, bitmap);
-      inFlight.delete(key);
-      return bitmap;
-    })
-    .catch(() => {
-      inFlight.delete(key);
-      return null;
-    });
-  inFlight.set(key, load);
-  return load;
+/**
+ * Rasterize (and cache) an Authored Background tile at a Glyph's resolved Background
+ * colours and size. Peer of {@link ensureSymbolBitmap}; recolours the tile's
+ * sentinels via {@link backgroundRoleColors} so it follows the Background fill /
+ * border (issue #18).
+ */
+export function ensureBackgroundBitmap(
+  backgroundId: string,
+  style: GlyphStyle,
+  size: number,
+  device?: string,
+): Promise<ImageBitmap | null> {
+  return ensureBitmap(
+    "bg",
+    backgroundId,
+    backgroundRoleColors(style),
+    size,
+    device,
+  );
 }
 
 async function rasterize(

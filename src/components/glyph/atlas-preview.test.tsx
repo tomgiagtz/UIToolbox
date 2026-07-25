@@ -12,6 +12,7 @@ const style: GlyphStyle = {
     cornerRadius: 16,
     border: { width: 0, color: "#000000" },
   },
+  symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
 };
 
 /** Build preview Glyphs from labels, all sharing the one test style. */

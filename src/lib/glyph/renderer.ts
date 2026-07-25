@@ -24,6 +24,14 @@ export interface RenderGlyphOptions {
    * place of the label; when absent the label is drawn (issue #17).
    */
   symbol?: CanvasImageSource;
+  /**
+   * The Glyph's **Authored Background** tile, already rasterized to its resolved
+   * Background colours (see `symbol-render.ts`). When present it is drawn across the
+   * whole cell in place of the plain `shape` — the tile carries its own shape +
+   * outline — with the label/Symbol composited on top (issue #18). Falls back to the
+   * plain `shape` while the bitmap is still warming.
+   */
+  backgroundImage?: CanvasImageSource;
 }
 
 const MAX_FONT_FRACTION = 0.5;
@@ -43,14 +51,31 @@ export function renderGlyph(
   oy: number,
   opts: RenderGlyphOptions,
 ): void {
-  const { cellSize, style, fontFamily, label, symbol } = opts;
+  const { cellSize, style, fontFamily, label, symbol, backgroundImage } = opts;
   const { background, textColor } = style;
 
   ctx.save();
   ctx.translate(ox, oy);
   ctx.clearRect(0, 0, cellSize, cellSize);
 
-  drawBackground(ctx, cellSize, background);
+  // An Authored Background tile replaces the plain shape and carries its own outline.
+  // Until its bitmap warms, fall back to the plain shape so there's no blank flash.
+  if (backgroundImage) {
+    // Mirror left-side tiles horizontally so they face opposite the right-side
+    // ones that share the same right-facing art (issue #18). The flip wraps only
+    // the tile draw, so the label below stays upright.
+    if (background.flipX) {
+      ctx.save();
+      ctx.translate(cellSize, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(backgroundImage, 0, 0, cellSize, cellSize);
+      ctx.restore();
+    } else {
+      ctx.drawImage(backgroundImage, 0, 0, cellSize, cellSize);
+    }
+  } else {
+    drawBackground(ctx, cellSize, background);
+  }
   // A Symbol Render Source replaces the label; both share the same content box.
   if (symbol) {
     drawSymbol(ctx, cellSize, symbol, background.border.width);

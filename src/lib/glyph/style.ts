@@ -17,10 +17,25 @@
  */
 import type { Background } from "@/lib/glyph/types";
 
-/** A fully-resolved Glyph style: the effective text color + Background. */
+/**
+ * The three **Paint Role** colours a Symbol's sentinel shapes resolve to
+ * (ADR-0007): `fill` (primary ink, `#f00`), `border` (outline, `#00f`), and
+ * `secondary` (highlight, `#0f0`). Independent of the label `textColor`.
+ */
+export interface SymbolPaints {
+  fill: string;
+  border: string;
+  secondary: string;
+}
+
+/**
+ * A fully-resolved Glyph style: the effective text color, Background, and the
+ * Symbol Paint Role colours (ADR-0007 §3).
+ */
 export interface GlyphStyle {
   textColor: string;
   background: Background;
+  symbolPaints: SymbolPaints;
 }
 
 /** A sparse patch of a {@link Background}; unset fields fall up the cascade. */
@@ -29,6 +44,10 @@ export interface BackgroundOverride {
   fill?: string;
   cornerRadius?: number;
   border?: Partial<Background["border"]>;
+  /** An Authored Background tile id; see {@link Background.backgroundId}. */
+  backgroundId?: string;
+  /** Mirror the Authored Background tile horizontally; see {@link Background.flipX}. */
+  flipX?: boolean;
 }
 
 /**
@@ -39,6 +58,8 @@ export interface BackgroundOverride {
 export interface StyleOverride {
   textColor?: string;
   background?: BackgroundOverride;
+  /** A sparse patch of the Symbol Paint Role colours; unset roles fall up (ADR-0007). */
+  symbolPaints?: Partial<SymbolPaints>;
 }
 
 /** An override that changes nothing — the default at every non-Project tier. */
@@ -65,7 +86,11 @@ export type StyleField =
   | "fill"
   | "cornerRadius"
   | "borderWidth"
-  | "borderColor";
+  | "borderColor"
+  | "backgroundSource"
+  | "symbolFill"
+  | "symbolBorder"
+  | "symbolSecondary";
 
 /**
  * Deep-merge two sparse overrides, `patch` winning. Background and its border are
@@ -85,6 +110,9 @@ export function mergeOverride(
       ...patch.background,
       ...(Object.keys(border).length > 0 ? { border } : {}),
     };
+  }
+  if (patch.symbolPaints) {
+    next.symbolPaints = { ...base.symbolPaints, ...patch.symbolPaints };
   }
   return next;
 }
@@ -107,6 +135,14 @@ export function isOverrideFieldSet(
       return override.background?.border?.width !== undefined;
     case "borderColor":
       return override.background?.border?.color !== undefined;
+    case "backgroundSource":
+      return override.background?.backgroundId !== undefined;
+    case "symbolFill":
+      return override.symbolPaints?.fill !== undefined;
+    case "symbolBorder":
+      return override.symbolPaints?.border !== undefined;
+    case "symbolSecondary":
+      return override.symbolPaints?.secondary !== undefined;
   }
 }
 
@@ -124,10 +160,28 @@ export function clearOverrideField(
     delete next.textColor;
     return next;
   }
+  if (
+    field === "symbolFill" ||
+    field === "symbolBorder" ||
+    field === "symbolSecondary"
+  ) {
+    if (!next.symbolPaints) return next;
+    const sp: Partial<SymbolPaints> = { ...next.symbolPaints };
+    if (field === "symbolFill") delete sp.fill;
+    else if (field === "symbolBorder") delete sp.border;
+    else delete sp.secondary;
+    if (Object.keys(sp).length > 0) next.symbolPaints = sp;
+    else delete next.symbolPaints;
+    return next;
+  }
   if (!next.background) return next;
   const bg: BackgroundOverride = { ...next.background };
   if (field === "shape") delete bg.shape;
-  else if (field === "fill") delete bg.fill;
+  else if (field === "backgroundSource") {
+    // The mirror flag is meaningless without a tile, so clear it together.
+    delete bg.backgroundId;
+    delete bg.flipX;
+  } else if (field === "fill") delete bg.fill;
   else if (field === "cornerRadius") delete bg.cornerRadius;
   else if (field === "borderWidth" || field === "borderColor") {
     if (bg.border) {
@@ -158,6 +212,7 @@ export function resolveStyle(
     ...base.background,
     border: { ...base.background.border },
   };
+  const symbolPaints: SymbolPaints = { ...base.symbolPaints };
 
   for (const override of overrides) {
     if (!override) continue;
@@ -165,9 +220,12 @@ export function resolveStyle(
     if (override.background) {
       background = applyBackground(background, override.background);
     }
+    if (override.symbolPaints) {
+      Object.assign(symbolPaints, override.symbolPaints);
+    }
   }
 
-  return { textColor, background };
+  return { textColor, background, symbolPaints };
 }
 
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */
@@ -177,6 +235,8 @@ function applyBackground(
 ): Background {
   const next: Background = { ...bg, border: { ...bg.border } };
   if (patch.shape !== undefined) next.shape = patch.shape;
+  if (patch.backgroundId !== undefined) next.backgroundId = patch.backgroundId;
+  if (patch.flipX !== undefined) next.flipX = patch.flipX;
   if (patch.fill !== undefined) next.fill = patch.fill;
   if (patch.cornerRadius !== undefined) next.cornerRadius = patch.cornerRadius;
   if (patch.border) {

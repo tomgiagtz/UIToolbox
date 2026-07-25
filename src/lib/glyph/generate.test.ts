@@ -40,6 +40,7 @@ function project(over: Partial<Project> = {}): Project {
       cornerRadius: 12,
       border: { width: 2, color: "#333333" },
     },
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
     cellSize: 128,
     devices: [device(["A", "Right Stick", "→"])],
     naming: { template: "{device}_{input}", case: "snake" },
@@ -70,6 +71,22 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     expect(out.placements.map((p) => p.symbolId)).toEqual([
       "xbox-a",
       undefined,
+      undefined,
+    ]);
+  });
+
+  it("threads the bumper's Authored Background id onto the placement style (#18)", () => {
+    const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
+    // The Catalog per-Input default rides in the resolved Background, not on a
+    // separate field like symbolId, so it flows to the compositor for free.
+    expect(lb.style.background.backgroundId).toBe("xbox-bumper");
+    expect(a.style.background.backgroundId).toBeUndefined();
+    expect(paddle.style.background.backgroundId).toBeUndefined();
+
+    const [out] = generateTilesets(project({ devices: [xbox] }));
+    expect(out.placements.map((p) => p.style.background.backgroundId)).toEqual([
+      undefined,
+      "xbox-bumper",
       undefined,
     ]);
   });
@@ -246,7 +263,11 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
 
   it("resolves every Glyph to the untouched Project style", () => {
     const proj = createDefaultProject("TestFont");
-    const base = { textColor: proj.textColor, background: proj.background };
+    const base = {
+      textColor: proj.textColor,
+      background: proj.background,
+      symbolPaints: proj.symbolPaints,
+    };
     const [kb] = generateTilesets(proj);
     for (const placement of kb.placements) {
       // Empty Device / Catalog / Glyph tiers ⇒ effective style === Project style,
@@ -262,6 +283,7 @@ describe("resolveScopeStyle", () => {
     expect(resolveScopeStyle(proj, { tier: "project" })).toEqual({
       textColor: proj.textColor,
       background: proj.background,
+      symbolPaints: proj.symbolPaints,
     });
   });
 
@@ -298,6 +320,7 @@ describe("resolveScopeStyle", () => {
       {
         textColor: proj.textColor,
         background: proj.background,
+        symbolPaints: proj.symbolPaints,
       },
     );
   });

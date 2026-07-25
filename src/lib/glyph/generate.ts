@@ -19,7 +19,11 @@ import type {
 
 /** The Project tier of the Style Cascade: the project's base style. */
 export function projectBaseStyle(project: Project): GlyphStyle {
-  return { textColor: project.textColor, background: project.background };
+  return {
+    textColor: project.textColor,
+    background: project.background,
+    symbolPaints: project.symbolPaints,
+  };
 }
 
 /**

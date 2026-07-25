@@ -16,6 +16,7 @@ function base(): GlyphStyle {
       cornerRadius: 18,
       border: { width: 4, color: "#475569" },
     },
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
   };
 }
 
@@ -67,6 +68,54 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     const glyph: StyleOverride = { background: { shape: "none" } };
     const out = resolveStyle(base(), undefined, catalog, glyph);
     expect(out.background.shape).toBe("none");
+  });
+
+  it("resolves an Authored Background id from the Catalog per-Input tier (issue #18)", () => {
+    const catalog: StyleOverride = {
+      background: { backgroundId: "xbox-bumper" },
+    };
+    const out = resolveStyle(base(), undefined, catalog);
+    expect(out.background.backgroundId).toBe("xbox-bumper");
+    // Falls up for everything else it doesn't set.
+    expect(out.background.fill).toBe(base().background.fill);
+  });
+
+  it("carries the Background mirror flag through the cascade (issue #18)", () => {
+    const catalog: StyleOverride = {
+      background: { backgroundId: "xbox-bumper", flipX: true },
+    };
+    const out = resolveStyle(base(), undefined, catalog);
+    expect(out.background.backgroundId).toBe("xbox-bumper");
+    expect(out.background.flipX).toBe(true);
+  });
+
+  it("lets a Glyph override switch or drop the Catalog's Background id", () => {
+    const catalog: StyleOverride = {
+      background: { backgroundId: "xbox-bumper" },
+    };
+    const glyph: StyleOverride = {
+      background: { backgroundId: "xbox-trigger" },
+    };
+    const out = resolveStyle(base(), undefined, catalog, glyph);
+    expect(out.background.backgroundId).toBe("xbox-trigger");
+  });
+
+  it("resolves each Symbol Paint Role independently through the cascade (#37)", () => {
+    const device: StyleOverride = { symbolPaints: { fill: "#0f0" } };
+    const glyph: StyleOverride = { symbolPaints: { border: "#00f" } };
+    const out = resolveStyle(base(), device, glyph);
+    expect(out.symbolPaints.fill).toBe("#0f0"); // device tier
+    expect(out.symbolPaints.border).toBe("#00f"); // glyph tier
+    // Unset role falls up to the base.
+    expect(out.symbolPaints.secondary).toBe(base().symbolPaints.secondary);
+  });
+
+  it("lets a higher tier override just one Symbol Paint Role", () => {
+    const out = resolveStyle(base(), { symbolPaints: { secondary: "#f0f" } });
+    expect(out.symbolPaints).toEqual({
+      ...base().symbolPaints,
+      secondary: "#f0f",
+    });
   });
 
   it("does not mutate the base style", () => {
@@ -128,6 +177,27 @@ describe("isOverrideFieldSet", () => {
       false,
     );
   });
+
+  it("detects a set Symbol Paint Role", () => {
+    expect(
+      isOverrideFieldSet({ symbolPaints: { fill: "#0f0" } }, "symbolFill"),
+    ).toBe(true);
+    expect(
+      isOverrideFieldSet({ symbolPaints: { fill: "#0f0" } }, "symbolBorder"),
+    ).toBe(false);
+  });
+
+  it("detects a set Authored Background source", () => {
+    expect(
+      isOverrideFieldSet(
+        { background: { backgroundId: "xbox-bumper" } },
+        "backgroundSource",
+      ),
+    ).toBe(true);
+    expect(
+      isOverrideFieldSet({ background: { fill: "#111" } }, "backgroundSource"),
+    ).toBe(false);
+  });
 });
 
 describe("clearOverrideField", () => {
@@ -162,6 +232,42 @@ describe("clearOverrideField", () => {
       clearOverrideField(
         { background: { border: { color: "#0f0" } } },
         "borderColor",
+      ),
+    ).toEqual({});
+  });
+
+  it("removes one Symbol Paint Role but keeps the others", () => {
+    const out = clearOverrideField(
+      { symbolPaints: { fill: "#0f0", border: "#00f" } },
+      "symbolFill",
+    );
+    expect(out).toEqual({ symbolPaints: { border: "#00f" } });
+  });
+
+  it("collapses the symbolPaints group when its last role is cleared", () => {
+    expect(
+      clearOverrideField(
+        { symbolPaints: { secondary: "#f0f" } },
+        "symbolSecondary",
+      ),
+    ).toEqual({});
+  });
+
+  it("clears an Authored Background source, collapsing to empty", () => {
+    expect(
+      clearOverrideField(
+        { background: { backgroundId: "xbox-bumper" } },
+        "backgroundSource",
+      ),
+    ).toEqual({});
+  });
+
+  it("drops the mirror flag together with the Background source", () => {
+    // flipX is meaningless without a tile, so clearing the source clears it too.
+    expect(
+      clearOverrideField(
+        { background: { backgroundId: "xbox-bumper", flipX: true } },
+        "backgroundSource",
       ),
     ).toEqual({});
   });

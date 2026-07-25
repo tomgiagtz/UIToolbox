@@ -2,7 +2,11 @@
 
 import { useRef, type CSSProperties } from "react";
 import { renderGlyph } from "@/lib/glyph/renderer";
-import { getSymbolBitmap } from "@/lib/glyph/symbol-render";
+import {
+  getBackgroundBitmap,
+  getSymbolBitmap,
+} from "@/lib/glyph/symbol-render";
+import type { SymbolPaints } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 import { useGlyphCanvas } from "./use-glyph-canvas";
 import { useSymbolBitmaps } from "./use-symbol-bitmaps";
@@ -12,6 +16,12 @@ export interface GlyphPreviewProps {
   cellSize?: number;
   textColor: string;
   background: Background;
+  /**
+   * Symbol Paint Role colours (fill / border / secondary) for a Symbol Render
+   * Source. Defaults to the label `textColor` for all three roles when unset, so a
+   * label-only or single-colour preview needs no extra props (ADR-0007 §3).
+   */
+  symbolPaints?: SymbolPaints;
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
@@ -38,6 +48,7 @@ export function GlyphPreview({
   cellSize = 128,
   textColor,
   background,
+  symbolPaints,
   fontFamily,
   symbolId,
   device,
@@ -45,7 +56,15 @@ export function GlyphPreview({
   style,
 }: GlyphPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const glyphStyle = { textColor, background };
+  const glyphStyle = {
+    textColor,
+    background,
+    symbolPaints: symbolPaints ?? {
+      fill: textColor,
+      border: textColor,
+      secondary: textColor,
+    },
+  };
 
   // Warm the shared Symbol bitmap cache and redraw once it's ready.
   const symbolsVersion = useSymbolBitmaps(
@@ -67,12 +86,21 @@ export function GlyphPreview({
         symbol: symbolId
           ? getSymbolBitmap(symbolId, glyphStyle, cellSize, device)
           : undefined,
+        backgroundImage: background.backgroundId
+          ? getBackgroundBitmap(
+              background.backgroundId,
+              glyphStyle,
+              cellSize,
+              device,
+            )
+          : undefined,
       }),
     [
       label,
       cellSize,
       textColor,
       background,
+      symbolPaints,
       fontFamily,
       symbolId,
       device,

@@ -143,20 +143,30 @@ const KEYBOARD_PRESET: string[] = [
 // the Preset. Order matches the labels the tool generated pre-Catalog.
 
 /**
- * Build a pad Catalog. Each entry is `[slug, label, symbolId?]`; a `symbolId`
- * makes that Input default to its shipped Symbol as Render Source (issue #17).
- * Bumper/trigger tiles carry no Symbol — they default to an Authored Background
- * instead (issue #18) — and face buttons the shipped atlases don't yet author
+ * Build a pad Catalog. Each entry is `[slug, label, symbolId?, backgroundId?,
+ * flipX?]`; a `symbolId` makes that Input default to its shipped Symbol as Render
+ * Source (issue #17), and a `backgroundId` defaults it to a shipped Authored
+ * Background tile via the Catalog per-Input style tier (issue #18) — that's how
+ * bumper/trigger tiles keep their shape. `flipX` mirrors that tile horizontally, so
+ * the left-side bumper/trigger face the opposite way from the right-side ones that
+ * share the same right-facing art. Face buttons the shipped atlases don't yet author
  * (the PlayStation shapes) simply stay label-rendered.
  */
 function pad(
   prefix: string,
-  entries: [string, string, string?][],
+  entries: [string, string, string?, string?, boolean?][],
 ): CatalogInput[] {
-  return entries.map(([slug, label, symbolId]) => ({
+  return entries.map(([slug, label, symbolId, backgroundId, flipX]) => ({
     id: `${prefix}-${slug}`,
     label,
     ...(symbolId ? { symbolId } : {}),
+    ...(backgroundId
+      ? {
+          defaultStyle: {
+            background: { backgroundId, ...(flipX ? { flipX: true } : {}) },
+          },
+        }
+      : {}),
   }));
 }
 
@@ -165,10 +175,12 @@ const XBOX_INPUTS = pad("xbox", [
   ["b", "B", "xbox-b"],
   ["x", "X", "xbox-x"],
   ["y", "Y", "xbox-y"],
-  ["lb", "LB"],
-  ["rb", "RB"],
-  ["lt", "LT"],
-  ["rt", "RT"],
+  // Both bumpers share one right-facing tile; the left one is mirrored. Same for
+  // the triggers.
+  ["lb", "LB", undefined, "xbox-bumper", true],
+  ["rb", "RB", undefined, "xbox-bumper"],
+  ["lt", "LT", undefined, "xbox-trigger", true],
+  ["rt", "RT", undefined, "xbox-trigger"],
   ["view", "View", "xbox-view"],
   ["menu", "Menu", "xbox-menu"],
   ["left-stick", "Left Stick", "stick"],

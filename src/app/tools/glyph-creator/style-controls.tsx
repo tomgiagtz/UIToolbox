@@ -280,6 +280,29 @@ export function StyleControls({
           />
         </>
       )}
+
+      {/* Symbol Paint Role colours (ADR-0007): fill / border / secondary recolour
+          a Symbol's sentinel shapes independently. They apply only to Glyphs that
+          render a Symbol, but live in the shared Style panel so the cascade UI
+          isn't forked. */}
+      <ColorField
+        label="Symbol fill"
+        value={style.symbolPaints.fill}
+        onChange={(fill) => patch({ symbolPaints: { fill } })}
+        onReset={resetFor("symbolFill")}
+      />
+      <ColorField
+        label="Symbol border"
+        value={style.symbolPaints.border}
+        onChange={(color) => patch({ symbolPaints: { border: color } })}
+        onReset={resetFor("symbolBorder")}
+      />
+      <ColorField
+        label="Symbol secondary"
+        value={style.symbolPaints.secondary}
+        onChange={(secondary) => patch({ symbolPaints: { secondary } })}
+        onReset={resetFor("symbolSecondary")}
+      />
     </div>
   );
 }

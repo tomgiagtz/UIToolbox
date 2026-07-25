@@ -4,7 +4,10 @@ import { useRef, useState } from "react";
 import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
-import { getSymbolBitmap } from "@/lib/glyph/symbol-render";
+import {
+  getBackgroundBitmap,
+  getSymbolBitmap,
+} from "@/lib/glyph/symbol-render";
 import { useGlyphCanvas } from "./use-glyph-canvas";
 import { useSymbolBitmaps } from "./use-symbol-bitmaps";
 
@@ -143,6 +146,14 @@ export function AtlasPreview({
           fontFamily,
           symbol: glyph.symbolId
             ? getSymbolBitmap(glyph.symbolId, glyph.style, cellSize, catalogId)
+            : undefined,
+          backgroundImage: glyph.style.background.backgroundId
+            ? getBackgroundBitmap(
+                glyph.style.background.backgroundId,
+                glyph.style,
+                cellSize,
+                catalogId,
+              )
             : undefined,
         });
       }

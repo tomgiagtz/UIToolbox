@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import {
+  backgroundRoleColors,
   recolorSymbolSvg,
   symbolInner,
   symbolRoleColors,
@@ -14,15 +15,58 @@ const style: GlyphStyle = {
     cornerRadius: 0,
     border: { width: 0, color: "#000000" },
   },
+  symbolPaints: { fill: "#ff0000", border: "#0000ff", secondary: "#00ff00" },
 };
 
 describe("symbolRoleColors", () => {
-  it("maps every role to the resolved text color (this slice)", () => {
+  it("resolves each role from the symbolPaints group, not the text color (#37)", () => {
     expect(symbolRoleColors(style)).toEqual({
-      fill: "#33cc99",
-      border: "#33cc99",
-      secondary: "#33cc99",
+      fill: "#ff0000",
+      border: "#0000ff",
+      secondary: "#00ff00",
     });
+  });
+});
+
+describe("backgroundRoleColors", () => {
+  it("maps fill to the Background fill and border to the border colour (issue #18)", () => {
+    const bgStyle: GlyphStyle = {
+      textColor: "#33cc99",
+      background: {
+        shape: "rounded-rect",
+        fill: "#0e7a0d",
+        cornerRadius: 8,
+        border: { width: 4, color: "#ffd400" },
+      },
+      symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
+    };
+    expect(backgroundRoleColors(bgStyle)).toEqual({
+      fill: "#0e7a0d",
+      border: "#ffd400",
+      secondary: "#0e7a0d",
+    });
+  });
+
+  it("recolours a bumper tile's sentinels through the Background colours", () => {
+    // The shipped xbox-bumper authors its fill as #f00 and its outline as #00f.
+    const bumper =
+      '<svg viewBox="0 0 256 256">' +
+      '<path style="fill:#f00;stroke:#00f;stroke-width:9.6px;"/></svg>';
+    const out = recolorSymbolSvg(
+      bumper,
+      backgroundRoleColors({
+        textColor: "#000000",
+        background: {
+          shape: "rounded-rect",
+          fill: "#0e7a0d",
+          cornerRadius: 0,
+          border: { width: 0, color: "#ffd400" },
+        },
+        symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
+      }),
+    );
+    expect(out).toContain("fill:#0e7a0d;");
+    expect(out).toContain("stroke:#ffd400;");
   });
 });
 
