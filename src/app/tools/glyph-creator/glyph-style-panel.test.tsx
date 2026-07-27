@@ -3,13 +3,28 @@ import { describe, expect, it, vi } from "vitest";
 import { GlyphStylePanel, type SelectedGlyph } from "./style-controls";
 import { createDefaultProject } from "@/lib/glyph/presets";
 import { projectBaseStyle } from "@/lib/glyph/generate";
+import { projectReducer } from "@/lib/glyph/project";
+import type { StyleOverride } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
+import type { ImageAsset, Project } from "@/lib/glyph/types";
 
 const glyph: SelectedGlyph = {
   deviceIndex: 0,
   glyphId: "a",
   label: "A",
 };
+
+/** The Xbox `A` Glyph — a Catalog Input that ships a Symbol. */
+const xboxA: SelectedGlyph = { deviceIndex: 0, glyphId: "xbox-a", label: "A" };
+
+/** A project whose only Device is the Xbox pad, so `xboxA` resolves on it. */
+function xboxProject(images: ImageAsset[] = []): Project {
+  const project = [
+    { type: "toggle-device", catalogId: "keyboard" } as const,
+    { type: "toggle-device", catalogId: "xbox" } as const,
+  ].reduce(projectReducer, createDefaultProject());
+  return { ...project, images };
+}
 
 /**
  * Render the panel at Glyph scope. `backgroundId` puts an Authored Background
@@ -19,13 +34,20 @@ const glyph: SelectedGlyph = {
 function renderPanel({
   onClose = vi.fn(),
   dispatch = vi.fn(),
+  onUploadImage = vi.fn(),
   backgroundId,
+  project = createDefaultProject(),
+  glyph: target = glyph,
+  override = {},
 }: {
   onClose?: () => void;
   dispatch?: () => void;
+  onUploadImage?: (file: File) => void;
   backgroundId?: string;
+  project?: Project;
+  glyph?: SelectedGlyph;
+  override?: StyleOverride;
 } = {}) {
-  const project = createDefaultProject();
   const base = projectBaseStyle(project);
   const style = backgroundId
     ? { ...base, background: { ...base.background, backgroundId } }
@@ -33,15 +55,17 @@ function renderPanel({
   const props = {
     project,
     dispatch,
-    glyph,
+    glyph: target,
     style,
-    override: {},
+    override,
     onClose,
+    onUploadImage,
   };
   const { rerender } = render(<GlyphStylePanel {...props} />);
   return {
     dispatch,
     onClose,
+    onUploadImage,
     /** Re-render the same panel with a tile applied. */
     withTile: (id: string) =>
       rerender(
@@ -115,6 +139,17 @@ describe("GlyphStylePanel", () => {
     expect(screen.getByLabelText("Background fill")).toBeInTheDocument();
   });
 
+  it("scales the Render Source through the cascade", () => {
+    const { dispatch } = renderPanel();
+    const slider = screen.getByLabelText(/content scale \(100%\)/i);
+    fireEvent.change(slider, { target: { value: "0.5" } });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { contentScale: 0.5 },
+    });
+  });
+
   it("closes via the close button and Escape", () => {
     const { onClose } = renderPanel();
     fireEvent.click(
@@ -124,5 +159,118 @@ describe("GlyphStylePanel", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("GlyphStylePanel — Render Source (issue #20)", () => {
+  const image: ImageAsset = {
+    id: "img-1.png",
+    fileName: "arrow.png",
+    type: "image/png",
+  };
+
+  it("shows a well-known Input rendering its Symbol", () => {
+    renderPanel({ project: xboxProject(), glyph: xboxA });
+    expect(screen.getByLabelText("Symbol")).toBeChecked();
+  });
+
+  it("offers no Symbol option for an Input the Catalog ships none for", () => {
+    // Offering it would only resolve straight back to the label.
+    renderPanel();
+    expect(screen.queryByLabelText("Symbol")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Label")).toBeChecked();
+  });
+
+  it("switches a Symbol-rendered Glyph back to its label", () => {
+    const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
+    });
+    fireEvent.click(screen.getByLabelText("Label"));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
+      patch: { renderSource: { kind: "label" } },
+    });
+  });
+
+  it("can't pick Image until something has been uploaded", () => {
+    renderPanel();
+    expect(screen.getByLabelText("Image")).toBeDisabled();
+    // Nothing to choose between yet, so no picker either — just the upload field.
+    expect(screen.queryByLabelText("Image file")).not.toBeInTheDocument();
+  });
+
+  it("enables Image once the project carries one", () => {
+    renderPanel({ project: { ...createDefaultProject(), images: [image] } });
+    expect(screen.getByLabelText("Image")).not.toBeDisabled();
+  });
+
+  it("points the Glyph at an uploaded image", () => {
+    const { dispatch } = renderPanel({
+      project: { ...createDefaultProject(), images: [image] },
+    });
+    fireEvent.click(screen.getByLabelText("Image"));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { renderSource: { kind: "image", imageId: image.id } },
+    });
+  });
+
+  it("hands an uploaded file to the editor", () => {
+    const { onUploadImage } = renderPanel();
+    const file = new File([new Uint8Array([1])], "arrow.png", {
+      type: "image/png",
+    });
+    fireEvent.change(screen.getByLabelText("Upload image"), {
+      target: { files: [file] },
+    });
+    expect(onUploadImage).toHaveBeenCalledWith(file);
+  });
+
+  it("offers no reset while the Glyph just inherits its Render Source", () => {
+    renderPanel({ project: xboxProject(), glyph: xboxA });
+    expect(
+      screen.queryByRole("button", { name: /reset render source/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resets an overridden Render Source back up the cascade", () => {
+    const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
+      override: { renderSource: { kind: "label" } },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /reset render source/i }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "clear-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
+      field: "renderSource",
+    });
+  });
+});
+
+describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
+  const images: ImageAsset[] = [
+    { id: "img-1.png", fileName: "first.png", type: "image/png" },
+    { id: "img-2.png", fileName: "second.png", type: "image/png" },
+  ];
+
+  it("restores the Glyph's own image, not the first upload", () => {
+    // The id survives on the override while the label is shown, so switching
+    // back must not silently repoint the Glyph at someone else's picture.
+    const { dispatch } = renderPanel({
+      project: { ...createDefaultProject(), images },
+      override: { renderSource: { kind: "image", imageId: "img-2.png" } },
+    });
+    fireEvent.click(screen.getByLabelText("Image"));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { renderSource: { kind: "image", imageId: "img-2.png" } },
+    });
   });
 });

@@ -43,7 +43,30 @@ Device.
 How an Input's Glyph content is drawn: its font-rendered **label** (default for
 arbitrary Inputs), a bundled **Symbol** (default for well-known Inputs), or a
 user-uploaded **custom image**. Whichever source is chosen is composited onto the
-same Background tile.
+same Background tile, sized by the **content scale**.
+
+The default comes from the Catalog — a well-known Input draws its Symbol, anything
+else its label — and any Glyph can override it through the **Style Cascade**. An
+override the project can't satisfy falls back to that default rather than failing:
+a Symbol pick on an Input that ships none, or an image whose bytes aren't present.
+The label is retained either way, since it stays the Input's identity and the
+source of its **Sprite Name**.
+
+### Custom image
+
+A user-uploaded image or SVG drawn as one Glyph's Render Source. Unlike a
+**Symbol** it is never recoloured — it draws as authored — and unlike a Symbol it
+is fitted to its own aspect rather than filling the square content box. The
+project config carries only a **manifest** (id, filename, type); the bytes live in
+IndexedDB and travel inside the ZIP project save file (ADR-0008).
+
+### Content scale
+
+A **Style Cascade** property multiplying the tile's content box — how large the
+label, Symbol, or custom image is drawn. It scales whichever Render Source a Glyph
+happens to use, so switching sources never discards the sizing. Above `1` the
+content is clipped to its own cell, so a large Glyph can't paint its neighbour in
+the atlas.
 
 ### Symbol
 
@@ -166,8 +189,11 @@ How a Glyph's style + Render Source are resolved, lowest precedence to highest:
 **Glyph** overrides.
 
 Each level is a sparse subset; anything unset falls up the chain. Every Background
-property (source, shape, corner radius, fill, border width+color) and the text
-color can be set at any level. The **Catalog per-Input default** tier is what lets
+property (source, shape, corner radius, fill, border width+color), the text
+color, and the **content scale** can be set at any level. The **Render Source**
+resolves through the same tiers but is only _set_ per Glyph: the tiers above it
+supply a Catalog default, and "every Glyph on this Device draws its label" isn't
+a thing the tool offers. The **Catalog per-Input default** tier is what lets
 a bumper keep its authored Background even when its Device is set to "circle" —
 the shipped per-Input default outranks a device-wide override, and only an
 explicit Glyph edit outranks it. `cellSize` and the **font** are the exception:
@@ -221,3 +247,5 @@ See `docs/adr/`:
 - **ADR-0006** — Glyph style resolves through a Project → Device → Glyph cascade
   (extended by ADR-0007).
 - **ADR-0007** — Sentinel paint roles and importable Symbol Sets.
+- **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
+  content scale joins the Style Cascade.

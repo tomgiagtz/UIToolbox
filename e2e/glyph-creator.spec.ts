@@ -4,6 +4,8 @@ import { expect, test, type Download } from "@playwright/test";
 import { expectNoA11yViolations } from "./axe";
 
 const FONT_PATH = path.join(__dirname, "fixtures", "test-font.ttf");
+/** A deliberately non-square SVG, so aspect-fit is exercised too (issue #20). */
+const IMAGE_PATH = path.join(__dirname, "fixtures", "test-image.svg");
 
 function isPowerOfTwo(n: number): boolean {
   return n >= 1 && (n & (n - 1)) === 0;
@@ -179,6 +181,68 @@ test.describe("Input Glyph Creator", () => {
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
+  });
+
+  test("draws an uploaded custom image on the tile in preview + export", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+
+    // Baseline export, before any image exists, to compare the atlas against.
+    const downloads: Download[] = [];
+    page.on("download", (d) => downloads.push(d));
+    await page.getByRole("button", { name: /generate/i }).click();
+    await expect.poll(() => downloads.length).toBe(2);
+    const before = await readDownload(
+      downloads.find((d) => d.suggestedFilename().endsWith(".png"))!,
+    );
+
+    // Pick a Glyph by clicking its cell, then give it a custom image. The
+    // canvas centre lands inside a cell — the gutters are 2px.
+    await preview.click();
+    await expect(
+      page.getByRole("region", { name: /edit glyph/i }),
+    ).toBeVisible();
+
+    const pixels = () =>
+      preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
+    const beforePixels = await pixels();
+
+    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+
+    // The Glyph switched to the image, which is now the pick in the manifest.
+    await expect(page.getByRole("radio", { name: "Image" })).toBeChecked();
+    await expect(page.getByLabel("Image file")).toHaveValue(/img-1\.svg/);
+
+    // The live preview redrew with the image on the tile. Rasterization is
+    // asynchronous, so poll rather than reading the canvas once.
+    await expect
+      .poll(pixels, { message: "preview should redraw with the image" })
+      .not.toBe(beforePixels);
+
+    // Scaling the content redraws it again, at a different size on the tile.
+    const withImage = await pixels();
+    // Scoped to the popover: the sidebar carries the same control at Project scope.
+    await page
+      .getByRole("region", { name: /edit glyph/i })
+      .getByLabel(/content scale/i)
+      .fill("1.5");
+    await expect
+      .poll(pixels, { message: "preview should redraw at the new scale" })
+      .not.toBe(withImage);
+
+    // The exported atlas differs from the baseline: the compositor drew it too.
+    downloads.length = 0;
+    await page.getByRole("button", { name: /generate/i }).click();
+    await expect.poll(() => downloads.length).toBe(2);
+    const after = await readDownload(
+      downloads.find((d) => d.suggestedFilename().endsWith(".png"))!,
+    );
+    expect(after.equals(before)).toBe(false);
   });
 
   test("has no WCAG 2.1 AA violations", async ({ page }, testInfo) => {

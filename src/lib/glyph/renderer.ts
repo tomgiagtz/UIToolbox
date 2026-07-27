@@ -25,6 +25,13 @@ export interface RenderGlyphOptions {
    */
   symbol?: CanvasImageSource;
   /**
+   * The Glyph's **custom image** Render Source, already rasterized (see
+   * `images.ts`). Outranks both the Symbol and the label, and is the one source
+   * drawn at its own aspect rather than filling the square content box — it is
+   * the user's own art, so it is never distorted (issue #20).
+   */
+  image?: CanvasImageSource;
+  /**
    * The Glyph's **Authored Background** tile, already rasterized to its resolved
    * Background colours (see `symbol-render.ts`). When present it is drawn across the
    * whole cell in place of the plain `shape` — the tile carries its own shape +
@@ -51,7 +58,8 @@ export function renderGlyph(
   oy: number,
   opts: RenderGlyphOptions,
 ): void {
-  const { cellSize, style, fontFamily, label, symbol, backgroundImage } = opts;
+  const { cellSize, style, fontFamily, label, symbol, image, backgroundImage } =
+    opts;
   const { background, textColor } = style;
 
   ctx.save();
@@ -76,34 +84,55 @@ export function renderGlyph(
   } else {
     drawBackground(ctx, cellSize, background);
   }
-  // A Symbol Render Source replaces the label; both share the same content box.
-  if (symbol) {
-    drawSymbol(ctx, cellSize, symbol, background.border.width);
-  } else {
-    drawLabel(
-      ctx,
-      cellSize,
-      label,
-      textColor,
-      fontFamily,
-      background.border.width,
-    );
+  // Exactly one Render Source is drawn, in the same content box: a custom image,
+  // else a Symbol, else the label. The order is also the fallback chain — a source
+  // whose bitmap hasn't loaded (or never will) shows the next one down rather
+  // than an empty cell.
+  const box = contentBox(cellSize, background.border.width, style.contentScale);
+  if (box.size > 0) {
+    // A content scale above 1 can reach past the cell, and cells are packed
+    // edge-to-edge, so clip before drawing or a big Glyph paints its neighbour.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, cellSize, cellSize);
+    ctx.clip();
+    if (image) {
+      drawImage(ctx, cellSize, image, box.size);
+    } else if (symbol) {
+      drawSymbol(ctx, cellSize, symbol, box.size);
+    } else {
+      drawLabel(
+        ctx,
+        cellSize,
+        label,
+        textColor,
+        fontFamily,
+        box.size,
+        style.contentScale,
+      );
+    }
+    ctx.restore();
   }
 
   ctx.restore();
 }
 
 /**
- * The inner box a Render Source draws in: the padding that keeps a Symbol or label
- * clear of the border and cell edge, and the resulting square edge length. Shared
- * so a Symbol and its fallback label occupy the exact same footprint.
+ * The inner box a Render Source draws in: an unscaled padding that keeps the
+ * content clear of the border and cell edge, then the user's `contentScale` on the
+ * resulting square. Shared by all three sources so a Symbol, a custom image, and
+ * the fallback label occupy the exact same footprint.
+ *
+ * The scale is applied to the box rather than the padding so the box stays centred
+ * on the cell — every source re-centres from {@link size} alone.
  */
 function contentBox(
   cellSize: number,
   borderWidth: number,
-): { padding: number; size: number } {
+  contentScale: number,
+): { size: number } {
   const padding = Math.max(borderWidth + 4, cellSize * 0.12);
-  return { padding, size: cellSize - padding * 2 };
+  return { size: (cellSize - padding * 2) * contentScale };
 }
 
 /**
@@ -114,11 +143,48 @@ function drawSymbol(
   ctx: Canvas2DContext,
   cellSize: number,
   symbol: CanvasImageSource,
-  borderWidth: number,
+  size: number,
 ): void {
-  const { padding, size } = contentBox(cellSize, borderWidth);
-  if (size <= 0) return;
-  ctx.drawImage(symbol, padding, padding, size, size);
+  const offset = (cellSize - size) / 2;
+  ctx.drawImage(symbol, offset, offset, size, size);
+}
+
+/**
+ * Draw a rasterized custom image centred in the tile's content box, **fitted** to
+ * its own aspect: the user's art is arbitrary, so it is letterboxed inside the box
+ * rather than stretched to fill it. A source reporting no intrinsic size falls back
+ * to filling the box.
+ */
+function drawImage(
+  ctx: Canvas2DContext,
+  cellSize: number,
+  image: CanvasImageSource,
+  size: number,
+): void {
+  const natural = intrinsicSize(image);
+  const fit = natural ? size / Math.max(natural.width, natural.height) : 0;
+  const width = natural ? natural.width * fit : size;
+  const height = natural ? natural.height * fit : size;
+  ctx.drawImage(
+    image,
+    (cellSize - width) / 2,
+    (cellSize - height) / 2,
+    width,
+    height,
+  );
+}
+
+/** An image source's intrinsic pixel size, or `null` if it reports none. */
+function intrinsicSize(
+  image: CanvasImageSource,
+): { width: number; height: number } | null {
+  const { width, height } = image as { width?: unknown; height?: unknown };
+  return typeof width === "number" &&
+    typeof height === "number" &&
+    width > 0 &&
+    height > 0
+    ? { width, height }
+    : null;
 }
 
 function drawBackground(
@@ -169,18 +235,19 @@ function drawLabel(
   label: string,
   color: string,
   fontFamily: string,
-  borderWidth: number,
+  available: number,
+  contentScale: number,
 ): void {
   if (!label) return;
-
-  // Keep the label clear of the border and cell edge (same box as a Symbol).
-  const { size: available } = contentBox(cellSize, borderWidth);
 
   ctx.fillStyle = color;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  let fontPx = Math.floor(cellSize * MAX_FONT_FRACTION);
+  // The content scale widens the box the label must fit, but it also has to move
+  // the starting size — otherwise scaling up would only loosen the fit for a
+  // long label and do nothing at all for a short one.
+  let fontPx = Math.floor(cellSize * MAX_FONT_FRACTION * contentScale);
   const font = (px: number) => `${px}px "${fontFamily}"`;
 
   ctx.font = font(fontPx);

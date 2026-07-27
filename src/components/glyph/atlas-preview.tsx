@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { getImageBitmap } from "@/lib/glyph/images";
 import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
@@ -9,7 +10,7 @@ import {
   getSymbolBitmap,
 } from "@/lib/glyph/symbol-render";
 import { useGlyphCanvas } from "./use-glyph-canvas";
-import { useSymbolBitmaps } from "./use-symbol-bitmaps";
+import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
 
 /** A hovered cell + its box relative to the canvas, driving the click highlight. */
 interface Hover {
@@ -23,6 +24,8 @@ export interface PreviewGlyph {
   style: GlyphStyle;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
   symbolId?: string;
+  /** Custom image id to draw as this Glyph's Render Source (issue #20). */
+  imageId?: string;
 }
 
 export interface AtlasPreviewProps {
@@ -65,9 +68,9 @@ export function AtlasPreview({
   const [hover, setHover] = useState<Hover | null>(null);
   const { placements } = gridPack(glyphs.length, cellSize);
 
-  // Symbol Render Sources rasterize asynchronously; warm the shared cache and
-  // redraw once ready (see `useSymbolBitmaps`).
-  const symbolsVersion = useSymbolBitmaps(glyphs, cellSize, catalogId);
+  // Render Sources rasterize asynchronously; warm the shared cache and
+  // redraw once ready (see `useRenderSourceBitmaps`).
+  const bitmapsVersion = useRenderSourceBitmaps(glyphs, cellSize, catalogId);
 
   // The tight bounds of the packed cells. The exported texture is padded up to a
   // power of two, but that padding is empty — showing it here would letterbox the
@@ -147,6 +150,9 @@ export function AtlasPreview({
           symbol: glyph.symbolId
             ? getSymbolBitmap(glyph.symbolId, glyph.style, cellSize, catalogId)
             : undefined,
+          image: glyph.imageId
+            ? getImageBitmap(glyph.imageId, cellSize)
+            : undefined,
           backgroundImage: glyph.style.background.backgroundId
             ? getBackgroundBitmap(
                 glyph.style.background.backgroundId,
@@ -159,8 +165,8 @@ export function AtlasPreview({
       }
     },
     // `placements`/`atlasSize` derive from glyphs + cellSize, so those cover them;
-    // `symbolsVersion` re-runs the draw once async Symbol bitmaps are ready.
-    [glyphs, cellSize, fontFamily, catalogId, symbolsVersion],
+    // `bitmapsVersion` re-runs the draw once async Render Source bitmaps land.
+    [glyphs, cellSize, fontFamily, catalogId, bitmapsVersion],
   );
 
   if (glyphs.length === 0) {

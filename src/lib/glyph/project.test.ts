@@ -249,3 +249,75 @@ describe("projectReducer — font", () => {
     expect(next.font.family).toBe("NewFamily");
   });
 });
+
+describe("projectReducer — Render Source & custom images (#20)", () => {
+  const image = { id: "img-1.png", fileName: "art.png", type: "image/png" };
+
+  it("starts with no images and an unscaled content default", () => {
+    expect(base().images).toEqual([]);
+    expect(base().contentScale).toBe(1);
+  });
+
+  it("adds an uploaded image to the shared manifest", () => {
+    const next = run(base(), { type: "add-image", image });
+    expect(next.images).toEqual([image]);
+  });
+
+  it("stores a Glyph's Render Source as a cascade override", () => {
+    const scope = {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "key-w",
+    } as const;
+    const next = run(
+      base(),
+      { type: "add-image", image },
+      {
+        type: "patch-style",
+        scope,
+        patch: { renderSource: { kind: "image", imageId: image.id } },
+      },
+    );
+    expect(next.devices[0].glyphStyles["key-w"]).toEqual({
+      renderSource: { kind: "image", imageId: image.id },
+    });
+  });
+
+  it("clears a Glyph's Render Source so it falls back up the cascade", () => {
+    const scope = {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "key-w",
+    } as const;
+    const next = run(
+      base(),
+      {
+        type: "patch-style",
+        scope,
+        patch: { renderSource: { kind: "label" } },
+      },
+      { type: "clear-style", scope, field: "renderSource" },
+    );
+    // The whole override collapses, leaving the Glyph with no trace.
+    expect(next.devices[0].glyphStyles["key-w"]).toBeUndefined();
+  });
+
+  it("folds a Project-tier content scale into the base style", () => {
+    const next = run(base(), {
+      type: "patch-style",
+      scope: { tier: "project" },
+      patch: { contentScale: 0.6 },
+    });
+    expect(next.contentScale).toBe(0.6);
+  });
+
+  it("stores a Device-tier content scale as an override", () => {
+    const next = run(base(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { contentScale: 1.4 },
+    });
+    expect(next.devices[0].style).toEqual({ contentScale: 1.4 });
+    expect(next.contentScale).toBe(1);
+  });
+});

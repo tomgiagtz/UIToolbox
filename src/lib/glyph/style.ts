@@ -29,13 +29,36 @@ export interface SymbolPaints {
 }
 
 /**
- * A fully-resolved Glyph style: the effective text color, Background, and the
- * Symbol Paint Role colours (ADR-0007 §3).
+ * A Glyph's chosen **Render Source**, overriding the Catalog's default for that
+ * Input (ADR-0004). `symbol` on an Input the Catalog ships no Symbol for, and
+ * `image` naming an asset the project doesn't carry, both fall back to the
+ * default — see `resolveRenderSource`.
+ *
+ * Sizing is deliberately **not** part of this union: {@link StyleOverride.contentScale}
+ * scales whichever source is drawn, so switching an Input from its Symbol to its
+ * label can't silently discard the sizing the user set.
+ */
+export type RenderSourceOverride =
+  { kind: "label" } | { kind: "symbol" } | { kind: "image"; imageId: string };
+
+/**
+ * A fully-resolved Glyph style: the effective text color, Background, the Symbol
+ * Paint Role colours (ADR-0007 §3), and the content scale.
+ *
+ * The Render Source itself is **not** here: resolving it also needs the Catalog
+ * entry's Symbol and the project's image manifest, so it has its own resolver
+ * (`resolveRenderSource`) over the same {@link StyleOverride} tiers.
  */
 export interface GlyphStyle {
   textColor: string;
   background: Background;
   symbolPaints: SymbolPaints;
+  /**
+   * Multiplier on the tile's content box — the square a label, Symbol, or custom
+   * image is drawn in. `1` is the default fit; above 1 the content is clipped to
+   * its cell (issue #20).
+   */
+  contentScale: number;
 }
 
 /** A sparse patch of a {@link Background}; unset fields fall up the cascade. */
@@ -68,6 +91,10 @@ export interface StyleOverride {
   background?: BackgroundOverride;
   /** A sparse patch of the Symbol Paint Role colours; unset roles fall up (ADR-0007). */
   symbolPaints?: Partial<SymbolPaints>;
+  /** Which Render Source this tier draws; replaces wholesale, never merged (#20). */
+  renderSource?: RenderSourceOverride;
+  /** Scale of whatever Render Source is drawn; see {@link GlyphStyle.contentScale}. */
+  contentScale?: number;
 }
 
 /** An override that changes nothing — the default at every non-Project tier. */
@@ -98,7 +125,9 @@ export type StyleField =
   | "backgroundSource"
   | "symbolFill"
   | "symbolBorder"
-  | "symbolSecondary";
+  | "symbolSecondary"
+  | "renderSource"
+  | "contentScale";
 
 /**
  * Deep-merge two sparse overrides, `patch` winning. Background and its border are
@@ -122,6 +151,10 @@ export function mergeOverride(
   if (patch.symbolPaints) {
     next.symbolPaints = { ...base.symbolPaints, ...patch.symbolPaints };
   }
+  // A Render Source is one choice, not a bag of properties: merging an `image`
+  // patch into a `label` base would leave a half-and-half override.
+  if (patch.renderSource !== undefined) next.renderSource = patch.renderSource;
+  if (patch.contentScale !== undefined) next.contentScale = patch.contentScale;
   return next;
 }
 
@@ -151,6 +184,10 @@ export function isOverrideFieldSet(
       return override.symbolPaints?.border !== undefined;
     case "symbolSecondary":
       return override.symbolPaints?.secondary !== undefined;
+    case "renderSource":
+      return override.renderSource !== undefined;
+    case "contentScale":
+      return override.contentScale !== undefined;
   }
 }
 
@@ -166,6 +203,14 @@ export function clearOverrideField(
   const next: StyleOverride = { ...override };
   if (field === "textColor") {
     delete next.textColor;
+    return next;
+  }
+  if (field === "renderSource") {
+    delete next.renderSource;
+    return next;
+  }
+  if (field === "contentScale") {
+    delete next.contentScale;
     return next;
   }
   if (
@@ -218,6 +263,7 @@ export function resolveStyle(
     border: { ...base.background.border },
   };
   const symbolPaints: SymbolPaints = { ...base.symbolPaints };
+  let contentScale = base.contentScale;
 
   for (const override of overrides) {
     if (!override) continue;
@@ -228,9 +274,11 @@ export function resolveStyle(
     if (override.symbolPaints) {
       Object.assign(symbolPaints, override.symbolPaints);
     }
+    if (override.contentScale !== undefined)
+      contentScale = override.contentScale;
   }
 
-  return { textColor, background, symbolPaints };
+  return { textColor, background, symbolPaints, contentScale };
 }
 
 /**

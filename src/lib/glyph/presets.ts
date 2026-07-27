@@ -58,6 +58,12 @@ export const DEFAULT_NAMING: NamingConfig = {
 /** Default output filename template. */
 export const DEFAULT_FILENAME_TEMPLATE = "{device}_atlas";
 
+/**
+ * Default content scale: the Render Source fills the tile's content box exactly
+ * as it did before the scale control existed (issue #20).
+ */
+export const DEFAULT_CONTENT_SCALE = 1;
+
 /** Default config name, used as the default filename when saving a project. */
 export const DEFAULT_PROJECT_NAME = "my-glyphs";
 
@@ -83,6 +89,8 @@ export function createDefaultProject(
     textColor: DEFAULT_TEXT_COLOR,
     background: DEFAULT_BACKGROUND,
     symbolPaints: DEFAULT_SYMBOL_PAINTS,
+    contentScale: DEFAULT_CONTENT_SCALE,
+    images: [],
     cellSize: DEFAULT_CELL_SIZE,
     devices: [createDeviceFromCatalog(DEVICE_CATALOGS[0])],
     naming: DEFAULT_NAMING,

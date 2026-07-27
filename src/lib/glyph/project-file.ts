@@ -5,8 +5,9 @@
  *
  * - a **JSON** file (`{name}.json`) carrying just the config, or
  * - a **ZIP** file (`{name}.zip`) bundling that same `config.json` alongside the
- *   original uploaded font file (unmodified bytes, not base64-blobbed), so a
- *   project is portable between machines without re-uploading the font.
+ *   original uploaded font file and any uploaded custom images under `images/`
+ *   (unmodified bytes, not base64-blobbed), so a project is portable between
+ *   machines without re-uploading its assets.
  *
  * The config inside both is the exact versioned envelope ProjectStore persists
  * to `localStorage` (see {@link serializeConfig} / {@link parseConfig}), so
@@ -19,41 +20,60 @@ import {
   parseConfig,
   serializeConfig,
   type PersistedFont,
+  type PersistedImage,
 } from "@/lib/glyph/project-store";
 import type { Project } from "@/lib/glyph/types";
 
 /** The config's entry name inside a project ZIP. */
 const CONFIG_ENTRY = "config.json";
+/** Folder every custom image's bytes live under, keyed by its image id. */
+const IMAGE_PREFIX = "images/";
 
-/** A project restored from a file: its config, plus the bundled font if any. */
+/**
+ * A project restored from a file: its config, plus whichever assets the file
+ * bundled — the font and the custom images (issue #20).
+ */
 export interface ImportedProject {
   project: Project;
   font: PersistedFont | null;
+  images: PersistedImage[];
 }
 
 /**
- * Build a downloadable project file. With a `font`, produces a ZIP of
- * `config.json` + the font file; without one, a plain config JSON.
+ * Build a downloadable project file. With a font or any custom images, produces a
+ * ZIP of `config.json` + those asset files; with neither, a plain config JSON.
+ *
+ * Only the bytes go in the ZIP — an image's filename and MIME type already ride in
+ * the config's manifest, so there is one place they can disagree: none.
  */
 export async function exportProjectFile(
   project: Project,
   font: PersistedFont | null,
+  images: PersistedImage[] = [],
 ): Promise<ExportArtifact> {
   const base = safeBaseName(project.name);
   const configJson = serializeConfig(project);
 
-  if (!font) {
+  if (!font && images.length === 0) {
     return {
       filename: `${base}.json`,
       blob: new Blob([configJson], { type: "application/json" }),
     };
   }
 
-  const fontBytes = new Uint8Array(await font.blob.arrayBuffer());
-  const zip = zipSync({
+  const entries: Record<string, Uint8Array> = {
     [CONFIG_ENTRY]: strToU8(configJson),
-    [font.fileName]: fontBytes,
-  });
+  };
+  if (font) {
+    entries[font.fileName] = new Uint8Array(await font.blob.arrayBuffer());
+  }
+  for (const image of images) {
+    entries[`${IMAGE_PREFIX}${image.id}`] = new Uint8Array(
+      await image.blob.arrayBuffer(),
+    );
+  }
+
+  const zip = zipSync(entries);
   return {
     filename: `${base}.zip`,
     // Copy into a fresh Uint8Array so the Blob owns a plain ArrayBuffer.
@@ -75,7 +95,7 @@ export async function importProjectFile(
 
 function importJson(bytes: Uint8Array): ImportedProject | null {
   const project = parseConfig(strFromU8(bytes));
-  return project ? { project, font: null } : null;
+  return project ? { project, font: null, images: [] } : null;
 }
 
 function importZip(bytes: Uint8Array): ImportedProject | null {
@@ -91,10 +111,25 @@ function importZip(bytes: Uint8Array): ImportedProject | null {
   const project = parseConfig(strFromU8(configBytes));
   if (!project) return null;
 
-  // Any non-config entry is the bundled font. Re-registered under the family the
-  // config already carries, so the same family name round-trips (see font.ts).
+  // An image's manifest entry is the source of truth for its name and type, so
+  // only entries the config still knows about are restored — a stale byte blob
+  // has nothing to describe it and nothing referencing it.
+  const images: PersistedImage[] = [];
+  for (const asset of project.images) {
+    const bytes = entries[`${IMAGE_PREFIX}${asset.id}`];
+    if (bytes) {
+      images.push({
+        ...asset,
+        blob: new Blob([bytes.slice()], { type: asset.type }),
+      });
+    }
+  }
+
+  // The font is whatever entry is left: it keeps its original filename (which the
+  // config doesn't record), so it can't be looked up by name the way images are.
+  // Re-registered under the family the config already carries (see font.ts).
   const fontEntry = Object.entries(entries).find(
-    ([name]) => name !== CONFIG_ENTRY,
+    ([name]) => name !== CONFIG_ENTRY && !name.startsWith(IMAGE_PREFIX),
   );
   const font: PersistedFont | null = fontEntry
     ? {
@@ -104,7 +139,7 @@ function importZip(bytes: Uint8Array): ImportedProject | null {
       }
     : null;
 
-  return { project, font };
+  return { project, font, images };
 }
 
 /** ZIP local-file-header magic: the ASCII bytes "PK". */

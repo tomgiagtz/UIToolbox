@@ -13,6 +13,7 @@ const style: GlyphStyle = {
     border: { width: 0, color: "#000000" },
   },
   symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+  contentScale: 1,
 };
 
 /** Build preview Glyphs from labels, all sharing the one test style. */

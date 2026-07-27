@@ -3,6 +3,7 @@
 import { useEffect, type Dispatch } from "react";
 import { Button, Tooltip, TooltipTrigger } from "react-aria-components";
 import { X } from "lucide-react";
+import { resolveScopeRenderSource } from "@/lib/glyph/generate";
 import type { ProjectAction } from "@/lib/glyph/project";
 import { isOverrideFieldSet } from "@/lib/glyph/style";
 import type {
@@ -14,6 +15,7 @@ import type {
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
 import type { BackgroundShape, Project } from "@/lib/glyph/types";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
+import { RenderSourceControls } from "./render-source-controls";
 
 const SHAPES: { value: BackgroundShape; label: string }[] = [
   { value: "rounded-rect", label: "Rounded rect" },
@@ -24,6 +26,13 @@ const SHAPES: { value: BackgroundShape; label: string }[] = [
 
 /** Common power-of-two-friendly cell sizes; also drives output resolution. */
 const CELL_SIZES = [32, 48, 64, 96, 128, 192, 256];
+
+/**
+ * Range of the content scale slider. It runs past 1 so art can be pushed to the
+ * cell edge (and beyond — the renderer clips to the cell), and stops well above
+ * zero since a Render Source scaled to nothing is just an empty tile.
+ */
+const CONTENT_SCALE_RANGE = { min: 0.1, max: 2, step: 0.05 };
 
 /** Stable option value for a {@link StyleScope} in the switcher's `<select>`. */
 function scopeValue(scope: StyleScope): string {
@@ -260,6 +269,27 @@ export function StyleControls({
 
       {/* A tile is tinted by fill/border even when `shape` is "none", so these
           stay available whenever either a tile or a drawn shape is in play. */}
+      {/* Sizes whichever Render Source the Glyph draws, so it lives with the
+          rest of the cascade rather than beside the image picker (issue #20). */}
+      <Field
+        label={`Content scale (${Math.round(style.contentScale * 100)}%)`}
+        hint="How large the label, Symbol, or image is drawn inside the tile."
+        onReset={resetFor("contentScale")}
+      >
+        {(id) => (
+          <input
+            id={id}
+            type="range"
+            min={CONTENT_SCALE_RANGE.min}
+            max={CONTENT_SCALE_RANGE.max}
+            step={CONTENT_SCALE_RANGE.step}
+            value={style.contentScale}
+            onChange={(e) => patch({ contentScale: Number(e.target.value) })}
+            className="w-full"
+          />
+        )}
+      </Field>
+
       {paintsApply && (
         <ColorField
           label="Background fill"
@@ -362,6 +392,7 @@ export function GlyphStylePanel({
   style,
   override,
   onClose,
+  onUploadImage,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -371,12 +402,17 @@ export function GlyphStylePanel({
   /** Raw sparse override stored on the Glyph. */
   override: StyleOverride;
   onClose: () => void;
+  /** Hand an uploaded custom image to the editor to register and persist. */
+  onUploadImage: (file: File) => void;
 }) {
   const scope: StyleScope = {
     tier: "glyph",
     deviceIndex: glyph.deviceIndex,
     glyphId: glyph.glyphId,
   };
+  // Render Source is per-Input, so this panel is the only place it's editable —
+  // the sidebar's Style controls address whole tiers.
+  const renderSource = resolveScopeRenderSource(project, scope);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -406,7 +442,18 @@ export function GlyphStylePanel({
           <X aria-hidden className="size-4" />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+        {renderSource && (
+          <RenderSourceControls
+            dispatch={dispatch}
+            scope={scope}
+            source={renderSource.source}
+            hasSymbol={renderSource.hasSymbol}
+            images={project.images}
+            override={override}
+            onUploadImage={onUploadImage}
+          />
+        )}
         <StyleControls
           project={project}
           dispatch={dispatch}

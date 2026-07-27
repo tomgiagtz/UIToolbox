@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   generateTilesets,
   resolveDeviceInputs,
+  resolveScopeRenderSource,
   resolveScopeStyle,
 } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
 import { projectReducer } from "@/lib/glyph/project";
 import { createDefaultProject } from "@/lib/glyph/presets";
-import type { DeviceConfig, Project } from "@/lib/glyph/types";
+import type { DeviceConfig, ImageAsset, Project } from "@/lib/glyph/types";
 
 /**
  * A Device whose Inputs are supplied as custom (off-catalog) labels, so a test
@@ -41,6 +42,8 @@ function project(over: Partial<Project> = {}): Project {
       border: { width: 2, color: "#333333" },
     },
     symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+    contentScale: 1,
+    images: [],
     cellSize: 128,
     devices: [device(["A", "Right Stick", "→"])],
     naming: { template: "{device}_{input}", case: "snake" },
@@ -108,6 +111,130 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
       "bumper",
       undefined,
     ]);
+  });
+});
+
+describe("Render Source per Input (issue #20)", () => {
+  /** An Xbox Device with a face button (has a Symbol), a bumper, and a custom Input. */
+  function xbox(glyphStyles: DeviceConfig["glyphStyles"] = {}): DeviceConfig {
+    return {
+      name: "Xbox",
+      catalogId: "xbox",
+      enabled: ["xbox-a", "xbox-lb"],
+      custom: [{ id: "c0", label: "Paddle" }],
+      style: {},
+      glyphStyles,
+    };
+  }
+
+  const image: ImageAsset = {
+    id: "img-1.png",
+    fileName: "paddle.png",
+    type: "image/png",
+  };
+
+  it("renders the label when a Glyph override picks it over the Symbol", () => {
+    const device = xbox({ "xbox-a": { renderSource: { kind: "label" } } });
+    const [a] = resolveDeviceInputs(device, project({ devices: [device] }));
+    expect(a.symbolId).toBeUndefined();
+    expect(a.imageId).toBeUndefined();
+    // The label is retained as the Input's identity whatever it renders as.
+    expect(a.label).toBe("A");
+  });
+
+  it("renders a custom image when a Glyph override picks one", () => {
+    const device = xbox({
+      "xbox-a": { renderSource: { kind: "image", imageId: image.id } },
+    });
+    const [a] = resolveDeviceInputs(
+      device,
+      project({ devices: [device], images: [image] }),
+    );
+    expect(a.imageId).toBe(image.id);
+    expect(a.symbolId).toBeUndefined();
+  });
+
+  it("falls back to the default when the chosen image isn't in the project", () => {
+    // ADR-0004: a config can outlive its image bytes, and must degrade, not break.
+    const device = xbox({
+      "xbox-a": { renderSource: { kind: "image", imageId: "gone.png" } },
+      c0: { renderSource: { kind: "image", imageId: "gone.png" } },
+    });
+    const [a, , paddle] = resolveDeviceInputs(
+      device,
+      project({ devices: [device] }),
+    );
+    expect(a.imageId).toBeUndefined();
+    expect(a.symbolId).toBe("a"); // back to its Catalog Symbol
+    expect(paddle.imageId).toBeUndefined();
+    expect(paddle.symbolId).toBeUndefined(); // no Symbol to fall back to → label
+  });
+
+  it("falls back to the label when an Input has no Symbol to switch to", () => {
+    const device = xbox({ c0: { renderSource: { kind: "symbol" } } });
+    const [, , paddle] = resolveDeviceInputs(
+      device,
+      project({ devices: [device] }),
+    );
+    expect(paddle.symbolId).toBeUndefined();
+  });
+
+  it("lets a Glyph override switch a label-rendered Input back to its Symbol", () => {
+    const device = xbox({ "xbox-lb": { renderSource: { kind: "symbol" } } });
+    const [, lb] = resolveDeviceInputs(device, project({ devices: [device] }));
+    // The bumper has no Symbol of its own — its identity is the tile — so it
+    // stays label-rendered rather than borrowing another Input's art.
+    expect(lb.symbolId).toBeUndefined();
+  });
+
+  it("carries a custom image id onto the packed placements for the compositor", () => {
+    const device = xbox({
+      "xbox-a": { renderSource: { kind: "image", imageId: image.id } },
+    });
+    const [out] = generateTilesets(
+      project({ devices: [device], images: [image] }),
+    );
+    expect(out.placements.map((p) => p.imageId)).toEqual([
+      image.id,
+      undefined,
+      undefined,
+    ]);
+    // The Sprite Name still comes from the label, not the image file.
+    expect(out.placements[0].spriteName).toBe("xbox_a");
+  });
+
+  it("resolves the content scale onto every placement's style", () => {
+    const device = xbox({ "xbox-a": { contentScale: 1.5 } });
+    const [out] = generateTilesets(
+      project({ devices: [device], contentScale: 0.8 }),
+    );
+    expect(out.placements.map((p) => p.style.contentScale)).toEqual([
+      1.5, // Glyph tier
+      0.8, // falls up to the Project tier
+      0.8,
+    ]);
+  });
+
+  it("resolves the Render Source for a scope, for the editor's controls", () => {
+    const device = xbox({ "xbox-a": { renderSource: { kind: "label" } } });
+    const proj = project({ devices: [device] });
+    expect(
+      resolveScopeRenderSource(proj, {
+        tier: "glyph",
+        deviceIndex: 0,
+        glyphId: "xbox-a",
+      }),
+      // Rendering its label, but its Symbol is still there to switch back to.
+    ).toEqual({ source: { kind: "label" }, hasSymbol: true });
+    expect(
+      resolveScopeRenderSource(proj, {
+        tier: "glyph",
+        deviceIndex: 0,
+        glyphId: "c0",
+      }),
+    ).toEqual({ source: { kind: "label" }, hasSymbol: false });
+    // A Device or Project scope has no single Input, so there's nothing to resolve.
+    expect(resolveScopeRenderSource(proj, { tier: "project" })).toBeNull();
   });
 });
 
@@ -286,6 +413,7 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
       textColor: proj.textColor,
       background: proj.background,
       symbolPaints: proj.symbolPaints,
+      contentScale: proj.contentScale,
     };
     const [kb] = generateTilesets(proj);
     for (const placement of kb.placements) {
@@ -303,6 +431,7 @@ describe("resolveScopeStyle", () => {
       textColor: proj.textColor,
       background: proj.background,
       symbolPaints: proj.symbolPaints,
+      contentScale: proj.contentScale,
     });
   });
 
@@ -370,6 +499,7 @@ describe("resolveScopeStyle", () => {
         textColor: proj.textColor,
         background: proj.background,
         symbolPaints: proj.symbolPaints,
+        contentScale: proj.contentScale,
       },
     );
   });

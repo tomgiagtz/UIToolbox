@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
 import {
+  DEFAULT_CONTENT_SCALE,
   DEFAULT_SYMBOL_PAINTS,
   createDefaultProject,
 } from "@/lib/glyph/presets";
@@ -66,6 +67,75 @@ describe("ProjectStore — config (localStorage)", () => {
       JSON.stringify({ version: 999, project: edited() }),
     );
     expect(loadConfig()).toBeNull();
+  });
+});
+
+describe("ProjectStore — v3 → v4 migration (content scale + images)", () => {
+  // A v3 config: before the Project gained a content scale and an image manifest
+  // (issue #20).
+  function v3(over: Record<string, unknown> = {}): string {
+    return JSON.stringify({
+      version: 3,
+      project: {
+        name: "pre-images",
+        font: { family: "Inter" },
+        textColor: "#f8fafc",
+        background: {
+          shape: "rounded-rect",
+          fill: "#1e293b",
+          cornerRadius: 18,
+          border: { width: 4, color: "#475569" },
+        },
+        symbolPaints: DEFAULT_SYMBOL_PAINTS,
+        cellSize: 128,
+        devices: [
+          {
+            name: "Keyboard",
+            catalogId: "keyboard",
+            enabled: ["key-w"],
+            custom: [],
+            style: {},
+            glyphStyles: {},
+          },
+        ],
+        naming: { template: "{device}_{input}", case: "snake" },
+        filenameTemplate: "{device}_atlas",
+        ...over,
+      },
+    });
+  }
+
+  it("backfills the unscaled content default and an empty image manifest", () => {
+    const project = parseConfig(v3());
+    expect(project).not.toBeNull();
+    expect(project!.contentScale).toBe(DEFAULT_CONTENT_SCALE);
+    expect(project!.images).toEqual([]);
+    // The rest of the project is carried through untouched.
+    expect(project!.devices[0].enabled).toEqual(["key-w"]);
+  });
+
+  it("produces a config that passes current-version validation on re-save", () => {
+    const migrated = parseConfig(v3())!;
+    saveConfig(migrated);
+    expect(loadConfig()).toEqual(migrated);
+  });
+
+  it("rejects a current-version config whose image manifest is malformed", () => {
+    const bad = JSON.stringify({
+      version: 4,
+      project: JSON.parse(v3({ contentScale: 1, images: [{ id: 7 }] })).project,
+    });
+    expect(parseConfig(bad)).toBeNull();
+  });
+
+  it("round-trips an image manifest and a scaled Glyph", () => {
+    const project: Project = {
+      ...createDefaultProject(""),
+      contentScale: 0.75,
+      images: [{ id: "img-1.png", fileName: "art.png", type: "image/png" }],
+    };
+    saveConfig(project);
+    expect(loadConfig()).toEqual(project);
   });
 });
 

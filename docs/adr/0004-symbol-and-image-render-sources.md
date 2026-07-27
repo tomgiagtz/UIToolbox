@@ -1,10 +1,12 @@
 # ADR-0004: Symbols and custom images as Glyph Render Sources
 
-- **Status:** Accepted (colour model amended by ADR-0007)
+- **Status:** Accepted (colour model amended by ADR-0007; image storage by ADR-0008)
 - **Date:** 2026-07-17
 - **Amends:** ADR-0002 (font-rendered glyphs)
 - **Amended by:** ADR-0007 — the tintable / fixed-colour / `tint` model below is
-  superseded by sentinel paint roles and importable Symbol Sets.
+  superseded by sentinel paint roles and importable Symbol Sets. ADR-0008 —
+  custom image bytes **are** persisted in IndexedDB, contrary to the final
+  consequence below; the ZIP remains the portable format.
 
 ## Context
 

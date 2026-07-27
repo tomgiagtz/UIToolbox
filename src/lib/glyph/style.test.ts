@@ -17,6 +17,7 @@ function base(): GlyphStyle {
       border: { width: 4, color: "#475569" },
     },
     symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+    contentScale: 1,
   };
 }
 
@@ -161,6 +162,17 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     });
   });
 
+  it("resolves the content scale through the cascade (issue #20)", () => {
+    const device: StyleOverride = { contentScale: 0.8 };
+    const glyph: StyleOverride = { contentScale: 1.5 };
+    expect(resolveStyle(base(), device).contentScale).toBe(0.8);
+    expect(resolveStyle(base(), device, undefined, glyph).contentScale).toBe(
+      1.5,
+    );
+    // Unset at every tier falls back to the Project base.
+    expect(resolveStyle(base(), {}).contentScale).toBe(1);
+  });
+
   it("does not mutate the base style", () => {
     const b = base();
     const snapshot = JSON.parse(JSON.stringify(b));
@@ -193,6 +205,28 @@ describe("mergeOverride", () => {
       background: { border: { color: "#0f0" } },
     });
     expect(out.background?.border).toEqual({ width: 4, color: "#0f0" });
+  });
+
+  it("replaces the Render Source wholesale rather than merging it (issue #20)", () => {
+    const base: StyleOverride = {
+      renderSource: { kind: "image", imageId: "img-1.png" },
+    };
+    const out = mergeOverride(base, { renderSource: { kind: "label" } });
+    expect(out.renderSource).toEqual({ kind: "label" });
+  });
+
+  it("keeps an existing Render Source when the patch doesn't set one", () => {
+    const base: StyleOverride = { renderSource: { kind: "label" } };
+    const out = mergeOverride(base, { contentScale: 0.5 });
+    expect(out).toEqual({ renderSource: { kind: "label" }, contentScale: 0.5 });
+  });
+
+  it("layers the content scale from the patch", () => {
+    expect(mergeOverride({ contentScale: 1.2 }, { contentScale: 0.9 })).toEqual(
+      {
+        contentScale: 0.9,
+      },
+    );
   });
 
   it("does not mutate either input", () => {
@@ -228,6 +262,17 @@ describe("isOverrideFieldSet", () => {
     expect(
       isOverrideFieldSet({ symbolPaints: { fill: "#0f0" } }, "symbolBorder"),
     ).toBe(false);
+  });
+
+  it("detects a set Render Source and content scale (issue #20)", () => {
+    expect(
+      isOverrideFieldSet({ renderSource: { kind: "label" } }, "renderSource"),
+    ).toBe(true);
+    expect(isOverrideFieldSet({}, "renderSource")).toBe(false);
+    expect(isOverrideFieldSet({ contentScale: 0.5 }, "contentScale")).toBe(
+      true,
+    );
+    expect(isOverrideFieldSet({}, "contentScale")).toBe(false);
   });
 
   it("detects a set Authored Background source", () => {
@@ -313,6 +358,26 @@ describe("clearOverrideField", () => {
         "backgroundSource",
       ),
     ).toEqual({});
+  });
+
+  it("clears the Render Source and the content scale (issue #20)", () => {
+    expect(
+      clearOverrideField({ renderSource: { kind: "label" } }, "renderSource"),
+    ).toEqual({});
+    expect(clearOverrideField({ contentScale: 0.5 }, "contentScale")).toEqual(
+      {},
+    );
+    // Independent of one another and of the rest of the override.
+    expect(
+      clearOverrideField(
+        {
+          renderSource: { kind: "symbol" },
+          contentScale: 2,
+          textColor: "#f00",
+        },
+        "renderSource",
+      ),
+    ).toEqual({ contentScale: 2, textColor: "#f00" });
   });
 
   it("is a no-op when the field is not set", () => {
