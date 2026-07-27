@@ -239,13 +239,32 @@ function cellOrigin(el, cell) {
 
 // --- Atlas parsing -----------------------------------------------------------
 
+/** The atlas whose art every Device falls back to when it draws none of its own. */
+const SHARED = "shared";
+
 /**
- * The `sources` key for a cell: the bare `id` when authored in its base atlas, or
- * `<device>:<id>` when a device atlas re-authors a shared id as an override (see
- * {@link parseAtlas}). Resolution prefers the device-scoped key, then the base.
+ * The emitted key for a cell: the bare `id` for shared art, `<atlas>:<id>` for a
+ * Device's own drawing. Ids are bare, so the atlas a cell lives in is the only
+ * thing that scopes it — `resolveSymbolSvg` prefers the Device-scoped key and
+ * falls back to the shared one.
  */
-function scopeKey(atlasId, asset) {
-  return atlasId === asset.atlas ? asset.id : `${atlasId}:${asset.id}`;
+function keyFor(atlasId, id) {
+  return atlasId === SHARED ? id : `${atlasId}:${id}`;
+}
+
+/**
+ * The cells one atlas is expected to draw, keyed by the id used **in that file**
+ * — an asset's bare `id` unless its `cells` map renames it there (PlayStation
+ * draws `bumper` as `R1`). Lets each atlas use its own vocabulary without the
+ * asset id having to change.
+ */
+function cellIndex(atlasId) {
+  const map = new Map();
+  for (const asset of SYMBOL_MANIFEST) {
+    if (!asset.atlases?.includes(atlasId)) continue;
+    map.set(asset.cells?.[atlasId] ?? asset.id, asset);
+  }
+  return map;
 }
 
 /**
@@ -255,8 +274,8 @@ function scopeKey(atlasId, asset) {
  * viewBox is windowed to that cell, so derived twins can rotate about the cell
  * centre. Derived ids must not be authored.
  *
- * A cell drawn in an atlas other than its manifest `atlas` is a **device override**
- * of a shared asset — allowed only for shared-base assets, keyed `<device>:<id>`.
+ * An id the manifest doesn't list for this atlas is an error: the pair of lists
+ * has to agree, or art silently goes missing (or lands under the wrong Device).
  */
 function parseAtlas(atlasId, svgText, file) {
   const dom = new JSDOM(svgText, { contentType: "image/svg+xml" });
@@ -266,27 +285,32 @@ function parseAtlas(atlasId, svgText, file) {
   const cell = parseFloat(root.getAttribute("data-cell") ?? "") || DEFAULT_CELL;
   const serializer = new XMLSerializer();
 
+  const cells = cellIndex(atlasId);
   const sources = {};
   for (const el of root.querySelectorAll("[id]")) {
     const id = el.getAttribute("id");
-    const asset = manifestById.get(id);
-    if (!asset) continue; // not a shipped asset — a layer group, defs, etc.
-    if (isDerived(asset))
+    const asset = cells.get(id);
+    if (!asset) {
+      // Not a cell this atlas draws. Usually a layer group or defs — but if the
+      // manifest knows the id, the two lists have drifted and art would silently
+      // vanish, so say so instead.
+      const known = manifestById.get(id);
+      if (!known) continue;
+      if (isDerived(known))
+        throw new Error(
+          `${file}: "${id}" is derived (rotateOf "${known.rotateOf}") — don't author a cell for it.`,
+        );
       throw new Error(
-        `${file}: "${id}" is derived (rotateOf "${asset.rotateOf}") — don't author a cell for it.`,
+        `${file}: "${id}" is drawn here, but the manifest lists it in ` +
+          `${JSON.stringify(known.atlases ?? [])} — add "${atlasId}" to its \`atlases\`.`,
       );
-    // Own-atlas cell = base; other-atlas cell = device override of a shared asset.
-    if (asset.atlas !== atlasId && asset.atlas !== "shared")
-      throw new Error(
-        `${file}: "${id}" is device-specific to "${asset.atlas}" and can't be ` +
-          `overridden from "${atlasId}". Only shared assets take per-device overrides.`,
-      );
-    const key = scopeKey(atlasId, asset);
+    }
+    const key = keyFor(atlasId, asset.id);
     if (sources[key]) throw new Error(`${file}: duplicate id "${id}".`);
 
     const origin = cellOrigin(el, cell);
     if (!origin) continue; // empty group — treated as not-yet-authored (pending)
-    collectNonSentinel(el, id);
+    collectNonSentinel(el, asset.id);
     sources[key] = {
       markup: serializer.serializeToString(el),
       cell,
@@ -316,49 +340,40 @@ for (const file of atlases) {
   console.log(`  ${atlasId}: ${Object.keys(parsed).length} source cell(s)`);
 }
 
-// Every device that supplied at least one override, plus the base scope ("").
-const scopes = [
-  "",
-  ...new Set(
-    Object.keys(sources)
-      .filter((k) => k.includes(":"))
-      .map((k) => k.slice(0, k.indexOf(":"))),
-  ),
-];
+/** The atlases an asset is drawn in — a derived asset inherits its source's. */
+function atlasesOf(asset) {
+  return (
+    (isDerived(asset)
+      ? manifestById.get(asset.rotateOf)?.atlases
+      : asset.atlases) ?? []
+  );
+}
 
-/** Scoped key for an id: bare in the base scope, `<device>:<id>` in a device scope. */
-const keyFor = (scope, id) => (scope ? `${scope}:${id}` : id);
-
-// Emit each scope in manifest order: sources verbatim, derived twins as a rotation
-// of their source about the cell centre. A device scope only emits the ids it
-// actually overrode (and their rotations); everything else falls back to base at
-// resolve time. Anything whose art isn't authored yet is skipped.
+// Emit in manifest order, once per atlas the asset is drawn in: sources verbatim,
+// derived twins as a rotation of their source about its cell centre. Each Device's
+// rotations therefore come from that Device's own art. Anything not drawn yet is
+// skipped and reported below.
 const svgs = {};
-for (const scope of scopes) {
-  for (const a of SYMBOL_MANIFEST) {
-    if (isDerived(a)) {
-      const src = sources[keyFor(scope, a.rotateOf)];
-      if (!src) continue; // source not drawn in this scope → twin skipped
-      const midX = src.x0 + src.cell / 2;
-      const midY = src.y0 + src.cell / 2;
-      const spun = `<g transform="rotate(${a.rotate} ${midX} ${midY})">${src.markup}</g>`;
-      svgs[keyFor(scope, a.id)] = standalone(spun, src.x0, src.y0, src.cell);
-    } else {
-      const src = sources[keyFor(scope, a.id)];
-      if (src)
-        svgs[keyFor(scope, a.id)] = standalone(
-          src.markup,
-          src.x0,
-          src.y0,
-          src.cell,
-        );
-    }
+for (const a of SYMBOL_MANIFEST) {
+  for (const atlas of atlasesOf(a)) {
+    const src = sources[keyFor(atlas, isDerived(a) ? a.rotateOf : a.id)];
+    if (!src) continue; // not drawn in this atlas yet
+    const markup = isDerived(a)
+      ? `<g transform="rotate(${a.rotate} ${src.x0 + src.cell / 2} ${
+          src.y0 + src.cell / 2
+        })">${src.markup}</g>`
+      : src.markup;
+    svgs[keyFor(atlas, a.id)] = standalone(markup, src.x0, src.y0, src.cell);
   }
 }
 
 // A manifest id with no art yet is a warning, not an error, so the slice can land
 // device-by-device (mirrors the layouts "empty until authored").
-const pending = SYMBOL_MANIFEST.filter((a) => !svgs[a.id]).map((a) => a.id);
+const pending = SYMBOL_MANIFEST.flatMap((a) =>
+  atlasesOf(a)
+    .filter((atlas) => !svgs[keyFor(atlas, a.id)])
+    .map((atlas) => keyFor(atlas, a.id)),
+);
 if (pending.length)
   console.warn(`  pending (not authored yet): ${pending.join(", ")}`);
 

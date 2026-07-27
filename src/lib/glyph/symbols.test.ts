@@ -27,29 +27,39 @@ describe("symbol manifest", () => {
     }
   });
 
-  it("ships the Xbox face buttons as symbols", () => {
-    for (const id of ["xbox-a", "xbox-b", "xbox-x", "xbox-y"]) {
+  it("ships each pad's face buttons as symbols", () => {
+    for (const id of ["a", "b", "x", "y", "cross", "circle", "square"]) {
       const asset = getSymbolAsset(id);
       expect(asset, id).toBeDefined();
       expect(asset?.kind).toBe("symbol");
     }
   });
 
-  it("shares only the cross-device stick art this pass", () => {
-    expect(getSymbolAsset("stick")?.atlas).toBe("shared");
-    // No shared d-pad yet — it's authored in the device atlas for now.
-    expect(getSymbolAsset("dpad-right")?.atlas).toBe("xbox");
+  it("keeps ids bare, so no id carries a device prefix", () => {
+    // The atlas a cell lives in is what scopes it to a Device; a prefixed id
+    // would encode that scope twice and let the two disagree.
+    for (const a of SYMBOL_ASSETS)
+      expect(a.id, a.id).not.toMatch(/^(xbox|playstation|ps)-/);
   });
 
-  it("keeps the device-specific bumper/trigger tiles in the device atlas", () => {
-    for (const id of ["xbox-bumper", "xbox-trigger"]) {
+  it("shares only the cross-device stick art this pass", () => {
+    expect(getSymbolAsset("stick")?.atlases).toEqual(["shared"]);
+  });
+
+  it("draws the bumper/trigger tiles and the d-pad once per pad", () => {
+    for (const id of ["bumper", "trigger"]) {
       const asset = getSymbolAsset(id);
       expect(asset?.kind, id).toBe("background");
-      expect(asset?.atlas, id).toBe("xbox");
+      expect(asset?.atlases, id).toEqual(["xbox", "playstation"]);
     }
+    // Same id on both pads, but each pad draws its own shape.
+    expect(getSymbolAsset("dpad-right")?.atlases).toEqual([
+      "xbox",
+      "playstation",
+    ]);
     expect(AUTHORED_BACKGROUNDS.map((a) => a.id)).toEqual([
-      "xbox-bumper",
-      "xbox-trigger",
+      "bumper",
+      "trigger",
     ]);
     expect(SYMBOLS.every((a) => a.kind === "symbol")).toBe(true);
   });
@@ -64,29 +74,39 @@ describe("symbol manifest", () => {
       const asset = getSymbolAsset(id);
       expect(asset?.rotateOf, id).toBe("dpad-right");
       expect(asset?.rotate, id).toBe(deg);
-      expect(asset?.atlas, `${id} is derived, not authored`).toBeUndefined();
+      expect(asset?.atlases, `${id} is derived, not authored`).toBeUndefined();
     }
   });
 });
 
 describe("authored symbol SVGs", () => {
+  /** Every Device scope an asset can resolve in, plus the unscoped fallback. */
+  const scopes = [undefined, "xbox", "playstation"] as const;
+
   it("only exposes SVGs for manifest ids, each a square-viewBox <svg>", () => {
     for (const a of SYMBOL_ASSETS) {
-      const svg = getSymbolSvg(a.id);
-      if (!svg) continue; // not drawn yet — falls back to the label
-      expect(svg.startsWith("<svg")).toBe(true);
-      const vb = /viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/.exec(svg);
-      expect(vb, `${a.id} needs a viewBox`).not.toBeNull();
-      const [, , , w, h] = vb!.map(Number);
-      expect(w, `${a.id} viewBox must be square`).toBe(h);
+      for (const scope of scopes) {
+        const svg = getSymbolSvg(a.id, scope);
+        if (!svg) continue; // not drawn in this scope — falls back to the label
+        const where = `${a.id}@${scope ?? "shared"}`;
+        expect(svg.startsWith("<svg")).toBe(true);
+        const vb = /viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/.exec(
+          svg,
+        );
+        expect(vb, `${where} needs a viewBox`).not.toBeNull();
+        const [, , , w, h] = vb!.map(Number);
+        expect(w, `${where} viewBox must be square`).toBe(h);
+      }
     }
   });
 
-  it("emits a rotation transform for derived directions once the source exists", () => {
-    if (!getSymbolSvg("dpad-right")) return; // source not drawn yet
-    expect(getSymbolSvg("dpad-down")).toContain("rotate(90");
-    expect(getSymbolSvg("dpad-left")).toContain("rotate(180");
-    expect(getSymbolSvg("dpad-up")).toContain("rotate(270");
+  it("emits a rotation transform for derived directions, per pad", () => {
+    for (const pad of ["xbox", "playstation"]) {
+      if (!getSymbolSvg("dpad-right", pad)) continue; // source not drawn yet
+      expect(getSymbolSvg("dpad-down", pad), pad).toContain("rotate(90");
+      expect(getSymbolSvg("dpad-left", pad), pad).toContain("rotate(180");
+      expect(getSymbolSvg("dpad-up", pad), pad).toContain("rotate(270");
+    }
   });
 
   // Colour is not enforced here: Symbols keep their authored colours as the

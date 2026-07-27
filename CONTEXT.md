@@ -28,9 +28,12 @@ sources).
 
 A single control the user cares about, e.g. `A`, `Space`, `LMB`, `Right Stick`.
 An Input always carries a **label string**, which is its identity and the source
-of its **Sprite Name** even when it renders as artwork. Its **Render Source**
-(label / Symbol / custom image) decides how its one Glyph is drawn. A **Device**
-owns an ordered list of Inputs.
+of its **Sprite Name** even when it renders as artwork. It may also carry
+**aliases** — other names the same control is known by, chiefly the other pad's
+word for it (an Xbox `RB` is a PlayStation `R1`). Aliases are for **lookup only**:
+they never replace the label, so they can't change what a Glyph renders or what
+its Sprite Name becomes. Its **Render Source** (label / Symbol / custom image)
+decides how its one Glyph is drawn. A **Device** owns an ordered list of Inputs.
 
 _Avoid:_ "key", "button" as the domain type — those are Inputs on a specific
 Device.
@@ -71,7 +74,11 @@ _depicts_, not how it is built.
 ### Symbol Set
 
 A self-contained atlas of Symbols — one SVG whose id'd cells sit on a fixed
-square grid, each painted in **Paint Role** sentinels. The tool ships a default
+square grid, each painted in **Paint Role** sentinels. Cell ids are **bare**: the
+Set a cell lives in is what scopes it to a **Device**, so the Xbox and
+PlayStation Sets both author `bumper` and `dpad-right` and each resolves to its
+own art. A Set of genuinely cross-device art is the fallback for any Device that
+ships none of its own. The tool ships a default
 Set (e.g. the Xbox pad); users can **author and import** their own. On import,
 each cell `id` is matched against the base **Catalog** first, and an
 unrecognized id becomes a new **custom Input**. By the _structure-only

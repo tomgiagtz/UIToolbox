@@ -27,8 +27,19 @@ export interface SymbolAsset {
    * red, …) is not wired up yet; face buttons resolve to the Project paints.
    */
   kind: "symbol" | "background";
-  /** Source assets: which `<atlas>-symbols.svg` authors this asset's cell. */
-  atlas?: string;
+  /**
+   * Source assets: every `<atlas>-symbols.svg` that draws this id. Ids are bare,
+   * so the atlas a cell lives in is what scopes it to a Device — `["shared"]` is
+   * one drawing every Device falls back to.
+   */
+  atlases?: string[];
+  /**
+   * Per-atlas cell id, where an atlas draws this asset under a different name —
+   * `{ playstation: "R1" }` lets that pad label its own art R1 while it still
+   * resolves as `bumper`. Authoring detail: the resolved id is always the bare
+   * one, so nothing downstream sees the per-atlas name.
+   */
+  cells?: Record<string, string>;
   /** Derived assets: the source id whose art is rotated to make this one. */
   rotateOf?: string;
   /** Derived assets: clockwise rotation in degrees (90 | 180 | 270). */

@@ -80,7 +80,7 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
 
   it("resolves each Input's default Symbol id (label-only when unset)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
-    expect(a.symbolId).toBe("xbox-a"); // well-known → its Symbol
+    expect(a.symbolId).toBe("a"); // well-known → its Symbol
     expect(lb.symbolId).toBeUndefined(); // bumper → Authored Background (#18)
     expect(paddle.symbolId).toBeUndefined(); // custom → label
   });
@@ -88,7 +88,7 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
   it("carries the Symbol id onto the packed placements for the compositor", () => {
     const [out] = generateTilesets(project({ devices: [xbox] }));
     expect(out.placements.map((p) => p.symbolId)).toEqual([
-      "xbox-a",
+      "a",
       undefined,
       undefined,
     ]);
@@ -98,14 +98,14 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
     // The Catalog per-Input default rides in the resolved Background, not on a
     // separate field like symbolId, so it flows to the compositor for free.
-    expect(lb.style.background.backgroundId).toBe("xbox-bumper");
+    expect(lb.style.background.backgroundId).toBe("bumper");
     expect(a.style.background.backgroundId).toBeUndefined();
     expect(paddle.style.background.backgroundId).toBeUndefined();
 
     const [out] = generateTilesets(project({ devices: [xbox] }));
     expect(out.placements.map((p) => p.style.background.backgroundId)).toEqual([
       undefined,
-      "xbox-bumper",
+      "bumper",
       undefined,
     ]);
   });
@@ -344,7 +344,7 @@ describe("resolveScopeStyle", () => {
     const inputs = resolveDeviceInputs(proj.devices[0], proj);
     const lb = inputs.find((i) => i.id === "xbox-lb");
     const a = inputs.find((i) => i.id === "xbox-a");
-    expect(lb?.style.background.backgroundId).toBe("xbox-bumper");
+    expect(lb?.style.background.backgroundId).toBe("bumper");
     expect(lb?.style.background.flipX).toBe(true);
     // A face button has no backer, so it does take the device-wide circle.
     expect(a?.style.background.shape).toBe("circle");

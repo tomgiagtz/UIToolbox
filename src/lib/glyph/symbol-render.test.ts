@@ -48,7 +48,7 @@ describe("backgroundRoleColors", () => {
   });
 
   it("recolours a bumper tile's sentinels through the Background colours", () => {
-    // The shipped xbox-bumper authors its fill as #f00 and its outline as #00f.
+    // The shipped bumper tile authors its fill as #f00 and its outline as #00f.
     const bumper =
       '<svg viewBox="0 0 256 256">' +
       '<path style="fill:#f00;stroke:#00f;stroke-width:9.6px;"/></svg>';

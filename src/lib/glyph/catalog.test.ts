@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   DEVICE_CATALOGS,
   catalogIndex,
+  catalogNameIndex,
   catalogPresetLabels,
   getCatalog,
   getCatalogByName,
 } from "@/lib/glyph/catalog";
-import { AUTHORED_BACKGROUNDS, SYMBOLS } from "@/lib/glyph/symbols";
+import {
+  AUTHORED_BACKGROUNDS,
+  SYMBOLS,
+  getSymbolSvg,
+} from "@/lib/glyph/symbols";
 
 /**
  * The label lists the tool shipped before the Catalog model. The migrated model
@@ -136,10 +141,19 @@ describe("Well-known Inputs default to a Symbol (issue #17)", () => {
   }
 
   it("maps Xbox face buttons and the menu cluster to their Symbols", () => {
-    expect(symbolOf("xbox", "xbox-a")).toBe("xbox-a");
-    expect(symbolOf("xbox", "xbox-y")).toBe("xbox-y");
-    expect(symbolOf("xbox", "xbox-view")).toBe("xbox-view");
-    expect(symbolOf("xbox", "xbox-menu")).toBe("xbox-menu");
+    expect(symbolOf("xbox", "xbox-a")).toBe("a");
+    expect(symbolOf("xbox", "xbox-y")).toBe("y");
+    expect(symbolOf("xbox", "xbox-view")).toBe("view");
+    expect(symbolOf("xbox", "xbox-menu")).toBe("menu");
+  });
+
+  it("maps PlayStation face buttons and the menu cluster to their Symbols", () => {
+    expect(symbolOf("playstation", "ps-cross")).toBe("cross");
+    expect(symbolOf("playstation", "ps-circle")).toBe("circle");
+    expect(symbolOf("playstation", "ps-square")).toBe("square");
+    expect(symbolOf("playstation", "ps-triangle")).toBe("triangle");
+    expect(symbolOf("playstation", "ps-share")).toBe("share");
+    expect(symbolOf("playstation", "ps-options")).toBe("options");
   });
 
   it("points both sticks at the shared stick Symbol", () => {
@@ -151,7 +165,18 @@ describe("Well-known Inputs default to a Symbol (issue #17)", () => {
   it("maps each d-pad direction to its rotated Symbol", () => {
     expect(symbolOf("xbox", "xbox-dpad-up")).toBe("dpad-up");
     expect(symbolOf("xbox", "xbox-dpad-right")).toBe("dpad-right");
+  });
+
+  it("names the same d-pad id on both pads, and resolves each to its own art", () => {
+    // Ids are bare — the Device supplies the scope — so the shared name must not
+    // mean shared art: each pad draws its own d-pad.
     expect(symbolOf("playstation", "ps-dpad-left")).toBe("dpad-left");
+    expect(symbolOf("playstation", "ps-dpad-up")).toBe("dpad-up");
+    const xbox = getSymbolSvg("dpad-up", "xbox");
+    const ps = getSymbolSvg("dpad-up", "playstation");
+    expect(xbox).toBeDefined();
+    expect(ps).toBeDefined();
+    expect(ps).not.toBe(xbox);
   });
 
   it("leaves bumper/trigger tiles Symbol-less (they default to a Background)", () => {
@@ -169,39 +194,95 @@ describe("Well-known Inputs default to a Symbol (issue #17)", () => {
   });
 });
 
+describe("Shoulder Inputs carry cross-pad aliases", () => {
+  const index = (id: string) => catalogIndex(getCatalog(id)!);
+
+  it("gives each PlayStation shoulder its Xbox name", () => {
+    expect(index("playstation").get("ps-r1")?.aliases).toContain("RB");
+    expect(index("playstation").get("ps-r2")?.aliases).toContain("RT");
+    expect(index("playstation").get("ps-l1")?.aliases).toContain("LB");
+    expect(index("playstation").get("ps-l2")?.aliases).toContain("LT");
+  });
+
+  it("gives each Xbox shoulder its PlayStation name", () => {
+    // An alias table is only useful both ways round.
+    expect(index("xbox").get("xbox-rb")?.aliases).toContain("R1");
+    expect(index("xbox").get("xbox-rt")?.aliases).toContain("R2");
+    expect(index("xbox").get("xbox-lb")?.aliases).toContain("L1");
+    expect(index("xbox").get("xbox-lt")?.aliases).toContain("L2");
+  });
+
+  it("resolves an Input by its label or any alias", () => {
+    const ps = catalogNameIndex(getCatalog("playstation")!);
+    expect(ps.get("R1")).toBe("ps-r1");
+    expect(ps.get("RB")).toBe("ps-r1");
+    expect(ps.get("Right Bumper")).toBe("ps-r1");
+    expect(ps.get("nope")).toBeUndefined();
+  });
+
+  it("never lets an alias shadow another Input's real label", () => {
+    // A label is the Input's identity; an alias is a convenience. If the two
+    // ever collide the label has to win, or a name silently changes meaning.
+    for (const catalog of DEVICE_CATALOGS) {
+      const names = catalogNameIndex(catalog);
+      for (const input of catalog.inputs)
+        expect(names.get(input.label), input.label).toBe(input.id);
+    }
+  });
+});
+
 describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", () => {
   function backgroundOf(catalogId: string, inputId: string) {
     return catalogIndex(getCatalog(catalogId)!).get(inputId)?.defaultStyle
       ?.background?.backgroundId;
   }
 
-  it("defaults both Xbox bumpers to the shared bumper tile", () => {
-    expect(backgroundOf("xbox", "xbox-lb")).toBe("xbox-bumper");
-    expect(backgroundOf("xbox", "xbox-rb")).toBe("xbox-bumper");
+  it("defaults both Xbox bumpers to the bumper tile", () => {
+    expect(backgroundOf("xbox", "xbox-lb")).toBe("bumper");
+    expect(backgroundOf("xbox", "xbox-rb")).toBe("bumper");
   });
 
-  it("defaults both Xbox triggers to the shared trigger tile", () => {
-    expect(backgroundOf("xbox", "xbox-lt")).toBe("xbox-trigger");
-    expect(backgroundOf("xbox", "xbox-rt")).toBe("xbox-trigger");
+  it("defaults both Xbox triggers to the trigger tile", () => {
+    expect(backgroundOf("xbox", "xbox-lt")).toBe("trigger");
+    expect(backgroundOf("xbox", "xbox-rt")).toBe("trigger");
+  });
+
+  it("names the same tiles on PlayStation, resolving to its own shapes", () => {
+    expect(backgroundOf("playstation", "ps-l1")).toBe("bumper");
+    expect(backgroundOf("playstation", "ps-r1")).toBe("bumper");
+    expect(backgroundOf("playstation", "ps-l2")).toBe("trigger");
+    expect(backgroundOf("playstation", "ps-r2")).toBe("trigger");
+    // A PlayStation L1 is not an Xbox bumper, so the shared id must not mean
+    // shared art. Assert both are drawn before comparing, or "missing" passes.
+    for (const id of ["bumper", "trigger"]) {
+      const ps = getSymbolSvg(id, "playstation");
+      const xbox = getSymbolSvg(id, "xbox");
+      expect(ps, `${id} must be drawn for PlayStation`).toBeDefined();
+      expect(xbox, `${id} must be drawn for Xbox`).toBeDefined();
+      expect(ps, id).not.toBe(xbox);
+    }
   });
 
   it("mirrors the left-side bumper/trigger so it faces opposite the right-side one", () => {
-    function flipOf(inputId: string) {
-      return catalogIndex(getCatalog("xbox")!).get(inputId)?.defaultStyle
+    function flipOf(catalogId: string, inputId: string) {
+      return catalogIndex(getCatalog(catalogId)!).get(inputId)?.defaultStyle
         ?.background?.flipX;
     }
     // Both sides share one right-facing tile; only the left ones are flipped.
-    expect(flipOf("xbox-lb")).toBe(true);
-    expect(flipOf("xbox-lt")).toBe(true);
-    expect(flipOf("xbox-rb")).toBeUndefined();
-    expect(flipOf("xbox-rt")).toBeUndefined();
+    expect(flipOf("xbox", "xbox-lb")).toBe(true);
+    expect(flipOf("xbox", "xbox-lt")).toBe(true);
+    expect(flipOf("xbox", "xbox-rb")).toBeUndefined();
+    expect(flipOf("xbox", "xbox-rt")).toBeUndefined();
+    // The PlayStation tiles are authored right-facing too.
+    expect(flipOf("playstation", "ps-l1")).toBe(true);
+    expect(flipOf("playstation", "ps-l2")).toBe(true);
+    expect(flipOf("playstation", "ps-r1")).toBeUndefined();
+    expect(flipOf("playstation", "ps-r2")).toBeUndefined();
   });
 
-  it("leaves face buttons and PlayStation bumpers/triggers Background-less", () => {
+  it("leaves face buttons Background-less", () => {
     expect(backgroundOf("xbox", "xbox-a")).toBeUndefined();
-    // PlayStation shapes aren't authored yet, so they stay label tiles.
-    expect(backgroundOf("playstation", "ps-l1")).toBeUndefined();
-    expect(backgroundOf("playstation", "ps-r2")).toBeUndefined();
+    expect(backgroundOf("playstation", "ps-cross")).toBeUndefined();
   });
 
   it("only references Authored Background ids the manifest actually ships", () => {

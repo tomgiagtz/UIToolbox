@@ -92,9 +92,9 @@ describe("GlyphStylePanel", () => {
   it("writes an explicit null when the source is set back to the plain shape", () => {
     // A Glyph that inherits a tile from the Catalog per-Input tier, the way an
     // Xbox bumper does — the case where omitting the field would be a no-op.
-    const { dispatch } = renderPanel({ backgroundId: "xbox-bumper" });
+    const { dispatch } = renderPanel({ backgroundId: "bumper" });
     const select = screen.getByLabelText("Background source");
-    expect((select as HTMLSelectElement).value).toBe("xbox-bumper");
+    expect((select as HTMLSelectElement).value).toBe("bumper");
     fireEvent.change(select, { target: { value: "" } });
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
@@ -107,7 +107,7 @@ describe("GlyphStylePanel", () => {
     const { withTile } = renderPanel();
     expect(screen.getByText("Background shape")).toBeInTheDocument();
 
-    withTile("xbox-bumper");
+    withTile("bumper");
     // The tile carries its own shape and corners, so those controls go away —
     // but fill and border stay, since they tint the tile's paint roles.
     expect(screen.queryByText("Background shape")).not.toBeInTheDocument();

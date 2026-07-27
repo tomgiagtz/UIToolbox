@@ -24,6 +24,13 @@ export interface CatalogInput {
   /** Default Symbol id, once Symbols are authored (skeleton: unset for now). */
   symbolId?: string;
   /**
+   * Other names this Input answers to — the other pad's word for the same
+   * physical control ("RB" for a PlayStation R1) and spelled-out forms. Lookup
+   * only: an alias never replaces {@link label}, which stays the Input's
+   * identity and the source of its Sprite Name.
+   */
+  aliases?: string[];
+  /**
    * Catalog per-Input style default — the third cascade tier. Lets a bumper keep
    * its authored Background even under a device-wide override (ADR-0006).
    * Skeleton: unset until authored Backgrounds land.
@@ -142,72 +149,104 @@ const KEYBOARD_PRESET: string[] = [
 // The pads enable their whole Catalog by default, so each entry list doubles as
 // the Preset. Order matches the labels the tool generated pre-Catalog.
 
+/** The optional half of a pad Catalog entry (see {@link pad}). */
+interface PadEntry {
+  /** Default Symbol as Render Source (issue #17). */
+  symbolId?: string;
+  /** Default Authored Background tile, via the per-Input style tier (issue #18). */
+  backgroundId?: string;
+  /**
+   * Mirror that tile horizontally, so a left-side bumper/trigger faces opposite
+   * the right-side one it shares right-facing art with.
+   */
+  flipX?: boolean;
+  /** Other names this Input answers to (see {@link CatalogInput.aliases}). */
+  aliases?: string[];
+}
+
 /**
- * Build a pad Catalog. Each entry is `[slug, label, symbolId?, backgroundId?,
- * flipX?]`; a `symbolId` makes that Input default to its shipped Symbol as Render
- * Source (issue #17), and a `backgroundId` defaults it to a shipped Authored
- * Background tile via the Catalog per-Input style tier (issue #18) — that's how
- * bumper/trigger tiles keep their shape. `flipX` mirrors that tile horizontally, so
- * the left-side bumper/trigger face the opposite way from the right-side ones that
- * share the same right-facing art. Face buttons the shipped atlases don't yet author
- * (the PlayStation shapes) simply stay label-rendered.
+ * Build a pad Catalog. Each entry is `[slug, label, PadEntry?]`, where the third
+ * element carries whatever defaults that Input has. Face buttons the shipped
+ * atlases don't yet author simply stay label-rendered.
  */
 function pad(
   prefix: string,
-  entries: [string, string, string?, string?, boolean?][],
+  entries: [string, string, PadEntry?][],
 ): CatalogInput[] {
-  return entries.map(([slug, label, symbolId, backgroundId, flipX]) => ({
-    id: `${prefix}-${slug}`,
-    label,
-    ...(symbolId ? { symbolId } : {}),
-    ...(backgroundId
-      ? {
-          defaultStyle: {
-            background: { backgroundId, ...(flipX ? { flipX: true } : {}) },
-          },
-        }
-      : {}),
-  }));
+  return entries.map(
+    ([slug, label, { symbolId, backgroundId, flipX, aliases } = {}]) => ({
+      id: `${prefix}-${slug}`,
+      label,
+      ...(symbolId ? { symbolId } : {}),
+      ...(aliases ? { aliases } : {}),
+      ...(backgroundId
+        ? {
+            defaultStyle: {
+              background: { backgroundId, ...(flipX ? { flipX: true } : {}) },
+            },
+          }
+        : {}),
+    }),
+  );
 }
 
+/**
+ * A shoulder Input: the four controls the two pads name differently (Xbox
+ * LB/RB/LT/RT vs PlayStation L1/R1/L2/R2). `tile` is its Authored Background;
+ * left-side ones mirror the shared right-facing art. `aliases` carries the other
+ * pad's name plus a spelled-out one, so a control can be found by whichever
+ * vocabulary the user knows.
+ */
+function shoulder(
+  tile: "bumper" | "trigger",
+  side: "left" | "right",
+  ...aliases: string[]
+): PadEntry {
+  return {
+    backgroundId: tile,
+    ...(side === "left" ? { flipX: true } : {}),
+    aliases,
+  };
+}
+
+// Asset ids are bare: the Device supplies the scope at resolve time, so both pads
+// name the same `bumper` / `dpad-up` and each gets its own drawing.
 const XBOX_INPUTS = pad("xbox", [
-  ["a", "A", "xbox-a"],
-  ["b", "B", "xbox-b"],
-  ["x", "X", "xbox-x"],
-  ["y", "Y", "xbox-y"],
-  // Both bumpers share one right-facing tile; the left one is mirrored. Same for
-  // the triggers.
-  ["lb", "LB", undefined, "xbox-bumper", true],
-  ["rb", "RB", undefined, "xbox-bumper"],
-  ["lt", "LT", undefined, "xbox-trigger", true],
-  ["rt", "RT", undefined, "xbox-trigger"],
-  ["view", "View", "xbox-view"],
-  ["menu", "Menu", "xbox-menu"],
-  ["left-stick", "Left Stick", "stick"],
-  ["right-stick", "Right Stick", "stick"],
-  ["dpad-up", "D-Pad Up", "dpad-up"],
-  ["dpad-down", "D-Pad Down", "dpad-down"],
-  ["dpad-left", "D-Pad Left", "dpad-left"],
-  ["dpad-right", "D-Pad Right", "dpad-right"],
+  ["a", "A", { symbolId: "a" }],
+  ["b", "B", { symbolId: "b" }],
+  ["x", "X", { symbolId: "x" }],
+  ["y", "Y", { symbolId: "y" }],
+  ["lb", "LB", shoulder("bumper", "left", "L1", "Left Bumper")],
+  ["rb", "RB", shoulder("bumper", "right", "R1", "Right Bumper")],
+  ["lt", "LT", shoulder("trigger", "left", "L2", "Left Trigger")],
+  ["rt", "RT", shoulder("trigger", "right", "R2", "Right Trigger")],
+  ["view", "View", { symbolId: "view" }],
+  ["menu", "Menu", { symbolId: "menu" }],
+  ["left-stick", "Left Stick", { symbolId: "stick" }],
+  ["right-stick", "Right Stick", { symbolId: "stick" }],
+  ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
+  ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
+  ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
+  ["dpad-right", "D-Pad Right", { symbolId: "dpad-right" }],
 ]);
 
 const PLAYSTATION_INPUTS = pad("ps", [
-  ["cross", "Cross"],
-  ["circle", "Circle"],
-  ["square", "Square"],
-  ["triangle", "Triangle"],
-  ["l1", "L1"],
-  ["r1", "R1"],
-  ["l2", "L2"],
-  ["r2", "R2"],
-  ["share", "Share"],
-  ["options", "Options"],
-  ["left-stick", "Left Stick", "stick"],
-  ["right-stick", "Right Stick", "stick"],
-  ["dpad-up", "D-Pad Up", "dpad-up"],
-  ["dpad-down", "D-Pad Down", "dpad-down"],
-  ["dpad-left", "D-Pad Left", "dpad-left"],
-  ["dpad-right", "D-Pad Right", "dpad-right"],
+  ["cross", "Cross", { symbolId: "cross" }],
+  ["circle", "Circle", { symbolId: "circle" }],
+  ["square", "Square", { symbolId: "square" }],
+  ["triangle", "Triangle", { symbolId: "triangle" }],
+  ["l1", "L1", shoulder("bumper", "left", "LB", "Left Bumper")],
+  ["r1", "R1", shoulder("bumper", "right", "RB", "Right Bumper")],
+  ["l2", "L2", shoulder("trigger", "left", "LT", "Left Trigger")],
+  ["r2", "R2", shoulder("trigger", "right", "RT", "Right Trigger")],
+  ["share", "Share", { symbolId: "share" }],
+  ["options", "Options", { symbolId: "options" }],
+  ["left-stick", "Left Stick", { symbolId: "stick" }],
+  ["right-stick", "Right Stick", { symbolId: "stick" }],
+  ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
+  ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
+  ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
+  ["dpad-right", "D-Pad Right", { symbolId: "dpad-right" }],
 ]);
 
 /** The Catalogs the tool ships, in picker order. */
@@ -247,6 +286,20 @@ export function catalogIndex(
   catalog: DeviceCatalog,
 ): Map<string, CatalogInput> {
   return new Map(catalog.inputs.map((i) => [i.id, i]));
+}
+
+/**
+ * Index a Catalog by every name its Inputs answer to — each `label` plus any
+ * `aliases` — mapping name to Input id. Labels are written last so a label always
+ * wins a collision with some other Input's alias: an alias is a convenience, and
+ * must never quietly redirect a name that is already an Input's identity.
+ */
+export function catalogNameIndex(catalog: DeviceCatalog): Map<string, string> {
+  const byName = new Map<string, string>();
+  for (const input of catalog.inputs)
+    for (const alias of input.aliases ?? []) byName.set(alias, input.id);
+  for (const input of catalog.inputs) byName.set(input.label, input.id);
+  return byName;
 }
 
 /** The labels a Catalog's Preset resolves to, in generation order. */
