@@ -12,11 +12,15 @@ describe("GlyphCreator editor shell", () => {
     localStorage.clear();
   });
 
-  it("shows the four editor sections", () => {
+  it("shows the three editor sections", () => {
     render(<GlyphCreator />);
-    for (const title of ["Devices", "Inputs", "Style", "Naming"]) {
+    for (const title of ["Devices", "Inputs", "Style"]) {
       expect(screen.getByRole("button", { name: title })).toBeInTheDocument();
     }
+    // Naming moved into the Export modal, where the names are actually used.
+    expect(
+      screen.queryByRole("button", { name: "Naming" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the font upload reachable under the Style section", () => {

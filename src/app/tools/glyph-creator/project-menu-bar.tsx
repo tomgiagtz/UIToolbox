@@ -12,32 +12,31 @@ interface ProjectMenuBarProps {
    * bundled default (Inter) is always available on load, so it is never bundled.
    */
   hasUploadedFont: boolean;
-  canGenerate: boolean;
-  generating: boolean;
+  canExport: boolean;
   /** Save the current project to a file; `includeFont` picks ZIP vs JSON. */
   onSave: (includeFont: boolean) => void;
   /** A project file the user chose to load. */
   onLoadFile: (file: File) => void;
   /** Reset everything (config + persisted font). Parent confirms first. */
   onDelete: () => void;
-  onGenerate: () => void;
+  /** Open the Export modal; the parent owns it and the download it triggers. */
+  onExport: () => void;
 }
 
 /**
  * The always-visible bottom toolbar: Save / Load / Delete a project, plus the
- * primary Generate action. Sticks to the bottom of the viewport so the developer
+ * primary Export action. Sticks to the bottom of the viewport so the developer
  * can act from anywhere in the (long) editor.
  */
 export function ProjectMenuBar({
   name,
   onNameChange,
   hasUploadedFont,
-  canGenerate,
-  generating,
+  canExport,
   onSave,
   onLoadFile,
   onDelete,
-  onGenerate,
+  onExport,
 }: ProjectMenuBarProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
@@ -92,8 +91,8 @@ export function ProjectMenuBar({
         />
 
         <div className="ml-auto">
-          <Button type="button" onClick={onGenerate} disabled={!canGenerate}>
-            {generating ? "Generating…" : "Generate"}
+          <Button type="button" onClick={onExport} disabled={!canExport}>
+            Export…
           </Button>
         </div>
       </div>
