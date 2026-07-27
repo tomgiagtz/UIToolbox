@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, test, type Download } from "@playwright/test";
+import { expect, test, type Download, type Page } from "@playwright/test";
+import { unzipSync } from "fflate";
 import { expectNoA11yViolations } from "./axe";
 
 const FONT_PATH = path.join(__dirname, "fixtures", "test-font.ttf");
@@ -23,33 +24,60 @@ async function readDownload(download: Download): Promise<Buffer> {
   return readFile(path);
 }
 
+/** The files inside a downloaded export bundle, keyed by entry name. */
+async function bundleEntries(
+  download: Download,
+): Promise<Record<string, Buffer>> {
+  const unzipped = unzipSync(await readDownload(download));
+  return Object.fromEntries(
+    Object.entries(unzipped).map(([name, bytes]) => [name, Buffer.from(bytes)]),
+  );
+}
+
+/**
+ * Drive the Export modal (#21): open it, let the caller adjust the selection,
+ * then confirm and hand back the one download it triggers.
+ */
+async function exportFrom(
+  page: Page,
+  configure?: (dialog: ReturnType<Page["getByRole"]>) => Promise<void>,
+): Promise<Download> {
+  await page.getByRole("button", { name: "Export…" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await configure?.(dialog);
+
+  const downloadPromise = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Export", exact: true }).click();
+  return downloadPromise;
+}
+
 test.describe("Input Glyph Creator", () => {
-  test("previews and generates with the bundled default font — no upload", async ({
+  test("previews and exports with the bundled default font — no upload", async ({
     page,
   }) => {
     await page.goto("/tools/glyph-creator");
 
-    // With Inter bundled (#13), the preview renders and Generate is available
+    // With Inter bundled (#13), the preview renders and Export is available
     // immediately — no font upload required.
-    const generate = page.getByRole("button", { name: /generate/i });
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
-    await expect(generate).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Export…" })).toBeEnabled();
 
-    // Generate emits the PNG + JSON downloads using only the default font.
-    const defaultDownloads: Download[] = [];
-    page.on("download", (d) => defaultDownloads.push(d));
-    await generate.click();
-    await expect.poll(() => defaultDownloads.length).toBe(2);
+    // Export bundles the PNG + JSON using only the default font.
+    const download = await exportFrom(page);
+    expect(Object.keys(await bundleEntries(download)).sort()).toEqual([
+      "keyboard_atlas.json",
+      "keyboard_atlas.png",
+    ]);
   });
 
-  test("an uploaded font overrides the default for preview + generation", async ({
+  test("an uploaded font overrides the default for preview + export", async ({
     page,
   }) => {
     await page.goto("/tools/glyph-creator");
 
-    const generate = page.getByRole("button", { name: /generate/i });
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
 
     // Live packed-atlas preview reflects the uploaded font.
@@ -57,29 +85,20 @@ test.describe("Input Glyph Creator", () => {
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
 
-    await expect(generate).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Export…" })).toBeEnabled();
 
-    // Generate emits two downloads: the PNG atlas and the JSON sidecar.
-    // Collect via page.on so both distinct events are captured (two
-    // concurrent waitForEvent listeners can both latch onto the first event).
-    const downloads: Download[] = [];
-    page.on("download", (d) => downloads.push(d));
-
-    await generate.click();
-    await expect.poll(() => downloads.length).toBe(2);
-
-    const png = downloads.find((d) => d.suggestedFilename().endsWith(".png"));
-    const json = downloads.find((d) => d.suggestedFilename().endsWith(".json"));
-    expect(png, "expected a .png download").toBeTruthy();
-    expect(json, "expected a .json download").toBeTruthy();
+    // One download, holding the PNG atlas and its JSON sidecar.
+    const download = await exportFrom(page);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    const entries = await bundleEntries(download);
 
     // The atlas PNG has power-of-two dimensions.
-    const { width, height } = pngDimensions(await readDownload(png!));
+    const { width, height } = pngDimensions(entries["keyboard_atlas.png"]);
     expect(isPowerOfTwo(width), `width ${width} should be pow2`).toBe(true);
     expect(isPowerOfTwo(height), `height ${height} should be pow2`).toBe(true);
 
     // The JSON is a TexturePacker doc whose meta.size matches the PNG.
-    const doc = JSON.parse((await readDownload(json!)).toString("utf8"));
+    const doc = JSON.parse(entries["keyboard_atlas.json"].toString("utf8"));
     expect(doc.meta.size).toEqual({ w: width, h: height });
     expect(Object.keys(doc.frames).length).toBeGreaterThan(0);
     // Sprite Names are slug-normalized (lowercase, no spaces).
@@ -88,29 +107,48 @@ test.describe("Input Glyph Creator", () => {
     }
   });
 
-  test("generates one atlas + JSON per selected Device", async ({ page }) => {
+  test("bundles one atlas + JSON per Device picked in the Export modal", async ({
+    page,
+  }) => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
 
-    // Add a second Device; each selected Device yields its own atlas + JSON.
+    // Add a second Device; each Device picked in the modal yields its own
+    // atlas + JSON, and the four files arrive as one .zip.
     await page.getByRole("checkbox", { name: "Xbox" }).check();
 
-    const downloads: Download[] = [];
-    page.on("download", (d) => downloads.push(d));
-
-    await page.getByRole("button", { name: /generate/i }).click();
-    await expect.poll(() => downloads.length).toBe(4);
-
-    const names = downloads.map((d) => d.suggestedFilename()).sort();
-    expect(names).toEqual([
+    const download = await exportFrom(page);
+    expect(download.suggestedFilename()).toBe("my-glyphs.zip");
+    expect(Object.keys(await bundleEntries(download)).sort()).toEqual([
       "keyboard_atlas.json",
       "keyboard_atlas.png",
       "xbox_atlas.json",
       "xbox_atlas.png",
     ]);
+  });
+
+  test("exports only the Devices and file types left checked", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    await expect(
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
+    ).toBeVisible();
+    await page.getByRole("checkbox", { name: "Xbox" }).check();
+
+    // Drop the Keyboard and the metadata: one file left, so it downloads bare
+    // rather than as a single-entry .zip.
+    const download = await exportFrom(page, async (dialog) => {
+      await dialog.getByRole("checkbox", { name: "Keyboard" }).uncheck();
+      await dialog.getByRole("checkbox", { name: /Metadata/ }).uncheck();
+    });
+
+    expect(download.suggestedFilename()).toBe("xbox_atlas.png");
+    const { width } = pngDimensions(await readDownload(download));
+    expect(isPowerOfTwo(width), `width ${width} should be pow2`).toBe(true);
   });
 
   test("restores config + font after a reload without re-uploading", async ({
@@ -193,13 +231,11 @@ test.describe("Input Glyph Creator", () => {
     await expect(preview).toBeVisible();
 
     // Baseline export, before any image exists, to compare the atlas against.
-    const downloads: Download[] = [];
-    page.on("download", (d) => downloads.push(d));
-    await page.getByRole("button", { name: /generate/i }).click();
-    await expect.poll(() => downloads.length).toBe(2);
-    const before = await readDownload(
-      downloads.find((d) => d.suggestedFilename().endsWith(".png"))!,
-    );
+    // Only the PNG is needed, so it downloads bare.
+    const pngOnly = async (dialog: ReturnType<Page["getByRole"]>) => {
+      await dialog.getByRole("checkbox", { name: /Metadata/ }).uncheck();
+    };
+    const before = await readDownload(await exportFrom(page, pngOnly));
 
     // Pick a Glyph by clicking its cell, then give it a custom image. The
     // canvas centre lands inside a cell — the gutters are 2px.
@@ -236,12 +272,7 @@ test.describe("Input Glyph Creator", () => {
       .not.toBe(withImage);
 
     // The exported atlas differs from the baseline: the compositor drew it too.
-    downloads.length = 0;
-    await page.getByRole("button", { name: /generate/i }).click();
-    await expect.poll(() => downloads.length).toBe(2);
-    const after = await readDownload(
-      downloads.find((d) => d.suggestedFilename().endsWith(".png"))!,
-    );
+    const after = await readDownload(await exportFrom(page, pngOnly));
     expect(after.equals(before)).toBe(false);
   });
 

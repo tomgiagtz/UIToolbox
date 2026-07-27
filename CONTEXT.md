@@ -208,6 +208,14 @@ metadata file (see ADR-0003).
 
 _Avoid:_ "sprite sheet", "tileset" — use Sprite Atlas for the generated output.
 
+### Export Bundle
+
+What one Export produces. The user picks which **Devices** and which file types
+(**Sprite Atlas** PNG, TexturePacker metadata JSON) they want; everything picked
+arrives as a single download — the bare file when it's the only one, otherwise a
+flat `{project-name}.zip` of the lot. Distinct from the **project save file**,
+which is the editable config plus its assets rather than engine-ready output.
+
 ### Sprite Name
 
 The identifier the game engine uses to look up a Glyph inside a Sprite Atlas.

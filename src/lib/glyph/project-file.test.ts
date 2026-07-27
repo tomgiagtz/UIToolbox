@@ -4,11 +4,7 @@
 // arrayBuffer(); Node's (like every real browser) implements it, so we exercise
 // the round-trip under the Node environment.
 import { describe, expect, it } from "vitest";
-import {
-  exportProjectFile,
-  importProjectFile,
-  safeBaseName,
-} from "@/lib/glyph/project-file";
+import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import { createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import type { PersistedFont, PersistedImage } from "@/lib/glyph/project-store";
@@ -150,17 +146,5 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     const imported = await importProjectFile(asFile(artifact.blob, "old.zip"));
     expect(imported!.font?.fileName).toBe("Heros.ttf");
     expect(imported!.images).toEqual([]);
-  });
-});
-
-describe("safeBaseName", () => {
-  it("keeps safe names and slugs unsafe characters", () => {
-    expect(safeBaseName("my-glyphs")).toBe("my-glyphs");
-    expect(safeBaseName("  Xbox / PS5 pack!  ")).toBe("Xbox-PS5-pack");
-  });
-
-  it("falls back to the default when nothing usable remains", () => {
-    expect(safeBaseName("   ")).toBe("my-glyphs");
-    expect(safeBaseName("///")).toBe("my-glyphs");
   });
 });

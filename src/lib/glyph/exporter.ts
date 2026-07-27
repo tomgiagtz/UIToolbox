@@ -1,7 +1,9 @@
+import { zipSync } from "fflate";
 import {
   renderAtlasBlob,
   type AtlasRenderInputs,
 } from "@/lib/glyph/compositor";
+import { safeBaseName } from "@/lib/glyph/naming";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
 export interface ExportArtifact {
@@ -35,23 +37,50 @@ export async function exportDevice(
 }
 
 /**
- * Trigger downloads of several artifacts, spaced slightly apart.
+ * Reduce an export selection to the single file the browser should download.
  *
- * Chromium drops rapid back-to-back programmatic downloads triggered from a
- * single click, so a small gap between each keeps every file (e.g. the PNG +
- * its JSON sidecar) from being coalesced away.
+ * One artifact downloads as itself; several are bundled flat into one
+ * `{project-name}.zip`. Beyond being tidier than a folder of loose files, the
+ * bundle sidesteps Chromium coalescing rapid back-to-back programmatic
+ * downloads triggered from a single click (issue #21).
  */
-export async function downloadArtifacts(
+export async function bundleArtifacts(
   artifacts: ExportArtifact[],
-): Promise<void> {
-  for (let i = 0; i < artifacts.length; i++) {
-    if (i > 0) await delay(150);
-    downloadArtifact(artifacts[i]);
+  projectName: string,
+): Promise<ExportArtifact> {
+  if (artifacts.length === 0) {
+    throw new Error("bundleArtifacts: nothing selected to export");
   }
+  if (artifacts.length === 1) return artifacts[0];
+
+  const entries: Record<string, Uint8Array> = {};
+  for (const { filename, blob } of artifacts) {
+    entries[uniqueEntry(filename, entries)] = new Uint8Array(
+      await blob.arrayBuffer(),
+    );
+  }
+  const zip = zipSync(entries);
+  return {
+    filename: `${safeBaseName(projectName)}.zip`,
+    blob: new Blob([zip.slice()], { type: "application/zip" }),
+  };
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * A ZIP entry name that isn't taken yet, suffixing `-2`, `-3`, … before the
+ * extension. Two Devices can produce one filename — the output-filename template
+ * is the user's to edit, and dropping `{device}` from it names them all alike —
+ * and a plain record would keep only the last, silently exporting fewer files
+ * than the user asked for.
+ */
+function uniqueEntry(filename: string, taken: Record<string, unknown>): string {
+  if (!(filename in taken)) return filename;
+  const dot = filename.lastIndexOf(".");
+  const [base, ext] =
+    dot > 0 ? [filename.slice(0, dot), filename.slice(dot)] : [filename, ""];
+  let n = 2;
+  while (`${base}-${n}${ext}` in taken) n++;
+  return `${base}-${n}${ext}`;
 }
 
 /** Trigger a browser download of a single artifact via a temporary anchor. */

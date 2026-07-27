@@ -15,7 +15,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { ExportArtifact } from "@/lib/glyph/exporter";
-import { DEFAULT_PROJECT_NAME } from "@/lib/glyph/presets";
+import { safeBaseName } from "@/lib/glyph/naming";
 import {
   parseConfig,
   serializeConfig,
@@ -145,13 +145,4 @@ function importZip(bytes: Uint8Array): ImportedProject | null {
 /** ZIP local-file-header magic: the ASCII bytes "PK". */
 function isZip(bytes: Uint8Array): boolean {
   return bytes[0] === 0x50 && bytes[1] === 0x4b;
-}
-
-/** Reduce a config name to a filesystem-safe base filename (no extension). */
-export function safeBaseName(name: string): string {
-  const safe = name
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^[-.]+|[-.]+$/g, "");
-  return safe || DEFAULT_PROJECT_NAME;
 }

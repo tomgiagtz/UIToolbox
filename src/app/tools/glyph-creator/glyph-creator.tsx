@@ -4,9 +4,10 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { DisclosureGroup } from "react-aria-components";
 import { AtlasPreview } from "@/components/glyph/atlas-preview";
 import {
+  bundleArtifacts,
   downloadArtifact,
-  downloadArtifacts,
   exportDevice,
+  type ExportArtifact,
 } from "@/lib/glyph/exporter";
 import {
   loadDefaultFont,
@@ -41,7 +42,7 @@ import {
   type SelectedGlyph,
 } from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
-import { NamingControls } from "./naming-controls";
+import { ExportDialog, type ExportSelection } from "./export-dialog";
 import { ProjectMenuBar } from "./project-menu-bar";
 import { PanelSection } from "./panel-section";
 import { FontUpload } from "./font-upload";
@@ -50,7 +51,7 @@ type Status =
   | { kind: "idle" }
   | { kind: "loading-font" }
   | { kind: "ready"; fontName: string }
-  | { kind: "generating"; fontName: string }
+  | { kind: "exporting"; fontName: string }
   | { kind: "done"; fontName: string; files: string[] }
   | { kind: "error"; message: string };
 
@@ -127,6 +128,9 @@ export function GlyphCreator() {
     null,
   );
   const preview = useSquareSize();
+  // The Export modal is opened from the menu bar but owned here, since it edits
+  // the project's naming alongside the selection.
+  const exportDialogRef = useRef<HTMLDialogElement>(null);
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
   // before the load below runs.
@@ -329,28 +333,34 @@ export function GlyphCreator() {
       .filter((image): image is PersistedImage => image !== undefined);
   }
 
-  async function onGenerate() {
-    if (!canGenerate) return;
+  /**
+   * Export the Devices and file types the user confirmed in the dialog. Whatever
+   * they picked lands as one download: the file itself when that's all they
+   * asked for, otherwise a single .zip of the lot (#21).
+   */
+  async function onExport({ devices, fileTypes }: ExportSelection) {
+    if (!canExport) return;
     const fontName =
       status.kind === "ready" || status.kind === "done"
         ? status.fontName
         : "font";
-    setStatus({ kind: "generating", fontName });
+    setStatus({ kind: "exporting", fontName });
     try {
       const outputs = generateTilesets(project);
-      const files: string[] = [];
-      for (const output of outputs) {
-        const { png, json } = await exportDevice(output, {
+      const artifacts: ExportArtifact[] = [];
+      for (const index of devices) {
+        const rendered = await exportDevice(outputs[index], {
           fontFamily: project.font.family,
         });
-        await downloadArtifacts([png, json]);
-        files.push(png.filename, json.filename);
+        artifacts.push(...fileTypes.map((type) => rendered[type]));
       }
-      setStatus({ kind: "done", fontName, files });
+      const bundle = await bundleArtifacts(artifacts, project.name);
+      downloadArtifact(bundle);
+      setStatus({ kind: "done", fontName, files: [bundle.filename] });
     } catch {
       setStatus({
         kind: "error",
-        message: "Generation failed. Please try again.",
+        message: "Export failed. Please try again.",
       });
     }
   }
@@ -433,11 +443,11 @@ export function GlyphCreator() {
     setSelectedGlyph(null);
   }
 
-  const isBusy = status.kind === "loading-font" || status.kind === "generating";
-  const canGenerate = fontLoaded && project.devices.length > 0 && !isBusy;
+  const isBusy = status.kind === "loading-font" || status.kind === "exporting";
+  const canExport = fontLoaded && project.devices.length > 0 && !isBusy;
   const fontName =
     status.kind === "ready" ||
-    status.kind === "generating" ||
+    status.kind === "exporting" ||
     status.kind === "done"
       ? status.fontName
       : null;
@@ -515,18 +525,6 @@ export function GlyphCreator() {
                     />
                   </div>
                 </PanelSection>
-
-                <PanelSection
-                  id="naming"
-                  title="Naming"
-                  help="Control Sprite Names and the exported file names."
-                >
-                  <NamingControls
-                    project={project}
-                    dispatch={dispatch}
-                    activeIndex={activeIndex}
-                  />
-                </PanelSection>
               </DisclosureGroup>
             </div>
           </aside>
@@ -598,8 +596,8 @@ export function GlyphCreator() {
       <p role="status" aria-live="polite" className="text-sm">
         {status.kind === "loading-font" && "Loading font…"}
         {status.kind === "ready" &&
-          `Loaded "${status.fontName}". Ready to generate.`}
-        {status.kind === "generating" && "Generating atlas…"}
+          `Loaded "${status.fontName}". Ready to export.`}
+        {status.kind === "exporting" && "Generating atlas…"}
         {status.kind === "done" && (
           <span className="text-foreground">
             Done — downloaded {status.files.join(" and ")}.
@@ -614,12 +612,18 @@ export function GlyphCreator() {
         name={project.name}
         onNameChange={(name) => dispatch({ type: "set-name", name })}
         hasUploadedFont={hasUploadedFont}
-        canGenerate={canGenerate}
-        generating={status.kind === "generating"}
+        canExport={canExport}
         onSave={onSave}
         onLoadFile={onLoadFile}
         onDelete={onDelete}
-        onGenerate={onGenerate}
+        onExport={() => exportDialogRef.current?.showModal()}
+      />
+
+      <ExportDialog
+        ref={exportDialogRef}
+        project={project}
+        dispatch={dispatch}
+        onExport={onExport}
       />
     </div>
   );
