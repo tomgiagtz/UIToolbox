@@ -3,9 +3,7 @@ import {
   renderAtlasBlob,
   type AtlasRenderInputs,
 } from "@/lib/glyph/compositor";
-// project-file only imports this module's types, so this stays a one-way
-// runtime dependency.
-import { safeBaseName } from "@/lib/glyph/project-file";
+import { safeBaseName } from "@/lib/glyph/naming";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
 export interface ExportArtifact {
@@ -57,13 +55,32 @@ export async function bundleArtifacts(
 
   const entries: Record<string, Uint8Array> = {};
   for (const { filename, blob } of artifacts) {
-    entries[filename] = new Uint8Array(await blob.arrayBuffer());
+    entries[uniqueEntry(filename, entries)] = new Uint8Array(
+      await blob.arrayBuffer(),
+    );
   }
   const zip = zipSync(entries);
   return {
     filename: `${safeBaseName(projectName)}.zip`,
     blob: new Blob([zip.slice()], { type: "application/zip" }),
   };
+}
+
+/**
+ * A ZIP entry name that isn't taken yet, suffixing `-2`, `-3`, … before the
+ * extension. Two Devices can produce one filename — the output-filename template
+ * is the user's to edit, and dropping `{device}` from it names them all alike —
+ * and a plain record would keep only the last, silently exporting fewer files
+ * than the user asked for.
+ */
+function uniqueEntry(filename: string, taken: Record<string, unknown>): string {
+  if (!(filename in taken)) return filename;
+  const dot = filename.lastIndexOf(".");
+  const [base, ext] =
+    dot > 0 ? [filename.slice(0, dot), filename.slice(dot)] : [filename, ""];
+  let n = 2;
+  while (`${base}-${n}${ext}` in taken) n++;
+  return `${base}-${n}${ext}`;
 }
 
 /** Trigger a browser download of a single artifact via a temporary anchor. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTemplate } from "@/lib/glyph/naming";
+import { applyTemplate, safeBaseName } from "@/lib/glyph/naming";
 import { slugify } from "@/lib/glyph/slugify";
 
 describe("applyTemplate", () => {
@@ -86,5 +86,17 @@ describe("template + case over slugged labels (#6)", () => {
     expect(named("PlayStation", "D-Pad Up", "{device}_{input}", "camel")).toBe(
       "playstationDMinusPadUp",
     );
+  });
+});
+
+describe("safeBaseName", () => {
+  it("keeps safe names and slugs unsafe characters", () => {
+    expect(safeBaseName("my-glyphs")).toBe("my-glyphs");
+    expect(safeBaseName("  Xbox / PS5 pack!  ")).toBe("Xbox-PS5-pack");
+  });
+
+  it("falls back to the default when nothing usable remains", () => {
+    expect(safeBaseName("   ")).toBe("my-glyphs");
+    expect(safeBaseName("///")).toBe("my-glyphs");
   });
 });

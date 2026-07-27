@@ -51,6 +51,25 @@ describe("bundleArtifacts", () => {
     expect(bundle.filename).toBe("my-glyphs.zip");
   });
 
+  it("keeps both files when two Devices produce the same filename", async () => {
+    // The output-filename template is the user's to edit; dropping {device}
+    // from it names every Device's atlas alike.
+    const bundle = await bundleArtifacts(
+      [
+        artifact("atlas.png", "keyboard-png"),
+        artifact("atlas.png", "xbox-png"),
+        artifact("atlas.png", "playstation-png"),
+      ],
+      "glyphs",
+    );
+
+    expect(await entries(bundle.blob)).toEqual({
+      "atlas.png": "keyboard-png",
+      "atlas-2.png": "xbox-png",
+      "atlas-3.png": "playstation-png",
+    });
+  });
+
   it("rejects an empty selection rather than downloading an empty zip", async () => {
     await expect(bundleArtifacts([], "My Cool Glyphs")).rejects.toThrow();
   });

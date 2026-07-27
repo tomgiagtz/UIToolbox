@@ -338,7 +338,7 @@ export function GlyphCreator() {
    * they picked lands as one download: the file itself when that's all they
    * asked for, otherwise a single .zip of the lot (#21).
    */
-  async function onExport({ devices, png, json }: ExportSelection) {
+  async function onExport({ devices, fileTypes }: ExportSelection) {
     if (!canExport) return;
     const fontName =
       status.kind === "ready" || status.kind === "done"
@@ -349,13 +349,10 @@ export function GlyphCreator() {
       const outputs = generateTilesets(project);
       const artifacts: ExportArtifact[] = [];
       for (const index of devices) {
-        const output = outputs[index];
-        if (!output) continue;
-        const rendered = await exportDevice(output, {
+        const rendered = await exportDevice(outputs[index], {
           fontFamily: project.font.family,
         });
-        if (png) artifacts.push(rendered.png);
-        if (json) artifacts.push(rendered.json);
+        artifacts.push(...fileTypes.map((type) => rendered[type]));
       }
       const bundle = await bundleArtifacts(artifacts, project.name);
       downloadArtifact(bundle);
@@ -599,7 +596,7 @@ export function GlyphCreator() {
       <p role="status" aria-live="polite" className="text-sm">
         {status.kind === "loading-font" && "Loading font…"}
         {status.kind === "ready" &&
-          `Loaded "${status.fontName}". Ready to generate.`}
+          `Loaded "${status.fontName}". Ready to export.`}
         {status.kind === "exporting" && "Generating atlas…"}
         {status.kind === "done" && (
           <span className="text-foreground">
@@ -626,8 +623,6 @@ export function GlyphCreator() {
         ref={exportDialogRef}
         project={project}
         dispatch={dispatch}
-        activeIndex={activeIndex}
-        exporting={status.kind === "exporting"}
         onExport={onExport}
       />
     </div>

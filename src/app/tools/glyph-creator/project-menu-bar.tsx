@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Modal } from "./modal";
 
 interface ProjectMenuBarProps {
   /** Current config name; the Save dialog edits this. */
@@ -138,70 +139,54 @@ function SaveDialog({
   onIncludeFontChange,
   onSubmit,
 }: SaveDialogProps) {
-  const dialogRef = ref as React.RefObject<HTMLDialogElement | null>;
-
-  // Reflect Esc / backdrop dismissal without leaving stale open state anywhere.
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const onCancel = (e: Event) => e.preventDefault(); // let the form handle close
-    dialog.addEventListener("cancel", onCancel);
-    return () => dialog.removeEventListener("cancel", onCancel);
-  }, [dialogRef]);
-
   return (
-    <dialog
+    <Modal
       ref={ref}
-      aria-labelledby="save-dialog-title"
-      className="fixed inset-0 m-auto h-fit max-h-[90vh] w-fit rounded-lg border bg-background p-0 text-foreground backdrop:bg-black/40"
+      title="Save project"
+      onSubmit={onSubmit}
+      className="w-80 space-y-4"
     >
-      <form onSubmit={onSubmit} method="dialog" className="w-80 space-y-4 p-5">
-        <h2 id="save-dialog-title" className="text-lg font-semibold">
-          Save project
-        </h2>
+      {(close) => (
+        <>
+          <div className="space-y-1.5">
+            <label htmlFor="save-name" className="text-sm font-medium">
+              Config name
+            </label>
+            <input
+              id="save-name"
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              autoFocus
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Used as the download filename.
+            </p>
+          </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="save-name" className="text-sm font-medium">
-            Config name
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={includeFont && hasUploadedFont}
+              disabled={!hasUploadedFont}
+              onChange={(e) => onIncludeFontChange(e.target.checked)}
+            />
+            <span
+              className={hasUploadedFont ? undefined : "text-muted-foreground"}
+            >
+              Include font
+              {hasUploadedFont ? " (saves a .zip)" : " (upload a font first)"}
+            </span>
           </label>
-          <input
-            id="save-name"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            autoFocus
-            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-          />
-          <p className="text-xs text-muted-foreground">
-            Used as the download filename.
-          </p>
-        </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={includeFont && hasUploadedFont}
-            disabled={!hasUploadedFont}
-            onChange={(e) => onIncludeFontChange(e.target.checked)}
-          />
-          <span
-            className={hasUploadedFont ? undefined : "text-muted-foreground"}
-          >
-            Include font
-            {hasUploadedFont ? " (saves a .zip)" : " (upload a font first)"}
-          </span>
-        </label>
-
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => dialogRef.current?.close()}
-          >
-            Cancel
-          </Button>
-          <Button type="submit">Save</Button>
-        </div>
-      </form>
-    </dialog>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={close}>
+              Cancel
+            </Button>
+            <Button type="submit">Save</Button>
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }

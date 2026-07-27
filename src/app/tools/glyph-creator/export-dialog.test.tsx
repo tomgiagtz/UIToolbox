@@ -18,22 +18,13 @@ function renderDialog({
   project = twoDeviceProject(),
   dispatch = vi.fn(),
   onExport = vi.fn(),
-  exporting = false,
 }: {
   project?: Project;
   dispatch?: () => void;
   onExport?: (selection: ExportSelection) => void;
-  exporting?: boolean;
 } = {}) {
   const ref = createRef<HTMLDialogElement>();
-  const props = {
-    ref,
-    project,
-    dispatch,
-    activeIndex: 0,
-    exporting,
-    onExport,
-  };
+  const props = { ref, project, dispatch, onExport };
   const { rerender } = render(<ExportDialog {...props} />);
   // The parent opens it; a closed <dialog> is hidden from the a11y tree.
   ref.current!.showModal();
@@ -72,8 +63,21 @@ describe("ExportDialog — selection", () => {
 
     expect(onExport).toHaveBeenCalledWith({
       devices: [1],
-      png: true,
-      json: false,
+      fileTypes: ["png"],
+    } satisfies ExportSelection);
+  });
+
+  it("reports Devices in project order, not the order they were clicked", () => {
+    const { onExport } = renderDialog();
+
+    const keyboard = screen.getByRole("checkbox", { name: "Keyboard" });
+    fireEvent.click(keyboard); // off…
+    fireEvent.click(keyboard); // …and back on, now last-clicked
+    fireEvent.click(exportButton());
+
+    expect(onExport).toHaveBeenCalledWith({
+      devices: [0, 1],
+      fileTypes: ["png", "json"],
     } satisfies ExportSelection);
   });
 
@@ -109,6 +113,19 @@ describe("ExportDialog — selection", () => {
     withProject(twoDeviceProject());
     expect(screen.getByRole("checkbox", { name: "Keyboard" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
+  });
+
+  it("keeps the picks when a Device is only renamed", () => {
+    const project = twoDeviceProject();
+    const { withProject } = renderDialog({ project });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Xbox" }));
+
+    // A rename leaves every index valid, so there's nothing to re-seed.
+    withProject({
+      ...project,
+      devices: [project.devices[0], { ...project.devices[1], name: "Pad" }],
+    });
+    expect(screen.getByRole("checkbox", { name: "Pad" })).not.toBeChecked();
   });
 });
 
