@@ -1,3 +1,4 @@
+import { ensureImageBitmap } from "@/lib/glyph/images";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import {
   ensureBackgroundBitmap,
@@ -40,6 +41,13 @@ export async function renderAtlasBlob(
           output.catalogId,
         )) ?? undefined)
       : undefined;
+    // A custom image Render Source rasterizes from the runtime registry, which the
+    // editor fills on upload and on restore. An image whose bytes never arrived
+    // resolves to null and the Glyph falls back to its Symbol or label.
+    const image = placement.imageId
+      ? ((await ensureImageBitmap(placement.imageId, output.cellSize)) ??
+        undefined)
+      : undefined;
     // An Authored Background tile rasterizes the same way, from the placement's
     // resolved Background colours, so the exported atlas matches the live preview.
     const backgroundId = placement.style.background.backgroundId;
@@ -57,6 +65,7 @@ export async function renderAtlasBlob(
       style: placement.style,
       fontFamily: inputs.fontFamily,
       symbol,
+      image,
       backgroundImage,
     });
   }

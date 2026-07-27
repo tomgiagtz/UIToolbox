@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { getImageBitmap } from "@/lib/glyph/images";
 import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
@@ -23,6 +24,8 @@ export interface PreviewGlyph {
   style: GlyphStyle;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
   symbolId?: string;
+  /** Custom image id to draw as this Glyph's Render Source (issue #20). */
+  imageId?: string;
 }
 
 export interface AtlasPreviewProps {
@@ -146,6 +149,9 @@ export function AtlasPreview({
           fontFamily,
           symbol: glyph.symbolId
             ? getSymbolBitmap(glyph.symbolId, glyph.style, cellSize, catalogId)
+            : undefined,
+          image: glyph.imageId
+            ? getImageBitmap(glyph.imageId, cellSize)
             : undefined,
           backgroundImage: glyph.style.background.backgroundId
             ? getBackgroundBitmap(

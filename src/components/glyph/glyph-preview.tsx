@@ -22,6 +22,11 @@ export interface GlyphPreviewProps {
    * label-only or single-colour preview needs no extra props (ADR-0007 §3).
    */
   symbolPaints?: SymbolPaints;
+  /**
+   * Scale of the tile's content box — how large the label or Symbol is drawn
+   * inside the tile (issue #20). Defaults to the unscaled fit.
+   */
+  contentScale?: number;
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
@@ -49,6 +54,7 @@ export function GlyphPreview({
   textColor,
   background,
   symbolPaints,
+  contentScale = 1,
   fontFamily,
   symbolId,
   device,
@@ -64,6 +70,7 @@ export function GlyphPreview({
       border: textColor,
       secondary: textColor,
     },
+    contentScale,
   };
 
   // Warm the shared Symbol bitmap cache and redraw once it's ready.
@@ -101,6 +108,7 @@ export function GlyphPreview({
       textColor,
       background,
       symbolPaints,
+      contentScale,
       fontFamily,
       symbolId,
       device,

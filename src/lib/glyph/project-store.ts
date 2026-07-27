@@ -14,12 +14,16 @@
  * to "start fresh" rather than throwing.
  */
 import { catalogNameIndex, getCatalogByName } from "@/lib/glyph/catalog";
-import { DEFAULT_SYMBOL_PAINTS } from "@/lib/glyph/presets";
+import {
+  DEFAULT_CONTENT_SCALE,
+  DEFAULT_SYMBOL_PAINTS,
+} from "@/lib/glyph/presets";
 import type { SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,
   CustomInput,
   DeviceConfig,
+  ImageAsset,
   NamingConfig,
   Project,
 } from "@/lib/glyph/types";
@@ -32,8 +36,11 @@ const CONFIG_KEY = "uitoolbox.glyph-creator.project";
  *   (the Catalog + Style Cascade model, #15). v1 saves are migrated on load.
  * - v3: Project gains the `symbolPaints` base tier (ADR-0007 §3). v1/v2 saves are
  *   migrated forward by backfilling the default Symbol Paint Role colours.
+ * - v4: Project gains `contentScale` (the cascade's base Render Source scale) and
+ *   the `images` manifest for custom image Render Sources (issue #20). Older saves
+ *   backfill the unscaled default and an empty manifest.
  */
-const CONFIG_VERSION = 3;
+const CONFIG_VERSION = 4;
 
 interface PersistedConfig {
   version: number;
@@ -81,11 +88,17 @@ function migrateConfig(version: number, project: unknown): Project | null {
   if (version === CONFIG_VERSION) {
     return isProject(project) ? project : null;
   }
+  // Each older version migrates into the next, so one step is written per bump.
+  if (version === 3) {
+    return isProjectV3(project) ? migrateV3(project) : null;
+  }
   if (version === 2) {
-    return isProjectV2(project) ? migrateV2(project) : null;
+    return isProjectV2(project) ? migrateV3(migrateV2(project)) : null;
   }
   if (version === 1) {
-    return isProjectV1(project) ? migrateV2(migrateV1(project)) : null;
+    return isProjectV1(project)
+      ? migrateV3(migrateV2(migrateV1(project)))
+      : null;
   }
   return null;
 }
@@ -121,8 +134,10 @@ export function loadConfig(): Project | null {
 // --- Font blob (IndexedDB) -------------------------------------------------
 
 const DB_NAME = "uitoolbox";
-const DB_VERSION = 1;
+/** v2 added the `images` store for custom image Render Sources (ADR-0008). */
+const DB_VERSION = 2;
 const FONT_STORE = "fonts";
+const IMAGE_STORE = "images";
 /** Single-slot key: the creator tracks exactly one active font at a time. */
 const FONT_KEY = "current";
 
@@ -130,6 +145,14 @@ const FONT_KEY = "current";
 export interface PersistedFont {
   family: string;
   fileName: string;
+  blob: Blob;
+}
+
+/**
+ * A persisted custom image: its {@link ImageAsset} manifest fields plus the raw
+ * blob. Unlike the font there can be many, so each is keyed by its image id.
+ */
+export interface PersistedImage extends ImageAsset {
   blob: Blob;
 }
 
@@ -161,7 +184,40 @@ export async function loadFont(): Promise<PersistedFont | null> {
   }
 }
 
-/** Clear all persisted state (config + font). */
+// --- Custom images (IndexedDB) ---------------------------------------------
+//
+// Custom image Render Sources persist beside the font so an upload survives a
+// refresh (ADR-0008, amending ADR-0004). Missing bytes are never fatal: a Glyph
+// referencing an image that didn't come back falls through to its Symbol or label.
+
+/** Persist one uploaded image. Silently no-ops if IndexedDB is unavailable. */
+export async function saveImage(image: PersistedImage): Promise<void> {
+  try {
+    const db = await openDb();
+    await runRequest(
+      txStore(db, "readwrite", IMAGE_STORE).put(image, image.id),
+    );
+    db.close();
+  } catch {
+    // No IndexedDB (SSR / disabled) — the image just won't survive a reload.
+  }
+}
+
+/** Every persisted image, or an empty list if none or IndexedDB is unavailable. */
+export async function loadImages(): Promise<PersistedImage[]> {
+  try {
+    const db = await openDb();
+    const images = await runRequest<PersistedImage[]>(
+      txStore(db, "readonly", IMAGE_STORE).getAll(),
+    );
+    db.close();
+    return images ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Clear all persisted state (config + font + images). */
 export async function clear(): Promise<void> {
   try {
     localStorage.removeItem(CONFIG_KEY);
@@ -171,6 +227,7 @@ export async function clear(): Promise<void> {
   try {
     const db = await openDb();
     await runRequest(txStore(db, "readwrite").delete(FONT_KEY));
+    await runRequest(txStore(db, "readwrite", IMAGE_STORE).clear());
     db.close();
   } catch {
     // ignore
@@ -185,15 +242,24 @@ function openDb(): Promise<IDBDatabase> {
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(FONT_STORE);
+      // Runs for a fresh DB and for a v1 → v2 upgrade alike, so each store is
+      // created only if it isn't already there.
+      const db = req.result;
+      for (const name of [FONT_STORE, IMAGE_STORE]) {
+        if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-function txStore(db: IDBDatabase, mode: IDBTransactionMode): IDBObjectStore {
-  return db.transaction(FONT_STORE, mode).objectStore(FONT_STORE);
+function txStore(
+  db: IDBDatabase,
+  mode: IDBTransactionMode,
+  store: string = FONT_STORE,
+): IDBObjectStore {
+  return db.transaction(store, mode).objectStore(store);
 }
 
 function runRequest<T>(req: IDBRequest<T>): Promise<T> {
@@ -293,7 +359,31 @@ function hasProjectCommonFields(
   );
 }
 
+function isImageAsset(value: unknown): value is ImageAsset {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.fileName === "string" &&
+    typeof value.type === "string"
+  );
+}
+
 function isProject(value: unknown): value is Project {
+  return (
+    isProjectV3(value) &&
+    typeof (value as Record<string, unknown>).contentScale === "number" &&
+    Array.isArray((value as Record<string, unknown>).images) &&
+    ((value as Record<string, unknown>).images as unknown[]).every(isImageAsset)
+  );
+}
+
+/**
+ * A v3 Project: the current shape minus the content scale and image manifest
+ * (added in v4). {@link migrateV3} backfills both.
+ */
+type ProjectV3 = Omit<Project, "contentScale" | "images">;
+
+function isProjectV3(value: unknown): value is ProjectV3 {
   return (
     hasProjectCommonFields(value) &&
     isSymbolPaints(value.symbolPaints) &&
@@ -301,12 +391,20 @@ function isProject(value: unknown): value is Project {
   );
 }
 
+function migrateV3(project: ProjectV3): Project {
+  return {
+    ...project,
+    contentScale: DEFAULT_CONTENT_SCALE,
+    images: [],
+  };
+}
+
 /**
- * A v2 Project: the current shape minus the `symbolPaints` base tier (added in
- * v3). `hasProjectCommonFields` already excludes `symbolPaints`, so this is the
- * v2 validator; {@link migrateV2} backfills the default palette.
+ * A v2 Project: the v3 shape minus the `symbolPaints` base tier (added in v3).
+ * `hasProjectCommonFields` already excludes `symbolPaints`, so this is the v2
+ * validator; {@link migrateV2} backfills the default palette.
  */
-type ProjectV2 = Omit<Project, "symbolPaints">;
+type ProjectV2 = Omit<ProjectV3, "symbolPaints">;
 
 function isProjectV2(value: unknown): value is ProjectV2 {
   return (
@@ -315,7 +413,7 @@ function isProjectV2(value: unknown): value is ProjectV2 {
   );
 }
 
-function migrateV2(project: ProjectV2): Project {
+function migrateV2(project: ProjectV2): ProjectV3 {
   return { ...project, symbolPaints: DEFAULT_SYMBOL_PAINTS };
 }
 

@@ -27,9 +27,13 @@ import {
   clear as clearPersisted,
   loadConfig,
   loadFont,
+  loadImages,
   saveConfig,
   saveFont,
+  saveImage,
+  type PersistedImage,
 } from "@/lib/glyph/project-store";
+import { clearImages, imageAssetFor, putImage } from "@/lib/glyph/images";
 import {
   GlyphStylePanel,
   StyleControls,
@@ -143,6 +147,16 @@ export function GlyphCreator() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Custom image Render Sources persist beside the font (ADR-0008). They are
+      // registered *before* the config that references them, so the first draw of
+      // a restored Glyph already has its bytes — the bitmap cache only warms when
+      // the set of referenced images changes, so arriving late would leave the
+      // Glyph showing its fallback until the next edit.
+      for (const image of await loadImages()) {
+        if (cancelled) return;
+        putImage(image.id, image.blob);
+      }
+
       const saved = loadConfig();
       if (saved && !cancelled)
         dispatch({ type: "load-project", project: saved });
@@ -285,6 +299,36 @@ export function GlyphCreator() {
     }
   }
 
+  /**
+   * Take an uploaded custom image as a Glyph's Render Source: register its bytes
+   * for drawing, add it to the project's shared manifest, point the selected
+   * Glyph at it, and persist it so it survives a reload (ADR-0008).
+   */
+  async function onUploadImage(file: File) {
+    const asset = imageAssetFor(project.images, file);
+    // Register before dispatching, so the redraw the patch triggers already has
+    // bytes to rasterize.
+    putImage(asset.id, file);
+    dispatch({ type: "add-image", image: asset });
+    if (selectedGlyphScope) {
+      dispatch({
+        type: "patch-style",
+        scope: selectedGlyphScope,
+        patch: { renderSource: { kind: "image", imageId: asset.id } },
+      });
+    }
+    await saveImage({ ...asset, blob: file });
+  }
+
+  /** The persisted bytes for the project's images, for bundling into a save. */
+  async function projectImages(): Promise<PersistedImage[]> {
+    const stored = await loadImages();
+    const byId = new Map(stored.map((i) => [i.id, i]));
+    return project.images
+      .map((asset) => byId.get(asset.id))
+      .filter((image): image is PersistedImage => image !== undefined);
+  }
+
   async function onGenerate() {
     if (!canGenerate) return;
     const fontName =
@@ -316,7 +360,13 @@ export function GlyphCreator() {
   async function onSave(includeFont: boolean) {
     try {
       const font = includeFont ? await loadFont() : null;
-      const artifact = await exportProjectFile(project, font);
+      // Images always travel: unlike the font there's no bundled fallback, so a
+      // save without them couldn't reproduce the project anywhere else.
+      const artifact = await exportProjectFile(
+        project,
+        font,
+        await projectImages(),
+      );
       downloadArtifact(artifact);
     } catch {
       setStatus({ kind: "error", message: "Couldn't save the project file." });
@@ -334,6 +384,12 @@ export function GlyphCreator() {
           message: `"${file.name}" isn't a valid project file.`,
         });
         return;
+      }
+      // Bundled images are registered and re-persisted before the config that
+      // references them, so the first draw already has their bytes.
+      for (const image of imported.images) {
+        putImage(image.id, image.blob);
+        await saveImage(image);
       }
       dispatch({ type: "load-project", project: imported.project });
       if (imported.font) {
@@ -368,6 +424,7 @@ export function GlyphCreator() {
       return;
     }
     await clearPersisted();
+    clearImages();
     dispatch({ type: "load-project", project: createDefaultProject() });
     // The bundled Inter stays registered, so the reset preview keeps rendering.
     markDefaultFontReady();
@@ -482,6 +539,7 @@ export function GlyphCreator() {
               style={resolveScopeStyle(project, selectedGlyphScope)}
               override={overrideAt(project, selectedGlyphScope)}
               onClose={() => setSelectedGlyph(null)}
+              onUploadImage={onUploadImage}
             />
           )}
         </div>

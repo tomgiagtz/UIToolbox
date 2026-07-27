@@ -1,10 +1,15 @@
-import { catalogIndex, getCatalog } from "@/lib/glyph/catalog";
+import {
+  catalogIndex,
+  getCatalog,
+  type CatalogInput,
+} from "@/lib/glyph/catalog";
 import { applyTemplate, caseSeparator } from "@/lib/glyph/naming";
 import { gridPack } from "@/lib/glyph/packer";
 import { slugify } from "@/lib/glyph/slugify";
 import {
   resolveStyle,
   type GlyphStyle,
+  type StyleOverride,
   type StyleScope,
 } from "@/lib/glyph/style";
 import type {
@@ -12,6 +17,7 @@ import type {
   DeviceConfig,
   DeviceOutput,
   GlyphPlacement,
+  ImageAsset,
   Project,
   ResolvedInput,
   TexturePackerDoc,
@@ -23,7 +29,104 @@ export function projectBaseStyle(project: Project): GlyphStyle {
     textColor: project.textColor,
     background: project.background,
     symbolPaints: project.symbolPaints,
+    contentScale: project.contentScale,
   };
+}
+
+/**
+ * The Render Source one Glyph actually draws: its font-rendered label, a bundled
+ * Symbol, or a user-uploaded custom image (ADR-0004).
+ */
+export type ResolvedRenderSource =
+  | { kind: "label" }
+  | { kind: "symbol"; symbolId: string }
+  | { kind: "image"; imageId: string };
+
+/**
+ * Resolve a Glyph's Render Source from its Catalog entry and the cascade's
+ * `renderSource` overrides (highest precedence last), against the project's
+ * image manifest.
+ *
+ * With no override, a well-known Input draws its Catalog Symbol and everything
+ * else draws its label — exactly the behaviour that predates the per-Input
+ * choice. Every unsatisfiable choice degrades to that default rather than
+ * failing: a `symbol` pick on an Input the Catalog ships no Symbol for, and an
+ * `image` pick whose asset the project no longer carries (ADR-0004 — a config
+ * can outlive its image bytes).
+ */
+export function resolveRenderSource(
+  entry: CatalogInput | undefined,
+  images: ImageAsset[],
+  ...overrides: (StyleOverride | undefined)[]
+): ResolvedRenderSource {
+  const fallback: ResolvedRenderSource = entry?.symbolId
+    ? { kind: "symbol", symbolId: entry.symbolId }
+    : { kind: "label" };
+
+  let chosen: StyleOverride["renderSource"];
+  for (const override of overrides) {
+    if (override?.renderSource !== undefined) chosen = override.renderSource;
+  }
+  if (!chosen) return fallback;
+
+  switch (chosen.kind) {
+    case "label":
+      return { kind: "label" };
+    case "symbol":
+      return fallback.kind === "symbol" ? fallback : { kind: "label" };
+    case "image":
+      return images.some((i) => i.id === chosen.imageId)
+        ? { kind: "image", imageId: chosen.imageId }
+        : fallback;
+  }
+}
+
+/** What the editor's Render Source control needs to know about one Glyph. */
+export interface ScopeRenderSource {
+  /** The source that Glyph draws today. */
+  source: ResolvedRenderSource;
+  /**
+   * Whether the Catalog offers this Input a Symbol at all — the control hides
+   * the Symbol option entirely when it doesn't, rather than offering a choice
+   * that would silently resolve back to the label.
+   */
+  hasSymbol: boolean;
+}
+
+/**
+ * The Render Source the editor's controls should display at a Glyph-tier
+ * {@link StyleScope}, resolved exactly as {@link resolveDeviceInputs} does.
+ * `null` at the Project and Device tiers, which address no single Input — and so
+ * have no one Render Source to show.
+ */
+export function resolveScopeRenderSource(
+  project: Project,
+  scope: StyleScope,
+): ScopeRenderSource | null {
+  if (scope.tier !== "glyph") return null;
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return null;
+  const catalog = getCatalog(device.catalogId);
+  const entry = catalog ? catalogIndex(catalog).get(scope.glyphId) : undefined;
+  return {
+    source: resolveRenderSource(
+      entry,
+      project.images,
+      device.style,
+      entry?.defaultStyle,
+      device.glyphStyles[scope.glyphId],
+    ),
+    hasSymbol: Boolean(entry?.symbolId),
+  };
+}
+
+/** Spread a {@link ResolvedRenderSource} onto the `symbolId` / `imageId` pair. */
+function renderSourceFields(
+  source: ResolvedRenderSource,
+): Pick<ResolvedInput, "symbolId" | "imageId"> {
+  if (source.kind === "symbol") return { symbolId: source.symbolId };
+  if (source.kind === "image") return { imageId: source.imageId };
+  return {};
 }
 
 /**
@@ -77,30 +180,27 @@ export function resolveDeviceInputs(
     const entry = byId?.get(id);
     // An enabled id with no Catalog entry (stale save) is skipped, not drawn.
     if (!entry) continue;
+    const tiers = [device.style, entry.defaultStyle, device.glyphStyles[id]];
     resolved.push({
       id,
       label: entry.label,
-      symbolId: entry.symbolId,
-      style: resolveStyle(
-        base,
-        device.style,
-        entry.defaultStyle,
-        device.glyphStyles[id],
+      ...renderSourceFields(
+        resolveRenderSource(entry, project.images, ...tiers),
       ),
+      style: resolveStyle(base, ...tiers),
     });
   }
 
   for (const { id, label } of device.custom) {
+    // Custom Inputs have neither a Catalog Symbol nor a per-Input default tier.
+    const tiers = [device.style, undefined, device.glyphStyles[id]];
     resolved.push({
       id,
       label,
-      // Custom Inputs have no Catalog per-Input default tier.
-      style: resolveStyle(
-        base,
-        device.style,
-        undefined,
-        device.glyphStyles[id],
+      ...renderSourceFields(
+        resolveRenderSource(undefined, project.images, ...tiers),
       ),
+      style: resolveStyle(base, ...tiers),
     });
   }
 
@@ -135,7 +235,7 @@ function buildDeviceOutput(
 
   const glyphPlacements: GlyphPlacement[] = placements.map(
     ({ index, rect }) => {
-      const { label, style, symbolId } = inputs[index];
+      const { label, style, symbolId, imageId } = inputs[index];
       const spriteName = uniqueName(
         applyTemplate(
           project.naming.template,
@@ -149,7 +249,7 @@ function buildDeviceOutput(
         used,
         project.naming.case,
       );
-      return { label, spriteName, rect, style, symbolId };
+      return { label, spriteName, rect, style, symbolId, imageId };
     },
   );
 

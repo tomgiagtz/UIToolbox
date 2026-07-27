@@ -12,7 +12,12 @@ import {
   type StyleOverride,
   type StyleScope,
 } from "@/lib/glyph/style";
-import type { CaseStyle, DeviceConfig, Project } from "@/lib/glyph/types";
+import type {
+  CaseStyle,
+  DeviceConfig,
+  ImageAsset,
+  Project,
+} from "@/lib/glyph/types";
 
 /**
  * Every edit the UI can make to a {@link Project}. Keeping these as plain data
@@ -42,6 +47,11 @@ export type ProjectAction =
       label: string;
     }
   | { type: "remove-custom-input"; deviceIndex: number; id: string }
+  // --- Custom image Render Sources (#20) ---
+  // Adds an uploaded image to the project's shared manifest, so any Glyph can
+  // then point its `renderSource` at it via `patch-style`. The bytes are handled
+  // outside the config (see `images.ts`).
+  | { type: "add-image"; image: ImageAsset }
   // --- Naming (#6) ---
   | { type: "set-naming-template"; template: string }
   | { type: "set-naming-case"; case: CaseStyle }
@@ -122,6 +132,9 @@ export function projectReducer(
         })),
       };
 
+    case "add-image":
+      return { ...project, images: [...project.images, action.image] };
+
     case "set-naming-template":
       return {
         ...project,
@@ -152,6 +165,7 @@ function patchStyle(
         textColor: project.textColor,
         background: project.background,
         symbolPaints: project.symbolPaints,
+        contentScale: project.contentScale,
       },
       patch,
     );
@@ -160,6 +174,7 @@ function patchStyle(
       textColor: resolved.textColor,
       background: resolved.background,
       symbolPaints: resolved.symbolPaints,
+      contentScale: resolved.contentScale,
     };
   }
   return patchDeviceStyle(project, scope, (override) =>

@@ -91,19 +91,41 @@ export interface DeviceConfig {
 }
 
 /**
+ * A user-uploaded **custom image** available as a Render Source (ADR-0004).
+ *
+ * The manifest only — the bytes are deliberately not in the config: they live in
+ * IndexedDB and travel in the project ZIP (ADR-0008). A Glyph pointing at an
+ * `id` with no bytes present falls back to its Symbol or label.
+ */
+export interface ImageAsset {
+  /** Stable id, and the entry name inside a project ZIP's `images/` folder. */
+  id: string;
+  /** The original upload's filename, shown in the UI. */
+  fileName: string;
+  /** MIME type, so the blob round-trips out of the ZIP as the right kind. */
+  type: string;
+}
+
+/**
  * One Input resolved for generation: its stable id, effective label, and the
  * effective {@link GlyphStyle} the Style Cascade produced for it.
+ *
+ * At most one of {@link symbolId} / {@link imageId} is set — the Render Source
+ * the cascade resolved (issue #20). With neither, the label is drawn. The label
+ * is always populated regardless, since it stays the Input's identity and the
+ * source of its Sprite Name (ADR-0004).
  */
 export interface ResolvedInput {
   id: string;
   label: string;
   style: GlyphStyle;
   /**
-   * Render Source: the shipped Symbol id to draw in place of the label, or
-   * unset to render the label (issue #17). Well-known Catalog Inputs default to
-   * their Symbol via the Catalog per-Input tier.
+   * Render Source: the Symbol id to draw in place of the label. Well-known
+   * Catalog Inputs default to their Symbol via the Catalog per-Input tier.
    */
   symbolId?: string;
+  /** Render Source: the {@link ImageAsset} id to draw in place of the label. */
+  imageId?: string;
 }
 
 /**
@@ -123,6 +145,17 @@ export interface Project {
    * of the `symbolPaints` cascade group (ADR-0007 §3). Independent of `textColor`.
    */
   symbolPaints: SymbolPaints;
+  /**
+   * Project-tier scale of the tile content box — the base of the cascade's
+   * `contentScale` (issue #20). `1` is the default fit.
+   */
+  contentScale: number;
+  /**
+   * Manifest of the user's uploaded custom images (bytes live elsewhere — see
+   * {@link ImageAsset}). Shared by every Device, so one upload can serve several
+   * Inputs.
+   */
+  images: ImageAsset[];
   /** Square cell edge length in px (default 128). */
   cellSize: number;
   devices: DeviceConfig[];
@@ -157,6 +190,8 @@ export interface GlyphPlacement {
   style: GlyphStyle;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
   symbolId?: string;
+  /** Custom image id to draw as this Glyph's Render Source (issue #20). */
+  imageId?: string;
 }
 
 /** The result of packing one Device's Glyphs. */

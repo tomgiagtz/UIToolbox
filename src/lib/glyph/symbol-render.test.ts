@@ -16,6 +16,7 @@ const style: GlyphStyle = {
     border: { width: 0, color: "#000000" },
   },
   symbolPaints: { fill: "#ff0000", border: "#0000ff", secondary: "#00ff00" },
+  contentScale: 1,
 };
 
 describe("symbolRoleColors", () => {
@@ -39,6 +40,7 @@ describe("backgroundRoleColors", () => {
         border: { width: 4, color: "#ffd400" },
       },
       symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
+      contentScale: 1,
     };
     expect(backgroundRoleColors(bgStyle)).toEqual({
       fill: "#0e7a0d",
@@ -63,6 +65,7 @@ describe("backgroundRoleColors", () => {
           border: { width: 0, color: "#ffd400" },
         },
         symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
+        contentScale: 1,
       }),
     );
     expect(out).toContain("fill:#0e7a0d;");

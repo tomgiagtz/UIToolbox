@@ -1,21 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ensureImageBitmap } from "@/lib/glyph/images";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import {
   ensureBackgroundBitmap,
   ensureSymbolBitmap,
 } from "@/lib/glyph/symbol-render";
 
-/** One Glyph's Symbol Render Source to warm: its id (if any) + resolved style. */
+/** One Glyph's Render Source to warm: its Symbol or image id + resolved style. */
 export interface SymbolSpec {
   symbolId?: string;
+  imageId?: string;
   style: GlyphStyle;
 }
 
 /**
- * Warm the shared bitmap cache for `specs` — both Symbol Render Sources and any
- * Authored Background tiles (`style.background.backgroundId`) — returning a version
+ * Warm the shared bitmap cache for `specs` — Symbol and custom-image Render
+ * Sources, plus any Authored Background tiles (`style.background.backgroundId`)
+ * — returning a version
  * number that bumps once asynchronous rasterization finishes so the caller can
  * redraw and pick up the ready bitmaps (via `getSymbolBitmap` /
  * `getBackgroundBitmap`).
@@ -31,6 +34,7 @@ export function useSymbolBitmaps(
   device?: string,
 ): number {
   const withSymbols = specs.filter((s) => s.symbolId);
+  const withImages = specs.filter((s) => s.imageId);
   const withBackgrounds = specs.filter((s) => s.style.background.backgroundId);
   const key =
     withSymbols
@@ -46,16 +50,26 @@ export function useSymbolBitmaps(
           `${s.style.background.backgroundId}:${s.style.background.fill}:${s.style.background.border.color}`,
       )
       .join("|") +
+    // A custom image draws as authored, so only its id varies the bitmap — not
+    // any resolved colour, and not the content scale (applied at draw time).
+    "~" +
+    withImages.map((s) => s.imageId).join("|") +
     `@${size}#${device ?? ""}`;
 
   const [version, setVersion] = useState(0);
   useEffect(() => {
-    if (withSymbols.length === 0 && withBackgrounds.length === 0) return;
+    if (
+      withSymbols.length === 0 &&
+      withImages.length === 0 &&
+      withBackgrounds.length === 0
+    )
+      return;
     let cancelled = false;
     Promise.all([
       ...withSymbols.map((s) =>
         ensureSymbolBitmap(s.symbolId!, s.style, size, device),
       ),
+      ...withImages.map((s) => ensureImageBitmap(s.imageId!, size)),
       ...withBackgrounds.map((s) =>
         ensureBackgroundBitmap(
           s.style.background.backgroundId!,
@@ -70,7 +84,7 @@ export function useSymbolBitmaps(
     return () => {
       cancelled = true;
     };
-    // `withSymbols`/`withBackgrounds`, `size`, and `device` are all captured by `key`.
+    // The spec lists, `size`, and `device` are all captured by `key`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
