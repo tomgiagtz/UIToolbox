@@ -11,6 +11,7 @@
  * every lookup here returns `undefined`/`null` rather than throwing, so a config
  * that outlives its assets degrades quietly.
  */
+import { createBitmapCache, decodeToBitmap } from "@/lib/glyph/bitmap-cache";
 import type { ImageAsset } from "@/lib/glyph/types";
 
 /** Extension used when an upload's filename doesn't carry one. */
@@ -68,23 +69,22 @@ export function hasImage(id: string): boolean {
 /** Forget every registered image (and its rasterized bitmaps). */
 export function clearImages(): void {
   blobs.clear();
-  bitmapCache.clear();
-  inFlight.clear();
+  bitmaps.clear();
 }
 
 // --- Rasterization cache ---------------------------------------------------
 //
-// Mirrors the Symbol cache in `symbol-render.ts`: decode once per (id, size),
-// share one decode between concurrent callers, and no-op where the DOM decode
-// path isn't available (SSR / jsdom) so the renderer falls back to the label.
-//
 // Unlike a Symbol, a custom image has no resolved colours — it draws as authored
-// — so the cache key is just its id and size. The content scale isn't part of it
-// either: the renderer scales at draw time, so dragging the scale slider never
-// re-rasterizes.
+// — so its appearance is just its id and the cell size. The content scale isn't
+// part of it either: the renderer scales at draw time, so dragging the scale
+// slider never re-rasterizes.
 
-const bitmapCache = new Map<string, ImageBitmap>();
-const inFlight = new Map<string, Promise<ImageBitmap | null>>();
+/** One custom image's drawable appearance. */
+interface ImageAppearance {
+  id: string;
+  /** Cell edge in px; the bitmap is decoded with headroom above it. */
+  size: number;
+}
 
 /**
  * Headroom factor on the rasterized size, so a content scale above 1 still draws
@@ -92,9 +92,16 @@ const inFlight = new Map<string, Promise<ImageBitmap | null>>();
  */
 const OVERSAMPLE = 2;
 
-function cacheKey(id: string, size: number): string {
-  return `${id}|${size}`;
-}
+const bitmaps = createBitmapCache<ImageAppearance>(
+  ({ id, size }) => `${id}|${size}`,
+  ({ id, size }) => {
+    const blob = blobs.get(id);
+    if (!blob) return Promise.resolve(null);
+    return decodeToBitmap(blob, (natural) =>
+      fitWithin(natural, size * OVERSAMPLE),
+    );
+  },
+);
 
 /**
  * The already-rasterized bitmap for an image at a cell size, or `undefined` if it
@@ -105,7 +112,7 @@ export function getImageBitmap(
   id: string,
   size: number,
 ): ImageBitmap | undefined {
-  return bitmapCache.get(cacheKey(id, size));
+  return bitmaps.get({ id, size });
 }
 
 /**
@@ -117,76 +124,19 @@ export function ensureImageBitmap(
   id: string,
   size: number,
 ): Promise<ImageBitmap | null> {
-  const key = cacheKey(id, size);
-  const cached = bitmapCache.get(key);
-  if (cached) return Promise.resolve(cached);
-
-  const pending = inFlight.get(key);
-  if (pending) return pending;
-
-  const load = rasterize(id, size)
-    .then((bitmap) => {
-      if (bitmap) bitmapCache.set(key, bitmap);
-      inFlight.delete(key);
-      return bitmap;
-    })
-    .catch(() => {
-      inFlight.delete(key);
-      return null;
-    });
-  inFlight.set(key, load);
-  return load;
-}
-
-async function rasterize(
-  id: string,
-  size: number,
-): Promise<ImageBitmap | null> {
-  const blob = blobs.get(id);
-  if (!blob) return null;
-  if (
-    typeof createImageBitmap !== "function" ||
-    typeof Image === "undefined" ||
-    typeof URL === "undefined" ||
-    typeof URL.createObjectURL !== "function"
-  ) {
-    return null;
-  }
-
-  // Decoded through an <img> rather than straight from the Blob because that is
-  // the one path that handles SVG uploads as well as raster ones.
-  const url = URL.createObjectURL(blob);
-  try {
-    const img = new Image();
-    img.decoding = "async";
-    img.src = url;
-    await img.decode();
-    const target = size * OVERSAMPLE;
-    const { width, height } = fitWithin(
-      img.naturalWidth,
-      img.naturalHeight,
-      target,
-    );
-    return await createImageBitmap(img, {
-      resizeWidth: width,
-      resizeHeight: height,
-      resizeQuality: "high",
-    });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return bitmaps.ensure({ id, size });
 }
 
 /**
- * Scale `w`×`h` so its longest edge is `max`, preserving aspect. An image with no
- * intrinsic size (some SVGs report 0) falls back to a square, which the renderer
- * then fits like any other.
+ * Scale a natural size so its longest edge is `max`, preserving aspect. An image
+ * with no intrinsic size (some SVGs report 0) falls back to a square, which the
+ * renderer then fits like any other.
  */
 function fitWithin(
-  w: number,
-  h: number,
+  natural: { width: number; height: number },
   max: number,
 ): { width: number; height: number } {
+  const { width: w, height: h } = natural;
   if (!(w > 0) || !(h > 0)) return { width: max, height: max };
   const scale = max / Math.max(w, h);
   return {

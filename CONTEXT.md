@@ -189,8 +189,11 @@ How a Glyph's style + Render Source are resolved, lowest precedence to highest:
 **Glyph** overrides.
 
 Each level is a sparse subset; anything unset falls up the chain. Every Background
-property (source, shape, corner radius, fill, border width+color), the text color,
-the **Render Source**, and the **content scale** can be set at any level. The **Catalog per-Input default** tier is what lets
+property (source, shape, corner radius, fill, border width+color), the text
+color, and the **content scale** can be set at any level. The **Render Source**
+resolves through the same tiers but is only _set_ per Glyph: the tiers above it
+supply a Catalog default, and "every Glyph on this Device draws its label" isn't
+a thing the tool offers. The **Catalog per-Input default** tier is what lets
 a bumper keep its authored Background even when its Device is set to "circle" —
 the shipped per-Input default outranks a device-wide override, and only an
 explicit Glyph edit outranks it. `cellSize` and the **font** are the exception:

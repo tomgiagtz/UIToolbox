@@ -252,3 +252,25 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     });
   });
 });
+
+describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
+  const images: ImageAsset[] = [
+    { id: "img-1.png", fileName: "first.png", type: "image/png" },
+    { id: "img-2.png", fileName: "second.png", type: "image/png" },
+  ];
+
+  it("restores the Glyph's own image, not the first upload", () => {
+    // The id survives on the override while the label is shown, so switching
+    // back must not silently repoint the Glyph at someone else's picture.
+    const { dispatch } = renderPanel({
+      project: { ...createDefaultProject(), images },
+      override: { renderSource: { kind: "image", imageId: "img-2.png" } },
+    });
+    fireEvent.click(screen.getByLabelText("Image"));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { renderSource: { kind: "image", imageId: "img-2.png" } },
+    });
+  });
+});

@@ -9,7 +9,7 @@ import {
 import type { SymbolPaints } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 import { useGlyphCanvas } from "./use-glyph-canvas";
-import { useSymbolBitmaps } from "./use-symbol-bitmaps";
+import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
 
 export interface GlyphPreviewProps {
   label: string;
@@ -73,8 +73,8 @@ export function GlyphPreview({
     contentScale,
   };
 
-  // Warm the shared Symbol bitmap cache and redraw once it's ready.
-  const symbolsVersion = useSymbolBitmaps(
+  // Warm the shared Render Source bitmap cache and redraw once it is ready.
+  const bitmapsVersion = useRenderSourceBitmaps(
     symbolId ? [{ symbolId, style: glyphStyle }] : [],
     cellSize,
     device,
@@ -112,7 +112,7 @@ export function GlyphPreview({
       fontFamily,
       symbolId,
       device,
-      symbolsVersion,
+      bitmapsVersion,
     ],
   );
 

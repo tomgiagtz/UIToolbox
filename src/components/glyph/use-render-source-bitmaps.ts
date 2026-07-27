@@ -9,27 +9,26 @@ import {
 } from "@/lib/glyph/symbol-render";
 
 /** One Glyph's Render Source to warm: its Symbol or image id + resolved style. */
-export interface SymbolSpec {
+export interface RenderSourceSpec {
   symbolId?: string;
   imageId?: string;
   style: GlyphStyle;
 }
 
 /**
- * Warm the shared bitmap cache for `specs` — Symbol and custom-image Render
+ * Warm the shared bitmap caches for `specs` — Symbol and custom-image Render
  * Sources, plus any Authored Background tiles (`style.background.backgroundId`)
- * — returning a version
- * number that bumps once asynchronous rasterization finishes so the caller can
- * redraw and pick up the ready bitmaps (via `getSymbolBitmap` /
- * `getBackgroundBitmap`).
+ * — returning a version number that bumps once asynchronous rasterization
+ * finishes, so the caller can redraw and pick up the ready bitmaps (via
+ * `getSymbolBitmap` / `getImageBitmap` / `getBackgroundBitmap`).
  *
  * Keyed on a **stable string** of the appearances needed (id + resolved colour +
  * size + device), never the `specs` array — whose identity changes every render —
  * so the version bump can't re-trigger the effect into a render loop. Shared by
  * {@link AtlasPreview} (many Glyphs) and {@link GlyphPreview} (one).
  */
-export function useSymbolBitmaps(
-  specs: SymbolSpec[],
+export function useRenderSourceBitmaps(
+  specs: RenderSourceSpec[],
   size: number,
   device?: string,
 ): number {

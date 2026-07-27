@@ -10,7 +10,7 @@ import {
   getSymbolBitmap,
 } from "@/lib/glyph/symbol-render";
 import { useGlyphCanvas } from "./use-glyph-canvas";
-import { useSymbolBitmaps } from "./use-symbol-bitmaps";
+import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
 
 /** A hovered cell + its box relative to the canvas, driving the click highlight. */
 interface Hover {
@@ -68,9 +68,9 @@ export function AtlasPreview({
   const [hover, setHover] = useState<Hover | null>(null);
   const { placements } = gridPack(glyphs.length, cellSize);
 
-  // Symbol Render Sources rasterize asynchronously; warm the shared cache and
-  // redraw once ready (see `useSymbolBitmaps`).
-  const symbolsVersion = useSymbolBitmaps(glyphs, cellSize, catalogId);
+  // Render Sources rasterize asynchronously; warm the shared cache and
+  // redraw once ready (see `useRenderSourceBitmaps`).
+  const bitmapsVersion = useRenderSourceBitmaps(glyphs, cellSize, catalogId);
 
   // The tight bounds of the packed cells. The exported texture is padded up to a
   // power of two, but that padding is empty — showing it here would letterbox the
@@ -165,8 +165,8 @@ export function AtlasPreview({
       }
     },
     // `placements`/`atlasSize` derive from glyphs + cellSize, so those cover them;
-    // `symbolsVersion` re-runs the draw once async Symbol bitmaps are ready.
-    [glyphs, cellSize, fontFamily, catalogId, symbolsVersion],
+    // `bitmapsVersion` re-runs the draw once async Render Source bitmaps land.
+    [glyphs, cellSize, fontFamily, catalogId, bitmapsVersion],
   );
 
   if (glyphs.length === 0) {

@@ -51,11 +51,19 @@ export function RenderSourceControls({
 
   function choose(kind: ResolvedRenderSource["kind"]) {
     if (kind === "image") {
-      // Reuse whatever the user already uploaded; with an empty manifest the
-      // choice can't be stored yet, so the picker below prompts for a file.
-      const first = images[0];
-      if (!first) return;
-      return patch({ kind: "image", imageId: first.id });
+      // Coming back to Image restores the Glyph's own picture, not the first
+      // upload — the id survives on the override while another source is shown,
+      // so switching away and back mustn't silently repoint it.
+      const previous = override.renderSource;
+      const imageId =
+        previous?.kind === "image" &&
+        images.some((i) => i.id === previous.imageId)
+          ? previous.imageId
+          : images[0]?.id;
+      // With an empty manifest there's nothing to point at; the picker below
+      // prompts for a file instead.
+      if (!imageId) return;
+      return patch({ kind: "image", imageId });
     }
     patch({ kind });
   }

@@ -11,6 +11,7 @@
  * `symbolPaints` cascade group — fill / border / secondary independently (ADR-0007
  * §3). Non-sentinel paints pass through as authored.
  */
+import { createBitmapCache, decodeToBitmap } from "@/lib/glyph/bitmap-cache";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { classifyPaint } from "@/lib/glyph/symbols/paint-roles.mjs";
 import { getSymbolSvg } from "@/lib/glyph/symbols";
@@ -77,66 +78,26 @@ export function symbolInner(svg: string): SymbolInner | null {
 // --- Rasterization cache ---------------------------------------------------
 //
 // Rasterizing an SVG needs the DOM (Image decode) + createImageBitmap, so it only
-// runs in the browser; under jsdom/SSR these guards make it a no-op and the
+// runs in the browser; under jsdom/SSR the shared cache makes it a no-op and the
 // renderer falls back to the label. Bitmaps are cached by symbol id + role
 // colours + size so the preview and compositor share one decode per appearance.
 
-const bitmapCache = new Map<string, ImageBitmap>();
-const inFlight = new Map<string, Promise<ImageBitmap | null>>();
-
-function cacheKey(
-  namespace: string,
-  id: string,
-  colors: RoleColors,
-  size: number,
-  device?: string,
-): string {
-  return `${namespace}|${device ?? ""}|${id}|${colors.fill}|${colors.border}|${colors.secondary}|${size}`;
+/** One asset's drawable appearance: which asset, recoloured how, at what size. */
+interface SymbolAppearance {
+  /** Separates Symbols from Authored Background tiles, which share id space. */
+  namespace: "sym" | "bg";
+  id: string;
+  colors: RoleColors;
+  size: number;
+  /** Catalog id, selecting a device-specific override of the same asset id. */
+  device?: string;
 }
 
-/** The already-cached bitmap for an asset at a resolved appearance, or undefined. */
-function getBitmap(
-  namespace: string,
-  id: string,
-  colors: RoleColors,
-  size: number,
-  device?: string,
-): ImageBitmap | undefined {
-  return bitmapCache.get(cacheKey(namespace, id, colors, size, device));
-}
-
-/**
- * Rasterize (and cache) an asset at a resolved appearance, resolving to the bitmap
- * — or `null` when the asset is unknown or rasterization isn't available (SSR /
- * test). Concurrent callers for the same appearance share one decode.
- */
-function ensureBitmap(
-  namespace: string,
-  id: string,
-  colors: RoleColors,
-  size: number,
-  device?: string,
-): Promise<ImageBitmap | null> {
-  const key = cacheKey(namespace, id, colors, size, device);
-  const cached = bitmapCache.get(key);
-  if (cached) return Promise.resolve(cached);
-
-  const pending = inFlight.get(key);
-  if (pending) return pending;
-
-  const load = rasterize(id, colors, size, device)
-    .then((bitmap) => {
-      if (bitmap) bitmapCache.set(key, bitmap);
-      inFlight.delete(key);
-      return bitmap;
-    })
-    .catch(() => {
-      inFlight.delete(key);
-      return null;
-    });
-  inFlight.set(key, load);
-  return load;
-}
+const bitmaps = createBitmapCache<SymbolAppearance>(
+  ({ namespace, device, id, colors, size }) =>
+    `${namespace}|${device ?? ""}|${id}|${colors.fill}|${colors.border}|${colors.secondary}|${size}`,
+  ({ id, colors, size, device }) => rasterize(id, colors, size, device),
+);
 
 /**
  * The already-rasterized bitmap for a Symbol at a Glyph's resolved appearance and
@@ -150,7 +111,13 @@ export function getSymbolBitmap(
   size: number,
   device?: string,
 ): ImageBitmap | undefined {
-  return getBitmap("sym", symbolId, symbolRoleColors(style), size, device);
+  return bitmaps.get({
+    namespace: "sym",
+    id: symbolId,
+    colors: symbolRoleColors(style),
+    size,
+    device,
+  });
 }
 
 /**
@@ -165,7 +132,13 @@ export function ensureSymbolBitmap(
   size: number,
   device?: string,
 ): Promise<ImageBitmap | null> {
-  return ensureBitmap("sym", symbolId, symbolRoleColors(style), size, device);
+  return bitmaps.ensure({
+    namespace: "sym",
+    id: symbolId,
+    colors: symbolRoleColors(style),
+    size,
+    device,
+  });
 }
 
 /**
@@ -180,13 +153,13 @@ export function getBackgroundBitmap(
   size: number,
   device?: string,
 ): ImageBitmap | undefined {
-  return getBitmap(
-    "bg",
-    backgroundId,
-    backgroundRoleColors(style),
+  return bitmaps.get({
+    namespace: "bg",
+    id: backgroundId,
+    colors: backgroundRoleColors(style),
     size,
     device,
-  );
+  });
 }
 
 /**
@@ -201,13 +174,13 @@ export function ensureBackgroundBitmap(
   size: number,
   device?: string,
 ): Promise<ImageBitmap | null> {
-  return ensureBitmap(
-    "bg",
-    backgroundId,
-    backgroundRoleColors(style),
+  return bitmaps.ensure({
+    namespace: "bg",
+    id: backgroundId,
+    colors: backgroundRoleColors(style),
     size,
     device,
-  );
+  });
 }
 
 async function rasterize(
@@ -218,14 +191,6 @@ async function rasterize(
 ): Promise<ImageBitmap | null> {
   const svg = getSymbolSvg(symbolId, device);
   if (!svg) return null;
-  if (
-    typeof createImageBitmap !== "function" ||
-    typeof Image === "undefined" ||
-    typeof URL === "undefined" ||
-    typeof URL.createObjectURL !== "function"
-  ) {
-    return null;
-  }
 
   // Give the SVG an intrinsic pixel size so the Image decodes at `size` and the
   // sentinels are already resolved to their role colours before rasterizing.
@@ -233,14 +198,5 @@ async function rasterize(
     "<svg",
     `<svg width="${size}" height="${size}"`,
   );
-  const url = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml" }));
-  try {
-    const img = new Image(size, size);
-    img.decoding = "async";
-    img.src = url;
-    await img.decode();
-    return await createImageBitmap(img);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return decodeToBitmap(new Blob([sized], { type: "image/svg+xml" }));
 }
