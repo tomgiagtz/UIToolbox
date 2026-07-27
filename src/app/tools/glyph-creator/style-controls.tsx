@@ -11,6 +11,7 @@ import type {
   StyleOverride,
   StyleScope,
 } from "@/lib/glyph/style";
+import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
 import type { BackgroundShape, Project } from "@/lib/glyph/types";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 
@@ -145,6 +146,10 @@ export function StyleControls({
   showCellSize?: boolean;
 }) {
   const bg = style.background;
+  /** An Authored Background tile is supplying the shape, not `bg.shape`. */
+  const hasTile = Boolean(bg.backgroundId);
+  /** Fill and border are live: they paint a tile's roles, or a drawn shape. */
+  const paintsApply = hasTile || bg.shape !== "none";
 
   /** A reset handler for `field`, or undefined when it isn't overridden here. */
   function resetFor(field: StyleField): (() => void) | undefined {
@@ -165,32 +170,66 @@ export function StyleControls({
         onReset={resetFor("textColor")}
       />
 
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-          <span>Background shape</span>
-          {resetFor("shape") && (
-            <ResetButton
-              label="Background shape"
-              onReset={resetFor("shape")!}
-            />
-          )}
-        </legend>
-        <div className="flex flex-wrap gap-3">
-          {SHAPES.map((s) => (
-            <label key={s.value} className="flex items-center gap-1.5 text-sm">
-              <input
-                type="radio"
-                name="bg-shape"
-                value={s.value}
-                checked={bg.shape === s.value}
-                onChange={() => patch({ background: { shape: s.value } })}
-                className="size-4"
+      {/* Background source: an Authored Background tile, or the plain shape.
+          Picking "Shape" writes an explicit null so it overrides a tile inherited
+          from the Catalog per-Input tier (bumpers/triggers) — omitting the field
+          would just let that tile fall through again. Issue #18. */}
+      <Field label="Background source" onReset={resetFor("backgroundSource")}>
+        {(id) => (
+          <select
+            id={id}
+            className={inputClass}
+            value={bg.backgroundId ?? ""}
+            onChange={(e) =>
+              patch({
+                background: { backgroundId: e.target.value || null },
+              })
+            }
+          >
+            <option value="">Shape</option>
+            {AUTHORED_BACKGROUNDS.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
+
+      {/* A tile carries its own shape and corner treatment, so the shape and
+          radius controls would be inert while one is selected. Fill and border
+          still apply — they tint the tile through its sentinel paint roles. */}
+      {!hasTile && (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+            <span>Background shape</span>
+            {resetFor("shape") && (
+              <ResetButton
+                label="Background shape"
+                onReset={resetFor("shape")!}
               />
-              {s.label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+            )}
+          </legend>
+          <div className="flex flex-wrap gap-3">
+            {SHAPES.map((s) => (
+              <label
+                key={s.value}
+                className="flex items-center gap-1.5 text-sm"
+              >
+                <input
+                  type="radio"
+                  name="bg-shape"
+                  value={s.value}
+                  checked={bg.shape === s.value}
+                  onChange={() => patch({ background: { shape: s.value } })}
+                  className="size-4"
+                />
+                {s.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       {showCellSize && (
         <Field
@@ -219,7 +258,9 @@ export function StyleControls({
         </Field>
       )}
 
-      {bg.shape !== "none" && (
+      {/* A tile is tinted by fill/border even when `shape` is "none", so these
+          stay available whenever either a tile or a drawn shape is in play. */}
+      {paintsApply && (
         <ColorField
           label="Background fill"
           value={bg.fill}
@@ -228,7 +269,7 @@ export function StyleControls({
         />
       )}
 
-      {bg.shape === "rounded-rect" && (
+      {!hasTile && bg.shape === "rounded-rect" && (
         <Field
           label={`Corner radius (${bg.cornerRadius}px)`}
           onReset={resetFor("cornerRadius")}
@@ -249,7 +290,7 @@ export function StyleControls({
         </Field>
       )}
 
-      {bg.shape !== "none" && (
+      {paintsApply && (
         <>
           <Field
             label={`Border width (${bg.border.width}px)`}

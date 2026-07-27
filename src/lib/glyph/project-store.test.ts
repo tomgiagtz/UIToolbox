@@ -167,6 +167,17 @@ describe("ProjectStore — v1 → v2 migration", () => {
     expect(project!.devices[0].custom).toEqual([]);
   });
 
+  it("matches a shoulder Input written in the other pad's vocabulary", () => {
+    // A v1 project listed Inputs by label only. Someone who wrote "RB" on a
+    // PlayStation Device meant R1, so the alias should recover the Catalog
+    // Input instead of stranding it as a custom Input.
+    const project = parseConfig(
+      v1([{ name: "PlayStation", inputs: ["RB", "R2"] }]),
+    );
+    expect(project!.devices[0].enabled).toEqual(["ps-r1", "ps-r2"]);
+    expect(project!.devices[0].custom).toEqual([]);
+  });
+
   it("produces a config that passes current-version validation on re-save", () => {
     const migrated = parseConfig(v1([{ name: "Keyboard", inputs: ["W"] }]))!;
     saveConfig(migrated);

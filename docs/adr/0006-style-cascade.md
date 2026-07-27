@@ -35,6 +35,22 @@ backers), and _below_ explicit Glyph edits so the user always has the final say.
 Project-global. cellSize keeps the atlas grid uniform; a single font keeps the
 tool's "match your game's identity from one font" promise (ADR-0002).
 
+### Amendment: clearing an inherited Background source (issue #18)
+
+"Unset properties fall up the chain" gives a tier two states — set, or absent —
+which is enough for every property whose default is a plain value. It is not
+enough for the Background **source**, because the Catalog per-Input tier sits
+_above_ Device: a bumper's authored Background is inherited from a higher tier
+than most edits, so leaving the field unset re-inherits the tile instead of
+removing it. Without a third state there is no value a Glyph can write that means
+"no tile" — a per-Glyph shape change would resolve to the tile anyway and appear
+to do nothing.
+
+So `BackgroundOverride.backgroundId` is **tri-state**: absent (fall up), an id
+(use that tile), or `null` (explicitly no tile — draw the plain shape). `null`
+clears the mirror flag with it, since `flipX` is meaningless without a tile. Only
+the source needs this; every other property keeps the two-state rule.
+
 ## Consequences
 
 - The model stores overrides as partial style objects at Device and Glyph level,

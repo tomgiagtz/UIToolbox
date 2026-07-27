@@ -13,7 +13,7 @@
  * access is defensively guarded so a private-mode / quota / SSR failure degrades
  * to "start fresh" rather than throwing.
  */
-import { getCatalogByName } from "@/lib/glyph/catalog";
+import { catalogNameIndex, getCatalogByName } from "@/lib/glyph/catalog";
 import { DEFAULT_SYMBOL_PAINTS } from "@/lib/glyph/presets";
 import type { SymbolPaints } from "@/lib/glyph/style";
 import type {
@@ -357,9 +357,12 @@ function migrateV1(project: ProjectV2 & { devices: DeviceV1[] }): ProjectV2 {
 
 function migrateV1Device(device: DeviceV1): DeviceConfig {
   const catalog = getCatalogByName(device.name);
-  const byLabel = new Map(
-    catalog?.inputs.map((i) => [i.label, i.id] as const) ?? [],
-  );
+  // By every name an Input answers to, not just its label: a v1 save listing
+  // "RB" on a PlayStation Device meant R1, and should recover that Catalog Input
+  // rather than strand it as a custom one.
+  const byLabel = catalog
+    ? catalogNameIndex(catalog)
+    : new Map<string, string>();
 
   const enabled: string[] = [];
   const custom: CustomInput[] = [];

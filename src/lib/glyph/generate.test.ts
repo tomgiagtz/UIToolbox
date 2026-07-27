@@ -49,6 +49,25 @@ function project(over: Partial<Project> = {}): Project {
   };
 }
 
+/**
+ * A one-Device Xbox project holding a face button and a bumper — the pair that
+ * separates the Catalog per-Input Background tier from the Device tier (#18).
+ */
+function xboxProject(): Project {
+  return project({
+    devices: [
+      {
+        name: "Xbox",
+        catalogId: "xbox",
+        enabled: ["xbox-a", "xbox-lb"],
+        custom: [],
+        style: {},
+        glyphStyles: {},
+      },
+    ],
+  });
+}
+
 describe("Symbol Render Source threads through the cascade (issue #17)", () => {
   const xbox: DeviceConfig = {
     name: "Xbox",
@@ -61,7 +80,7 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
 
   it("resolves each Input's default Symbol id (label-only when unset)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
-    expect(a.symbolId).toBe("xbox-a"); // well-known → its Symbol
+    expect(a.symbolId).toBe("a"); // well-known → its Symbol
     expect(lb.symbolId).toBeUndefined(); // bumper → Authored Background (#18)
     expect(paddle.symbolId).toBeUndefined(); // custom → label
   });
@@ -69,7 +88,7 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
   it("carries the Symbol id onto the packed placements for the compositor", () => {
     const [out] = generateTilesets(project({ devices: [xbox] }));
     expect(out.placements.map((p) => p.symbolId)).toEqual([
-      "xbox-a",
+      "a",
       undefined,
       undefined,
     ]);
@@ -79,14 +98,14 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
     // The Catalog per-Input default rides in the resolved Background, not on a
     // separate field like symbolId, so it flows to the compositor for free.
-    expect(lb.style.background.backgroundId).toBe("xbox-bumper");
+    expect(lb.style.background.backgroundId).toBe("bumper");
     expect(a.style.background.backgroundId).toBeUndefined();
     expect(paddle.style.background.backgroundId).toBeUndefined();
 
     const [out] = generateTilesets(project({ devices: [xbox] }));
     expect(out.placements.map((p) => p.style.background.backgroundId)).toEqual([
       undefined,
-      "xbox-bumper",
+      "bumper",
       undefined,
     ]);
   });
@@ -312,6 +331,36 @@ describe("resolveScopeStyle", () => {
     const style = resolveScopeStyle(proj, scope);
     expect(style.textColor).toBe("#0f0"); // Glyph tier
     expect(style.background.shape).toBe("circle"); // Device tier
+  });
+
+  it("keeps bumpers on their Authored Background under a device-wide shape override (issue #18)", () => {
+    // The Catalog per-Input tier outranks the Device tier, so a project-wide
+    // "make everything a circle" must not strip the bumper/trigger backers.
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { shape: "circle" } },
+    });
+    const inputs = resolveDeviceInputs(proj.devices[0], proj);
+    const lb = inputs.find((i) => i.id === "xbox-lb");
+    const a = inputs.find((i) => i.id === "xbox-a");
+    expect(lb?.style.background.backgroundId).toBe("bumper");
+    expect(lb?.style.background.flipX).toBe(true);
+    // A face button has no backer, so it does take the device-wide circle.
+    expect(a?.style.background.shape).toBe("circle");
+  });
+
+  it("lets an explicit per-Glyph source change override the backer (issue #18)", () => {
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      patch: { background: { backgroundId: null, shape: "circle" } },
+    });
+    const lb = resolveDeviceInputs(proj.devices[0], proj).find(
+      (i) => i.id === "xbox-lb",
+    );
+    expect(lb?.style.background.backgroundId).toBeUndefined();
+    expect(lb?.style.background.shape).toBe("circle");
   });
 
   it("falls back to the Project base for a missing Device", () => {

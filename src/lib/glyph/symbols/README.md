@@ -9,9 +9,9 @@ same authored-SVG → codegen pattern as `../layouts/`.
 
 ## The workshop loop
 
-1. Add/adjust the asset's row in `manifest.mjs` (`id`, `label`, `kind`, `atlas`).
-2. Draw its cell in the matching atlas — `xbox-symbols.svg`, `shared-symbols.svg`
-   — as a `<g id="…">` placed on the grid.
+1. Add/adjust the asset's row in `manifest.mjs` (`id`, `label`, `kind`, `atlases`).
+2. Draw its cell in each atlas listed in `atlases` — `xbox-symbols.svg`,
+   `playstation-symbols.svg`, `shared-symbols.svg` — as a `<g id="…">` on the grid.
 3. Run `npm run symbols` to regenerate `symbols.generated.ts`.
 4. Repeat. Un-drawn manifest ids are reported as `pending` and simply omitted
    from `SYMBOL_SVGS` until authored (callers fall back to the label).
@@ -24,24 +24,29 @@ same authored-SVG → codegen pattern as `../layouts/`.
   the root `<svg>` if needed.
 - **Safe box.** Keep art inside the centered ~80% (≈205 units) of its cell so
   nothing clips when composited.
-- **`id` = asset id.** Each interactive cell's `<g>` `id` must equal a `manifest.mjs`
-  id (e.g. `xbox-a`, `dpad-up`, `bg-bumper`). Any group whose id isn't in the
-  manifest is ignored (use it for guides / labels).
-- **One home per id.** An id is authored in exactly the atlas named by its
-  manifest `atlas` field; the codegen errors if a cell lands in the wrong file.
-  Only the genuinely cross-device art — this pass just the stick — lives in
-  `shared-symbols.svg`. Everything device-specific, including the d-pad and the
-  bumper/trigger tile shapes (which differ per platform), lives in that device's
-  own atlas.
-- **Derived directions.** Don't draw all four d-pad arrows: author only `dpad-up`;
-  the codegen rotates it into `dpad-right`/`down`/`left`. Derived ids have a
-  `rotateOf`/`rotate` in the manifest and **no** cell — authoring one is an error.
-- **Overriding a shared asset.** To give one device its own take on a shared asset,
-  re-author that shared id (e.g. `dpad-up`) as a cell in **that device's** atlas.
-  The codegen keys it `<device>:<id>` and `getSymbolSvg(id, device)` prefers it over
-  the shared base; devices without an override still fall back to shared. Overriding
-  the rotation source overrides its rotations too. Only shared assets can be
-  overridden — re-authoring a device-specific id elsewhere is an error.
+- **`id` = asset id, and ids are bare.** Each interactive cell's `<g>` `id` must
+  equal a `manifest.mjs` id (e.g. `a`, `dpad-right`, `bumper`) — **no device
+  prefix**. The atlas file a cell lives in is what scopes it to a Device, so both
+  pads author their own `bumper` and neither name has to say which pad it is. Any
+  group whose id isn't in the manifest is ignored (use it for guides / labels).
+- **Draw an id once per atlas that needs it.** An asset's manifest `atlases` lists
+  every file that draws it; the codegen errors if a cell appears in an atlas the
+  manifest doesn't list, so the two can't drift. Device art is emitted as
+  `<atlas>:<id>` and `getSymbolSvg(id, device)` picks the matching one. Only the
+  genuinely cross-device art — this pass just the stick — lives in
+  `shared-symbols.svg`, which is emitted unscoped and acts as the fallback for any
+  Device that draws none of its own.
+- **An atlas may name a cell in its own vocabulary.** Where a pad calls a control
+  something else, put that name in the asset's `cells` map rather than renaming
+  the asset: `cells: { playstation: "R1" }` lets `playstation-symbols.svg` label
+  its bumper tile `R1` while it still resolves as `bumper`. The per-atlas name is
+  an authoring convenience only — the emitted key and everything downstream use
+  the bare asset id.
+- **Derived directions.** Don't draw all four d-pad arrows: author only
+  `dpad-right`; the codegen rotates it into `dpad-down`/`left`/`up`. Derived ids
+  have a `rotateOf`/`rotate` in the manifest and **no** cell — authoring one is an
+  error. Rotations are generated once per atlas the source is drawn in, so each
+  Device's arrows come from its own art.
 - **Colour = paint role (RGB sentinels).** Don't author with `currentColor` or
   real colours. Paint each shape in the **exact sentinel primary for the role it
   plays**, and the classifier keys on that colour (independent of fill vs. stroke):
@@ -63,7 +68,7 @@ same authored-SVG → codegen pattern as `../layouts/`.
 ## Files
 
 - `*-symbols.svg` — authored atlases, one per source (git-tracked). **Author these.**
-- `manifest.mjs` — the asset list (`id`, `label`, `kind`, `atlas`). Edit this.
+- `manifest.mjs` — the asset list (`id`, `label`, `kind`, `atlases`). Edit this.
 - `build-symbols.mjs` — the codegen (`npm run symbols`). Uses `jsdom`.
 - `paint-roles.mjs` — the RGB sentinel palette (colour → role) and its classifier,
   shared by the preview and the tool. Edit here to change the convention.

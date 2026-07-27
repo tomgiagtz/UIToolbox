@@ -209,9 +209,11 @@ export function keyboardExtent(): { width: number; height: number } {
 /**
  * One clickable shape on a pad Layout, bound to a Catalog id. `tag` + `geom`
  * reconstruct the SVG element ({@link DeviceLayout} strips authored fill/stroke
- * and applies the enabled/disabled theme). `labelAt` is an optional centre for
- * an in-shape label placeholder (Symbols replace these later); it is set for the
- * simple code-drawn/round shapes and omitted for arbitrary authored paths.
+ * and applies the enabled/disabled theme). `contentAt` is an optional centre for
+ * the node's in-shape content — its Symbol, or a short label placeholder. Round
+ * and rectangular shapes report their exact centre; paths and polygons are
+ * measured from their on-path points (`path-bbox.mjs`), which is approximate for
+ * curves. Only a transformed shape, which we don't resolve, reports none.
  */
 export interface PadButtonShape {
   /** Catalog id this shape toggles, e.g. "xbox-a". */
@@ -220,7 +222,7 @@ export interface PadButtonShape {
   tag: string;
   /** Geometry attributes only (e.g. `d`, `cx`/`cy`/`r`, `points`, `x`/`y`/…). */
   geom: Record<string, string | number>;
-  labelAt?: { x: number; y: number; r: number };
+  contentAt?: { x: number; y: number; r: number };
 }
 
 /**
@@ -269,7 +271,12 @@ function circleButton(
   y: number,
   r: number,
 ): PadButtonShape {
-  return { id, tag: "circle", geom: { cx: x, cy: y, r }, labelAt: { x, y, r } };
+  return {
+    id,
+    tag: "circle",
+    geom: { cx: x, cy: y, r },
+    contentAt: { x, y, r },
+  };
 }
 
 /** Place a pad's Inputs into the shared code-drawn controller template. */

@@ -9,6 +9,7 @@ import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { LAYOUT_MAPPINGS } from "./mapping.mjs";
+import { pathBBox, pointsBBox } from "./path-bbox.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "pad-layouts.generated.ts");
@@ -38,11 +39,37 @@ function num(el, attr) {
 }
 
 /**
- * A centre + radius for an in-shape label placeholder, for the simple shapes we
- * can measure cheaply and only when untransformed. Arbitrary paths get none.
+ * Round to 3 decimal places, so float noise from measuring paths (`147.008` vs
+ * `147.00799999999998`) doesn't churn the generated file between runs. Well
+ * below one SVG unit, so it never moves a glyph visibly.
  */
-function labelAtOf(el, tag) {
+function round(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * A centre + radius for a node's in-shape content (a Symbol, or the label
+ * placeholder), for shapes we can measure cheaply and only when untransformed.
+ * Paths and polygons are measured from their on-path points (see `path-bbox.mjs`),
+ * which is approximate for curves but plenty to centre a glyph.
+ */
+function contentAtOf(el, tag) {
   if (el.getAttribute("transform")) return undefined;
+  if (tag === "path" || tag === "polygon" || tag === "polyline") {
+    const box =
+      tag === "path"
+        ? pathBBox(el.getAttribute("d") ?? undefined)
+        : pointsBBox(el.getAttribute("points") ?? undefined);
+    if (!box) return undefined;
+    const w = box.maxX - box.minX,
+      h = box.maxY - box.minY;
+    if (!(w > 0 && h > 0)) return undefined;
+    return {
+      x: round(box.minX + w / 2),
+      y: round(box.minY + h / 2),
+      r: round(Math.min(w, h) / 2),
+    };
+  }
   if (tag === "circle") {
     const cx = num(el, "cx"),
       cy = num(el, "cy"),
@@ -114,7 +141,7 @@ function parseLayout(controllerId, svgText, file) {
     }
     const transform = el.getAttribute("transform");
     if (transform) geom.transform = transform;
-    buttons.push({ id: catalogId, tag, geom, labelAt: labelAtOf(el, tag) });
+    buttons.push({ id: catalogId, tag, geom, contentAt: contentAtOf(el, tag) });
   }
 
   // Every mapped name must exist in the SVG, or the map is stale.
@@ -137,8 +164,8 @@ function parseLayout(controllerId, svgText, file) {
     .join("")
     .trim();
 
-  // Drop undefined labelAt so the JSON stays tidy.
-  for (const b of buttons) if (!b.labelAt) delete b.labelAt;
+  // Drop undefined contentAt so the JSON stays tidy.
+  for (const b of buttons) if (!b.contentAt) delete b.contentAt;
   return { viewBox, decoration, buttons };
 }
 

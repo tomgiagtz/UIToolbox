@@ -35,7 +35,7 @@ const style: GlyphStyle = {
     fill: "#0e7a0d",
     cornerRadius: 8,
     border: { width: 0, color: "#ffd400" },
-    backgroundId: "xbox-bumper",
+    backgroundId: "bumper",
   },
   symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
 };

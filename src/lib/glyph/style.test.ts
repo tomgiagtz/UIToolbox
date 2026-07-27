@@ -72,32 +72,75 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
 
   it("resolves an Authored Background id from the Catalog per-Input tier (issue #18)", () => {
     const catalog: StyleOverride = {
-      background: { backgroundId: "xbox-bumper" },
+      background: { backgroundId: "bumper" },
     };
     const out = resolveStyle(base(), undefined, catalog);
-    expect(out.background.backgroundId).toBe("xbox-bumper");
+    expect(out.background.backgroundId).toBe("bumper");
     // Falls up for everything else it doesn't set.
     expect(out.background.fill).toBe(base().background.fill);
   });
 
   it("carries the Background mirror flag through the cascade (issue #18)", () => {
     const catalog: StyleOverride = {
-      background: { backgroundId: "xbox-bumper", flipX: true },
+      background: { backgroundId: "bumper", flipX: true },
     };
     const out = resolveStyle(base(), undefined, catalog);
-    expect(out.background.backgroundId).toBe("xbox-bumper");
+    expect(out.background.backgroundId).toBe("bumper");
     expect(out.background.flipX).toBe(true);
   });
 
-  it("lets a Glyph override switch or drop the Catalog's Background id", () => {
+  it("lets a Glyph override switch the Catalog's Background id", () => {
     const catalog: StyleOverride = {
-      background: { backgroundId: "xbox-bumper" },
+      background: { backgroundId: "bumper" },
     };
     const glyph: StyleOverride = {
-      background: { backgroundId: "xbox-trigger" },
+      background: { backgroundId: "trigger" },
     };
     const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.backgroundId).toBe("xbox-trigger");
+    expect(out.background.backgroundId).toBe("trigger");
+  });
+
+  it("lets a Glyph override drop the Catalog's Background id with null (issue #18)", () => {
+    // Clearing the Glyph tier's own field only makes it fall back to the tile
+    // again, so "no tile" needs an explicit value the cascade can carry.
+    const catalog: StyleOverride = {
+      background: { backgroundId: "bumper", flipX: true },
+    };
+    const glyph: StyleOverride = {
+      background: { backgroundId: null, shape: "circle" },
+    };
+    const out = resolveStyle(base(), undefined, catalog, glyph);
+    expect(out.background.backgroundId).toBeUndefined();
+    // The mirror flag is meaningless with no tile, so it goes too.
+    expect(out.background.flipX).toBeUndefined();
+    expect(out.background.shape).toBe("circle");
+  });
+
+  it("never resolves to 'no tile, but mirrored' when one patch sets both", () => {
+    const catalog: StyleOverride = {
+      background: { backgroundId: "bumper", flipX: true },
+    };
+    const glyph: StyleOverride = {
+      background: { backgroundId: null, flipX: true },
+    };
+    const out = resolveStyle(base(), undefined, catalog, glyph);
+    expect(out.background.backgroundId).toBeUndefined();
+    expect(out.background.flipX).toBeUndefined();
+  });
+
+  it("treats a null Background id at the Device tier as no tile, not as unset", () => {
+    const device: StyleOverride = { background: { backgroundId: null } };
+    const catalog: StyleOverride = {
+      background: { backgroundId: "bumper" },
+    };
+    // Catalog outranks Device, so the tile still wins here...
+    expect(resolveStyle(base(), device, catalog).background.backgroundId).toBe(
+      "bumper",
+    );
+    // ...but with no Catalog tile, the Device's null resolves to no tile.
+    expect(
+      resolveStyle(base(), device, undefined).background.backgroundId,
+    ).toBeUndefined();
   });
 
   it("resolves each Symbol Paint Role independently through the cascade (#37)", () => {
@@ -190,7 +233,7 @@ describe("isOverrideFieldSet", () => {
   it("detects a set Authored Background source", () => {
     expect(
       isOverrideFieldSet(
-        { background: { backgroundId: "xbox-bumper" } },
+        { background: { backgroundId: "bumper" } },
         "backgroundSource",
       ),
     ).toBe(true);
@@ -256,7 +299,7 @@ describe("clearOverrideField", () => {
   it("clears an Authored Background source, collapsing to empty", () => {
     expect(
       clearOverrideField(
-        { background: { backgroundId: "xbox-bumper" } },
+        { background: { backgroundId: "bumper" } },
         "backgroundSource",
       ),
     ).toEqual({});
@@ -266,7 +309,7 @@ describe("clearOverrideField", () => {
     // flipX is meaningless without a tile, so clearing the source clears it too.
     expect(
       clearOverrideField(
-        { background: { backgroundId: "xbox-bumper", flipX: true } },
+        { background: { backgroundId: "bumper", flipX: true } },
         "backgroundSource",
       ),
     ).toEqual({});

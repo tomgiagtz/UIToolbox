@@ -74,4 +74,26 @@ describe("DeviceLayout", () => {
     // The whole diagram still carries currentColor'd symbol art.
     expect(container.innerHTML).toContain("currentColor");
   });
+
+  it("draws nothing inside a d-pad arm, whose Symbol depicts the whole cluster", () => {
+    const device = createDeviceFromCatalog(getCatalog("xbox")!);
+    render(<DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />);
+    // `dpad-up` art draws all four arms; nesting it in one arm would show a
+    // whole d-pad inside a quarter of itself. The Layout's own geometry already
+    // says "up", so the node stays a bare shape — no Symbol, no label.
+    const up = screen.getByRole("button", { name: "D-Pad Up" });
+    expect(up.querySelector("svg")).not.toBeInTheDocument();
+    expect(up.querySelector("text")).not.toBeInTheDocument();
+  });
+
+  it("falls back to a label placeholder on authored-path nodes with no Symbol", () => {
+    const device = createDeviceFromCatalog(getCatalog("xbox")!);
+    render(<DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />);
+    // LB is an arbitrary <path>, and uses an Authored Background rather than a
+    // Symbol — so it shows its short label. It rendered blank before its shape
+    // could report a centre.
+    const lb = screen.getByRole("button", { name: "LB" });
+    expect(lb.querySelector("svg")).not.toBeInTheDocument();
+    expect(lb.querySelector("text")).toHaveTextContent("LB");
+  });
 });

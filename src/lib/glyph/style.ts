@@ -44,8 +44,16 @@ export interface BackgroundOverride {
   fill?: string;
   cornerRadius?: number;
   border?: Partial<Background["border"]>;
-  /** An Authored Background tile id; see {@link Background.backgroundId}. */
-  backgroundId?: string;
+  /**
+   * An Authored Background tile id (see {@link Background.backgroundId}), or
+   * `null` for "no tile — draw the plain shape".
+   *
+   * The `null` matters because the Catalog per-Input tier outranks the Device
+   * tier: bumpers and triggers carry a tile by default, and *omitting* the field
+   * at a higher tier just lets that tile fall through. Only an explicit `null`
+   * can turn it off, which is what makes a per-Glyph shape change stick.
+   */
+  backgroundId?: string | null;
   /** Mirror the Authored Background tile horizontally; see {@link Background.flipX}. */
   flipX?: boolean;
 }
@@ -177,11 +185,8 @@ export function clearOverrideField(
   if (!next.background) return next;
   const bg: BackgroundOverride = { ...next.background };
   if (field === "shape") delete bg.shape;
-  else if (field === "backgroundSource") {
-    // The mirror flag is meaningless without a tile, so clear it together.
-    delete bg.backgroundId;
-    delete bg.flipX;
-  } else if (field === "fill") delete bg.fill;
+  else if (field === "backgroundSource") clearTile(bg);
+  else if (field === "fill") delete bg.fill;
   else if (field === "cornerRadius") delete bg.cornerRadius;
   else if (field === "borderWidth" || field === "borderColor") {
     if (bg.border) {
@@ -228,6 +233,22 @@ export function resolveStyle(
   return { textColor, background, symbolPaints };
 }
 
+/**
+ * Drop an Authored Background tile and its mirror flag together, in place.
+ *
+ * `flipX` says how to draw a tile, so it is meaningless without a `backgroundId`
+ * — the two are always cleared as a unit. Shared by the resolver (dropping a
+ * tile inherited from a lower tier) and the override editor (dropping a tier's
+ * own tile): different operations, same invariant.
+ */
+function clearTile(bg: {
+  backgroundId?: string | null;
+  flipX?: boolean;
+}): void {
+  delete bg.backgroundId;
+  delete bg.flipX;
+}
+
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */
 function applyBackground(
   bg: Background,
@@ -235,8 +256,15 @@ function applyBackground(
 ): Background {
   const next: Background = { ...bg, border: { ...bg.border } };
   if (patch.shape !== undefined) next.shape = patch.shape;
-  if (patch.backgroundId !== undefined) next.backgroundId = patch.backgroundId;
-  if (patch.flipX !== undefined) next.flipX = patch.flipX;
+  if (patch.backgroundId === null) {
+    // Explicit "no tile". A mirror in the same patch goes with it, so the pair
+    // can never resolve to "no tile, but flipped".
+    clearTile(next);
+  } else {
+    if (patch.backgroundId !== undefined)
+      next.backgroundId = patch.backgroundId;
+    if (patch.flipX !== undefined) next.flipX = patch.flipX;
+  }
   if (patch.fill !== undefined) next.fill = patch.fill;
   if (patch.cornerRadius !== undefined) next.cornerRadius = patch.cornerRadius;
   if (patch.border) {

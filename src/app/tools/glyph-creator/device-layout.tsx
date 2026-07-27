@@ -15,7 +15,7 @@ import {
   type RoleColors,
   type SymbolInner,
 } from "@/lib/glyph/symbol-render";
-import { getSymbolSvg } from "@/lib/glyph/symbols";
+import { getSymbolSvg, isClusterArt } from "@/lib/glyph/symbols";
 import type { DeviceConfig } from "@/lib/glyph/types";
 
 /**
@@ -29,17 +29,6 @@ const CURRENT_COLOR_ROLES: RoleColors = {
 };
 
 /**
- * The code-drawn **Device Layout** (ADR-0005): a Device's Catalog rendered as a
- * clickable schematic for enabling Inputs. The keyboard is a US-staggered
- * rounded-rect keycap board; the pads are clustered nodes over a prototype
- * controller outline. Enabled Inputs read filled/pressed, disabled ones dimmed;
- * clicking one toggles it, which the live preview reflects.
- *
- * This is editor chrome only — the geometry (see `layout.ts`) never reaches an
- * exported Sprite Atlas. Pad nodes show their label as a placeholder until
- * Symbols land.
- */
-/**
  * What each diagram needs to render and drive one Device's Layout: its name, how
  * to resolve an id's label and enabled state, and how to toggle it. Bundled so
  * the keyboard and pad diagrams share one prop rather than four parallel ones.
@@ -49,14 +38,36 @@ interface DeviceView {
   label: (id: string) => string;
   isEnabled: (id: string) => boolean;
   onToggle: (id: string) => void;
-  /**
-   * The node's Symbol Render Source, recoloured to `currentColor` and split for
-   * inline embedding — or `undefined` when the Input has no Symbol (it then shows
-   * its label placeholder). Issue #17.
-   */
-  symbol: (id: string) => SymbolInner | undefined;
+  /** What to draw inside the node; see {@link NodeContent}. Issue #17. */
+  content: (id: string) => NodeContent;
 }
 
+/**
+ * What a pad node draws on top of its shape:
+ *
+ * - `symbol` — the Input's Symbol Render Source, recoloured to `currentColor`.
+ * - `label` — the short text placeholder, for Inputs with no Symbol art.
+ * - `none` — nothing, because the Layout's own geometry already depicts the
+ *   Input. That is the d-pad: its Symbols are cluster art (all four arms), so
+ *   drawing one inside a single arm would nest a whole d-pad in a quarter of
+ *   itself, and an arrow would only repeat what the arm's shape already says.
+ */
+type NodeContent =
+  | { kind: "symbol"; symbol: SymbolInner }
+  | { kind: "label" }
+  | { kind: "none" };
+
+/**
+ * The code-drawn **Device Layout** (ADR-0005): a Device's Catalog rendered as a
+ * clickable schematic for enabling Inputs. The keyboard is a US-staggered
+ * rounded-rect keycap board; the pads are clustered nodes over a prototype
+ * controller outline. Enabled Inputs read filled/pressed, disabled ones dimmed;
+ * clicking one toggles it, which the live preview reflects.
+ *
+ * This is editor chrome only — the geometry (see `layout.ts`) never reaches an
+ * exported Sprite Atlas. Pad nodes draw their Symbol where they have one and a
+ * short label placeholder otherwise (see {@link NodeContent}).
+ */
 export function DeviceLayout({
   device,
   deviceIndex,
@@ -77,13 +88,16 @@ export function DeviceLayout({
     isEnabled: (id) => enabled.has(id),
     onToggle: (inputId) =>
       dispatch({ type: "toggle-input", deviceIndex, inputId }),
-    symbol: (id) => {
+    content: (id) => {
       const symbolId = entries.get(id)?.symbolId;
-      if (!symbolId) return undefined;
+      if (!symbolId) return { kind: "label" };
+      // Cluster art describes the whole d-pad, which the Layout already draws.
+      if (isClusterArt(symbolId)) return { kind: "none" };
       const raw = getSymbolSvg(symbolId, device.catalogId);
-      return raw
-        ? (symbolInner(recolorSymbolSvg(raw, CURRENT_COLOR_ROLES)) ?? undefined)
+      const symbol = raw
+        ? symbolInner(recolorSymbolSvg(raw, CURRENT_COLOR_ROLES))
         : undefined;
+      return symbol ? { kind: "symbol", symbol } : { kind: "label" };
     },
   };
 
@@ -228,7 +242,7 @@ function PadDiagram({
           key={shape.id}
           shape={shape}
           label={label(shape.id)}
-          symbol={view.symbol(shape.id)}
+          content={view.content(shape.id)}
           on={isEnabled(shape.id)}
           onToggle={() => onToggle(shape.id)}
         />
@@ -259,27 +273,27 @@ type GeomAttrs = Pick<
  * recoloured by enabled state. The Catalog's authored fill is stripped at ingest
  * so the whole footprint takes `fill-primary` (enabled) / `fill-muted` (disabled).
  * For this to be clickable across the button, author each shape **solid** (a
- * filled region), not as a hollow outline ring. When the Input has a Symbol it
- * draws over the footprint in the node's text colour; otherwise a centred label
- * placeholder shows for the shapes that report a centre (issue #17).
+ * filled region), not as a hollow outline ring. Over the footprint it draws its
+ * {@link NodeContent} in the node's text colour, centred on the shape's measured
+ * centre — shapes too irregular to measure report none and stay bare (issue #17).
  */
 function PadButton({
   shape,
   label,
-  symbol,
+  content,
   on,
   onToggle,
 }: {
   shape: PadButtonShape;
   label: string;
-  symbol: SymbolInner | undefined;
+  content: NodeContent;
   on: boolean;
   onToggle: () => void;
 }) {
   const cls = nodeClasses(on);
   const Shape = shape.tag as "path";
   const glyph = padGlyph(shape.id, label);
-  const at = shape.labelAt;
+  const at = shape.contentAt;
   return (
     <g
       role="button"
@@ -301,18 +315,18 @@ function PadButton({
         className={cls.shape}
       />
       {at &&
-        (symbol ? (
+        (content.kind === "symbol" ? (
           <svg
             x={at.x - at.r}
             y={at.y - at.r}
             width={at.r * 2}
             height={at.r * 2}
-            viewBox={symbol.viewBox}
+            viewBox={content.symbol.viewBox}
             preserveAspectRatio="xMidYMid meet"
             className={`${cls.symbol} pointer-events-none`}
-            dangerouslySetInnerHTML={{ __html: symbol.inner }}
+            dangerouslySetInnerHTML={{ __html: content.symbol.inner }}
           />
-        ) : (
+        ) : content.kind === "label" ? (
           <text
             x={at.x}
             y={at.y}
@@ -323,13 +337,13 @@ function PadButton({
           >
             {glyph}
           </text>
-        ))}
+        ) : null)}
     </g>
   );
 }
 
 /**
- * A short in-node placeholder for a pad Input (Symbols will replace these). Short
+ * A short in-node placeholder for a pad Input that has no Symbol art. Short
  * labels (A, LB, R2) show as-is; sticks and d-pad directions get compact glyphs;
  * anything else falls back to the label, shrunk to fit by {@link fitFontSize}.
  */
