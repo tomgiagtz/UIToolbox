@@ -21,9 +21,10 @@ export interface SymbolAsset {
   label: string;
   /**
    * Foreground Render Source (`symbol`) vs. background tile (`background`).
-   * Symbols carry their authored colours as tool-configurable defaults (face
-   * buttons default to the Xbox brand palette); backgrounds are tinted by the
-   * Style Cascade fill.
+   * Both are authored in sentinel paint roles and recoloured through the Style
+   * Cascade — Symbols by `symbolPaints`, backgrounds by the Background `fill` /
+   * `border.color` (ADR-0007). The per-Catalog brand palette (Xbox A green, B
+   * red, …) is not wired up yet; face buttons resolve to the Project paints.
    */
   kind: "symbol" | "background";
   /** Source assets: which `<atlas>-symbols.svg` authors this asset's cell. */
@@ -32,6 +33,14 @@ export interface SymbolAsset {
   rotateOf?: string;
   /** Derived assets: clockwise rotation in degrees (90 | 180 | 270). */
   rotate?: number;
+  /**
+   * `"cluster"` marks art that depicts a whole multi-Input cluster rather than
+   * the single Input it is bound to — the d-pad Symbols draw all four arms and
+   * emphasise one. Correct in an exported Glyph, where the cell stands alone; a
+   * Device Layout must skip it, because the Layout already draws the cluster and
+   * would otherwise nest a whole d-pad inside one arm. See {@link isClusterArt}.
+   */
+  depicts?: "cluster";
 }
 
 export { SYMBOL_ASSETS };
@@ -75,3 +84,11 @@ export const SYMBOLS: SymbolAsset[] = SYMBOL_ASSETS.filter(
 export const AUTHORED_BACKGROUNDS: SymbolAsset[] = SYMBOL_ASSETS.filter(
   (a) => a.kind === "background",
 );
+
+/**
+ * Whether an asset id's art depicts a whole cluster rather than its own Input
+ * (see {@link SymbolAsset.depicts}). Unknown ids are not cluster art.
+ */
+export function isClusterArt(id: string | undefined): boolean {
+  return id != null && byId.get(id)?.depicts === "cluster";
+}

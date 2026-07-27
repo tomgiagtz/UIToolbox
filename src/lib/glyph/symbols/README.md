@@ -25,7 +25,7 @@ same authored-SVG → codegen pattern as `../layouts/`.
 - **Safe box.** Keep art inside the centered ~80% (≈205 units) of its cell so
   nothing clips when composited.
 - **`id` = asset id.** Each interactive cell's `<g>` `id` must equal a `manifest.mjs`
-  id (e.g. `xbox-a`, `dpad-up`, `bg-bumper`). Any group whose id isn't in the
+  id (e.g. `xbox-a`, `dpad-up`, `xbox-bumper`). Any group whose id isn't in the
   manifest is ignored (use it for guides / labels).
 - **One home per id.** An id is authored in exactly the atlas named by its
   manifest `atlas` field; the codegen errors if a cell lands in the wrong file.

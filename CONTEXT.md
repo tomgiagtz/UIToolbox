@@ -55,6 +55,19 @@ default to their Symbol; the user can toggle back to the label. Distinct from a
 _Avoid:_ "icon", "default image" — use Symbol for artwork; "tintable" /
 "fixed-color" (the retired ADR-0004 model — see ADR-0007).
 
+### Cluster art
+
+A Symbol whose artwork depicts a whole group of Inputs and emphasises one of
+them, rather than depicting its own Input alone — the d-pad Symbols draw all four
+arms with one highlighted. Correct in an exported **Glyph**, where the cell
+stands on its own, but a **Device Layout** skips it: the Layout already draws the
+cluster as separate nodes, so nesting the art inside one of them would show a
+whole d-pad inside a quarter of itself. Marked `depicts: "cluster"` in the Symbol
+Set manifest.
+
+_Avoid:_ "composite Symbol", "group icon" — cluster art is about what the art
+_depicts_, not how it is built.
+
 ### Symbol Set
 
 A self-contained atlas of Symbols — one SVG whose id'd cells sit on a fixed

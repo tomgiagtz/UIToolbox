@@ -64,28 +64,32 @@ export const SYMBOL_ASSETS: SymbolAsset[] = [
     "id": "dpad-right",
     "label": "D-Pad Right",
     "kind": "symbol",
-    "atlas": "xbox"
+    "atlas": "xbox",
+    "depicts": "cluster"
   },
   {
     "id": "dpad-down",
     "label": "D-Pad Down",
     "kind": "symbol",
     "rotateOf": "dpad-right",
-    "rotate": 90
+    "rotate": 90,
+    "depicts": "cluster"
   },
   {
     "id": "dpad-left",
     "label": "D-Pad Left",
     "kind": "symbol",
     "rotateOf": "dpad-right",
-    "rotate": 180
+    "rotate": 180,
+    "depicts": "cluster"
   },
   {
     "id": "dpad-up",
     "label": "D-Pad Up",
     "kind": "symbol",
     "rotateOf": "dpad-right",
-    "rotate": 270
+    "rotate": 270,
+    "depicts": "cluster"
   }
 ];
 

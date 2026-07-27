@@ -57,13 +57,22 @@ export const SYMBOL_MANIFEST = [
 
   // --- Xbox d-pad — author "right"; the rest are rotations of it ---------------
   // Device-specific this pass (no shared d-pad yet); promote to "shared" later.
-  { id: "dpad-right", label: "D-Pad Right", kind: "symbol", atlas: "xbox" },
+  // The art draws the whole d-pad and emphasises one arm, so it is `cluster`:
+  // right in an exported Glyph, skipped by the Device Layout (see SymbolAsset).
+  {
+    id: "dpad-right",
+    label: "D-Pad Right",
+    kind: "symbol",
+    atlas: "xbox",
+    depicts: "cluster",
+  },
   {
     id: "dpad-down",
     label: "D-Pad Down",
     kind: "symbol",
     rotateOf: "dpad-right",
     rotate: 90,
+    depicts: "cluster",
   },
   {
     id: "dpad-left",
@@ -71,6 +80,7 @@ export const SYMBOL_MANIFEST = [
     kind: "symbol",
     rotateOf: "dpad-right",
     rotate: 180,
+    depicts: "cluster",
   },
   {
     id: "dpad-up",
@@ -78,5 +88,6 @@ export const SYMBOL_MANIFEST = [
     kind: "symbol",
     rotateOf: "dpad-right",
     rotate: 270,
+    depicts: "cluster",
   },
 ];
