@@ -11,20 +11,29 @@ import type {
   SymbolPaints,
 } from "@/lib/glyph/style";
 
-/** The shape of a Glyph's Background tile. "none" yields a label-only Glyph. */
-export type BackgroundShape = "rounded-rect" | "square" | "circle" | "none";
+/** The primitive a Background draws when its source is `{ kind: "shape" }`. */
+export type BackgroundShape = "rounded-rect" | "square" | "circle";
 
 /**
  * Where a Glyph's Background tile art comes from (issue #22) — the drawn
- * {@link BackgroundShape}, a shipped **Authored Background** SVG, or one of the
- * user's uploaded images. Exactly one at a time, so the three can never disagree
- * about what a tile is.
+ * {@link BackgroundShape}, a shipped **Authored Background** SVG, one of the
+ * user's uploaded images, or nothing at all. Exactly one at a time, so they can
+ * never disagree about what a tile is.
  *
  * A source that can't be honoured falls back to the plain shape rather than
  * failing: an image whose bytes aren't present, or an unknown Authored id, draws
  * as `shape` would.
  */
 export type BackgroundSource =
+  /**
+   * Nothing is drawn behind the content at all — no primitive, no tile art.
+   *
+   * A *source* rather than a fourth {@link BackgroundShape} because "draw
+   * nothing" is a statement about the tile as a whole: a shape can only suppress
+   * the primitive, and the Catalog per-Input tier outranks the Device tier, so
+   * only a source can turn off an inherited Authored Background.
+   */
+  | { kind: "none" }
   /** The primitive named by {@link Background.shape}. */
   | { kind: "shape" }
   /**
@@ -52,8 +61,9 @@ export type BackgroundSource =
 export interface Background {
   /** Where the tile art comes from; defaults to the drawn {@link shape}. */
   source: BackgroundSource;
+  /** The primitive to draw. Read only while {@link source} is `{ kind: "shape" }`. */
   shape: BackgroundShape;
-  /** CSS color of the fill. Ignored when shape is "none". */
+  /** CSS color of the fill. Ignored by a source that draws no primitive. */
   fill: string;
   /** Corner radius in px for the "rounded-rect" shape. */
   cornerRadius: number;

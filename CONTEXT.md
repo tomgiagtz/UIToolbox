@@ -163,15 +163,18 @@ Catalog. A Preset is a starting selection, freely changed afterward.
 
 The tile a Glyph's Render Source is drawn on. Its **source** is one of:
 
-- a **shape** — rounded-rect / square / circle / none, with a **fill** color and
-  optional **border** (color + width); "none" yields a transparent, content-only
-  Glyph;
-- an **uploaded image** — the user's own tile graphic; or
-- an **authored Background** — a shipped SVG tile from the tool's gallery.
+- a **shape** — rounded-rect / square / circle, with a **fill** color and
+  optional **border** (color + width);
+- an **uploaded image** — the user's own tile graphic;
+- an **authored Background** — a shipped SVG tile from the tool's gallery; or
+- **none** — nothing is drawn behind the content at all, not even inherited tile
+  art, yielding a transparent, content-only Glyph.
 
-The source is a single value, not a bag of flags — one of the three at a time
+The source is a single value, not a bag of flags — one of the four at a time
 (ADR-0009) — and it resolves through the **Style Cascade** like any other style
-property, settable at any scope. Some Catalog Inputs whose identity is their tile
+property, settable at any scope. "None" is a _source_ rather than a fourth shape
+because a shape could only ever suppress the drawn primitive, leaving an
+inherited authored tile still showing. Some Catalog Inputs whose identity is their tile
 _shape_ (bumpers, triggers) default to a specific authored Background rather than
 a plain shape. Fill and border paint a shape or recolour an authored tile; an
 uploaded image draws as authored, fitted to the cell and never recoloured.
@@ -261,4 +264,4 @@ See `docs/adr/`:
 - **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
   content scale joins the Style Cascade.
 - **ADR-0009** — A Background's tile art is one `source` union: shape / authored /
-  uploaded image (amends ADR-0006).
+  uploaded image / none (amends ADR-0006).

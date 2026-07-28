@@ -37,7 +37,8 @@ export interface RenderGlyphOptions {
    * resolved Background colours, or an uploaded tile image. When present it is
    * drawn across the whole cell in place of the plain `shape` — the tile carries
    * its own shape + outline — with the label/Symbol composited on top (#18, #22).
-   * Falls back to the plain `shape` while the bitmap is still warming.
+   * Falls back to the plain `shape` while the bitmap is still warming, and is
+   * ignored outright by a `none` source, which draws no background whatsoever.
    */
   backgroundImage?: CanvasImageSource;
 }
@@ -46,9 +47,9 @@ const MAX_FONT_FRACTION = 0.5;
 const MIN_FONT_PX = 8;
 
 /**
- * Draw one Glyph — Background shape + fill + border, then a centered,
- * single-line, auto-shrunk label — into the `cellSize`×`cellSize` region whose
- * top-left corner is (`ox`, `oy`).
+ * Draw one Glyph — its Background (tile art, a drawn shape, or nothing at all),
+ * then a centered, single-line, auto-shrunk label — into the `cellSize`×`cellSize`
+ * region whose top-left corner is (`ox`, `oy`).
  *
  * Shared by the live preview and the atlas compositor so both render
  * identically.
@@ -67,13 +68,16 @@ export function renderGlyph(
   ctx.translate(ox, oy);
   ctx.clearRect(0, 0, cellSize, cellSize);
 
-  // A tile — Authored or uploaded — replaces the plain shape and carries its own
-  // outline. Until its bitmap warms, fall back to the plain shape so there's no
-  // blank flash.
-  if (backgroundImage) {
-    drawTile(ctx, cellSize, backgroundImage, background.source);
-  } else {
-    drawBackground(ctx, cellSize, background);
+  // A "none" source draws nothing behind the content at all — no primitive and
+  // no tile art. Otherwise a tile (Authored or uploaded) replaces the plain shape
+  // and carries its own outline; until its bitmap warms, fall back to the plain
+  // shape so there's no blank flash.
+  if (background.source.kind !== "none") {
+    if (backgroundImage) {
+      drawTile(ctx, cellSize, backgroundImage, background.source);
+    } else {
+      drawBackground(ctx, cellSize, background);
+    }
   }
   // Exactly one Render Source is drawn, in the same content box: a custom image,
   // else a Symbol, else the label. The order is also the fallback chain — a source
@@ -215,8 +219,6 @@ function drawBackground(
   cellSize: number,
   bg: Background,
 ): void {
-  if (bg.shape === "none") return;
-
   const bw = bg.border.width;
   const inset = bw / 2;
   const x = inset;

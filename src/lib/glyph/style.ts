@@ -72,9 +72,11 @@ export interface BackgroundOverride {
    * the Catalog per-Input tier outranks the Device tier, so bumpers and triggers
    * carry a tile by default and *omitting* the field just lets that tile fall
    * through. Only an explicit "shape" turns it off, which is what makes a
-   * per-Glyph shape change stick.
+   * per-Glyph shape change stick — and likewise an explicit `{ kind: "none" }`,
+   * the only way to turn an inherited tile off without putting a shape back.
    */
   source?: BackgroundSource;
+  /** Read only where the resolved source is `{ kind: "shape" }`. */
   shape?: Background["shape"];
   fill?: string;
   cornerRadius?: number;

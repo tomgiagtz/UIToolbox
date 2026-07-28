@@ -27,7 +27,6 @@ const SHAPES: { value: BackgroundShape; label: string }[] = [
   { value: "rounded-rect", label: "Rounded rect" },
   { value: "square", label: "Square" },
   { value: "circle", label: "Circle" },
-  { value: "none", label: "None (label only)" },
 ];
 
 /** Common power-of-two-friendly cell sizes; also drives output resolution. */
@@ -44,6 +43,7 @@ const CONTENT_SCALE_RANGE = { min: 0.1, max: 2, step: 0.05 };
 function sourceValue(source: BackgroundSource): string {
   if (source.kind === "authored") return `authored:${source.backgroundId}`;
   if (source.kind === "image") return `image:${source.imageId}`;
+  if (source.kind === "none") return "none";
   return "shape";
 }
 
@@ -67,6 +67,9 @@ function sourceFromValue(
   if (value.startsWith("image:")) {
     return { kind: "image", imageId: value.slice("image:".length) };
   }
+  // Before the fallback: "shape" is what an unrecognized value becomes, so a
+  // missed branch here would round-trip "none" into a drawn shape.
+  if (value === "none") return { kind: "none" };
   return { kind: "shape" };
 }
 
@@ -106,6 +109,7 @@ function BackgroundSourceField({
             value={sourceValue(source)}
             onChange={(e) => onChange(sourceFromValue(e.target.value, source))}
           >
+            <option value="none">None (content only)</option>
             <option value="shape">Shape</option>
             <optgroup label="Authored">
               {AUTHORED_BACKGROUNDS.map((a) => (
@@ -263,15 +267,14 @@ export function StyleControls({
   onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const bg = style.background;
-  /** Tile art is supplying the shape, not `bg.shape`. */
-  const hasTile = bg.source.kind !== "shape";
+  /** The Background draws its `shape` primitive — nothing else supplies one. */
+  const drawsShape = bg.source.kind === "shape";
   /**
    * Fill and border are live: they paint an Authored tile's sentinel roles, or a
-   * drawn shape. An uploaded tile draws as authored, so neither reaches it.
+   * drawn shape. An uploaded tile draws as authored and "none" draws nothing, so
+   * neither reaches them.
    */
-  const paintsApply =
-    bg.source.kind === "authored" ||
-    (bg.source.kind === "shape" && bg.shape !== "none");
+  const paintsApply = drawsShape || bg.source.kind === "authored";
 
   /** A reset handler for `field`, or undefined when it isn't overridden here. */
   function resetFor(field: StyleField): (() => void) | undefined {
@@ -300,10 +303,11 @@ export function StyleControls({
         onUploadImage={onUploadImage}
       />
 
-      {/* A tile carries its own shape and corner treatment, so the shape and
-          radius controls would be inert while one is selected. Fill and border
-          still apply — they tint the tile through its sentinel paint roles. */}
-      {!hasTile && (
+      {/* A tile carries its own shape and corner treatment, and "none" draws no
+          primitive at all, so the shape and radius controls would be inert under
+          either. Fill and border survive a tile — they tint it through its
+          sentinel paint roles. */}
+      {drawsShape && (
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
             <span>Background shape</span>
@@ -362,8 +366,6 @@ export function StyleControls({
         </Field>
       )}
 
-      {/* A tile is tinted by fill/border even when `shape` is "none", so these
-          stay available whenever either a tile or a drawn shape is in play. */}
       {/* Sizes whichever Render Source the Glyph draws, so it lives with the
           rest of the cascade rather than beside the image picker (issue #20). */}
       <Field
@@ -394,7 +396,7 @@ export function StyleControls({
         />
       )}
 
-      {!hasTile && bg.shape === "rounded-rect" && (
+      {drawsShape && bg.shape === "rounded-rect" && (
         <Field
           label={`Corner radius (${bg.cornerRadius}px)`}
           onReset={resetFor("cornerRadius")}
