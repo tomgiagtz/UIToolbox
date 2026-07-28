@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
-import {
-  DEFAULT_BACKGROUND,
-  DEFAULT_CONTENT_SCALE,
-  DEFAULT_SYMBOL_PAINTS,
-  createDefaultProject,
-} from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
+
+const CONFIG_KEY = "uitoolbox.glyph-creator.project";
 
 function edited(): Project {
   // A project that differs from the default across every persisted axis, so a
@@ -25,438 +22,128 @@ function edited(): Project {
     { type: "set-naming-template", template: "btn_{input}" } as const,
     { type: "set-naming-case", case: "kebab" } as const,
     { type: "set-filename-template", template: "atlas_{device}" } as const,
-  ].reduce(projectReducer, createDefaultProject(""));
+  ].reduce(projectReducer, createDefaultProject());
 }
 
 describe("ProjectStore — config (localStorage)", () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => localStorage.clear());
 
-  it("returns null when nothing has been saved", () => {
-    expect(loadConfig()).toBeNull();
+  it("reports empty when nothing has been saved", () => {
+    expect(loadConfig()).toEqual({ kind: "empty" });
   });
 
   it("round-trips a full project through save/load", () => {
     const project = edited();
     saveConfig(project);
-    expect(loadConfig()).toEqual(project);
+    expect(loadConfig()).toEqual({ kind: "ok", project });
   });
 
   it("overwrites the previous save", () => {
     saveConfig(createDefaultProject("first"));
     const project = edited();
     saveConfig(project);
-    expect(loadConfig()).toEqual(project);
-  });
-
-  it("returns null for malformed JSON rather than throwing", () => {
-    localStorage.setItem("uitoolbox.glyph-creator.project", "{ not json");
-    expect(loadConfig()).toBeNull();
-  });
-
-  it("returns null for a structurally-invalid payload", () => {
-    localStorage.setItem(
-      "uitoolbox.glyph-creator.project",
-      JSON.stringify({ version: 1, project: { nope: true } }),
-    );
-    expect(loadConfig()).toBeNull();
-  });
-
-  it("returns null for an unknown schema version", () => {
-    localStorage.setItem(
-      "uitoolbox.glyph-creator.project",
-      JSON.stringify({ version: 999, project: edited() }),
-    );
-    expect(loadConfig()).toBeNull();
-  });
-});
-
-describe("ProjectStore — v4 → v5 migration (Background source union)", () => {
-  // A v4 config: before the Background named its tile art with a `source` union,
-  // it carried an optional `backgroundId` + `flipX` pair — and, inside a sparse
-  // override, a `null` id meaning "no tile, draw the shape" (issue #22).
-  function v4(
-    background: Record<string, unknown>,
-    device: object = {},
-  ): string {
-    return JSON.stringify({
-      version: 4,
-      project: {
-        name: "pre-source",
-        font: { family: "Inter" },
-        textColor: "#f8fafc",
-        background: {
-          shape: "rounded-rect",
-          fill: "#1e293b",
-          cornerRadius: 18,
-          border: { width: 4, color: "#475569" },
-          ...background,
-        },
-        symbolPaints: DEFAULT_SYMBOL_PAINTS,
-        contentScale: 1,
-        images: [],
-        cellSize: 128,
-        devices: [
-          {
-            name: "Xbox",
-            catalogId: "xbox",
-            enabled: ["xbox-lb"],
-            custom: [],
-            style: {},
-            glyphStyles: {},
-            ...device,
-          },
-        ],
-        naming: { template: "{device}_{input}", case: "snake" },
-        filenameTemplate: "{device}_atlas",
-      },
-    });
-  }
-
-  it("gives a tile-less Background the plain shape source", () => {
-    const project = parseConfig(v4({}))!;
-    expect(project.background.source).toEqual({ kind: "shape" });
-    // Nothing else about the Background moves.
-    expect(project.background.shape).toBe("rounded-rect");
-    expect(project.background.cornerRadius).toBe(18);
-  });
-
-  it("rewrites a saved Authored Background, mirror flag and all", () => {
-    const project = parseConfig(v4({ backgroundId: "bumper", flipX: true }))!;
-    expect(project.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-      flipX: true,
-    });
-  });
-
-  it("rewrites Device and per-Glyph overrides too", () => {
-    const project = parseConfig(
-      v4(
-        {},
-        {
-          style: { background: { backgroundId: "trigger", fill: "#111111" } },
-          glyphStyles: {
-            // The pre-v5 spelling of "no tile — draw the shape".
-            "xbox-lb": { background: { backgroundId: null, shape: "circle" } },
-          },
-        },
-      ),
-    )!;
-    const device = project.devices[0];
-    expect(device.style.background).toEqual({
-      source: { kind: "authored", backgroundId: "trigger" },
-      fill: "#111111",
-    });
-    expect(device.glyphStyles["xbox-lb"].background).toEqual({
-      source: { kind: "shape" },
-      shape: "circle",
-    });
-  });
-
-  it("leaves an override that never named a tile alone", () => {
-    const project = parseConfig(
-      v4({}, { style: { background: { shape: "circle" } } }),
-    )!;
-    // Still sparse: an unset source falls up the cascade, so it must not be
-    // backfilled with an explicit "shape" that would outrank the Catalog tier.
-    expect(project.devices[0].style.background).toEqual({ shape: "circle" });
-  });
-
-  it('promotes the pre-v5 "none" shape into the source union', () => {
-    const project = parseConfig(v4({ shape: "none" }))!;
-    expect(project.background.source).toEqual({ kind: "none" });
-    // `shape` is required and can no longer be "none", so the field it vacates
-    // takes the default primitive. Inert while the source draws nothing; it
-    // surfaces only if the user later picks "Shape".
-    expect(project.background.shape).toBe(DEFAULT_BACKGROUND.shape);
-  });
-
-  it('lets a saved tile outrank a "none" shape, as v4 drew it', () => {
-    // v4's renderer painted tile art whenever it had a bitmap and never looked
-    // at `shape` — so reading the shape first here would blank every saved
-    // bumper and trigger whose tier also carried "none".
-    const project = parseConfig(v4({ backgroundId: "bumper", shape: "none" }))!;
-    expect(project.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-    });
-    expect(project.background.shape).toBe(DEFAULT_BACKGROUND.shape);
-  });
-
-  it('rewrites a "none" shape inside a sparse override, dropping the key', () => {
-    const project = parseConfig(
-      v4({}, { style: { background: { shape: "none" } } }),
-    )!;
-    // toEqual, not toMatchObject: a leftover `shape` key would newly pin that
-    // property at this tier, so a later Project-level shape change would stop
-    // reaching these Glyphs.
-    expect(project.devices[0].style.background).toEqual({
-      source: { kind: "none" },
-    });
-  });
-
-  it("drops a mirror flag that never named a tile", () => {
-    const project = parseConfig(
-      v4({}, { style: { background: { flipX: true, shape: "circle" } } }),
-    )!;
-    // `flipX` only ever meant something beside a `backgroundId`. With no id to
-    // describe, v5 has nowhere to keep it — and it must not linger as a field
-    // `BackgroundOverride` no longer has.
-    expect(project.devices[0].style.background).toEqual({ shape: "circle" });
-  });
-
-  it("produces a config that passes current-version validation on re-save", () => {
-    const migrated = parseConfig(v4({ backgroundId: "bumper" }))!;
-    saveConfig(migrated);
-    expect(loadConfig()).toEqual(migrated);
-  });
-
-  it('round-trips a migrated "none" Background through a re-save', () => {
-    const migrated = parseConfig(v4({ shape: "none" }))!;
-    saveConfig(migrated);
-    expect(loadConfig()).toEqual(migrated);
-  });
-
-  it('rejects a current-version config still spelling "none" as a shape', () => {
-    // The v1-v4 validators accept the legacy shape vocabulary by design, so
-    // `isBackground` is the only thing standing between a stale spelling and a
-    // v5 config that two fields disagree about.
-    const bad = JSON.stringify({
-      version: 5,
-      project: {
-        ...JSON.parse(v4({})).project,
-        background: {
-          shape: "none",
-          fill: "#111111",
-          cornerRadius: 0,
-          border: { width: 0, color: "#000000" },
-          source: { kind: "shape" },
-        },
-      },
-    });
-    expect(parseConfig(bad)).toBeNull();
-  });
-
-  it("rejects a current-version config whose Background source is malformed", () => {
-    const bad = JSON.stringify({
-      version: 5,
-      project: {
-        ...JSON.parse(v4({})).project,
-        background: {
-          shape: "circle",
-          fill: "#111111",
-          cornerRadius: 0,
-          border: { width: 0, color: "#000000" },
-          source: { kind: "authored" },
-        },
-      },
-    });
-    expect(parseConfig(bad)).toBeNull();
-  });
-});
-
-describe("ProjectStore — v3 → v4 migration (content scale + images)", () => {
-  // A v3 config: before the Project gained a content scale and an image manifest
-  // (issue #20).
-  function v3(over: Record<string, unknown> = {}): string {
-    return JSON.stringify({
-      version: 3,
-      project: {
-        name: "pre-images",
-        font: { family: "Inter" },
-        textColor: "#f8fafc",
-        background: {
-          shape: "rounded-rect",
-          fill: "#1e293b",
-          cornerRadius: 18,
-          border: { width: 4, color: "#475569" },
-        },
-        symbolPaints: DEFAULT_SYMBOL_PAINTS,
-        cellSize: 128,
-        devices: [
-          {
-            name: "Keyboard",
-            catalogId: "keyboard",
-            enabled: ["key-w"],
-            custom: [],
-            style: {},
-            glyphStyles: {},
-          },
-        ],
-        naming: { template: "{device}_{input}", case: "snake" },
-        filenameTemplate: "{device}_atlas",
-        ...over,
-      },
-    });
-  }
-
-  it("backfills the unscaled content default and an empty image manifest", () => {
-    const project = parseConfig(v3());
-    expect(project).not.toBeNull();
-    expect(project!.contentScale).toBe(DEFAULT_CONTENT_SCALE);
-    expect(project!.images).toEqual([]);
-    // The rest of the project is carried through untouched.
-    expect(project!.devices[0].enabled).toEqual(["key-w"]);
-  });
-
-  it("produces a config that passes current-version validation on re-save", () => {
-    const migrated = parseConfig(v3())!;
-    saveConfig(migrated);
-    expect(loadConfig()).toEqual(migrated);
-  });
-
-  it("rejects a current-version config whose image manifest is malformed", () => {
-    const bad = JSON.stringify({
-      version: 4,
-      project: JSON.parse(v3({ contentScale: 1, images: [{ id: 7 }] })).project,
-    });
-    expect(parseConfig(bad)).toBeNull();
-  });
-
-  it('still accepts the legacy "none" shape this far back, then promotes it', () => {
-    // The validators for v4-and-older share one core check with the current
-    // version but not its shape vocabulary. A v3 save predates the source union
-    // entirely, so "none" must survive validation here and be folded into the
-    // union by the time it lands.
-    const project = parseConfig(
-      v3({
-        background: {
-          shape: "none",
-          fill: "#1e293b",
-          cornerRadius: 18,
-          border: { width: 4, color: "#475569" },
-        },
-      }),
-    )!;
-    expect(project.background.source).toEqual({ kind: "none" });
-    expect(project.background.shape).toBe(DEFAULT_BACKGROUND.shape);
+    expect(loadConfig()).toEqual({ kind: "ok", project });
   });
 
   it("round-trips an image manifest and a scaled Glyph", () => {
     const project: Project = {
-      ...createDefaultProject(""),
+      ...createDefaultProject(),
       contentScale: 0.75,
       images: [{ id: "img-1.png", fileName: "art.png", type: "image/png" }],
     };
     saveConfig(project);
-    expect(loadConfig()).toEqual(project);
+    expect(loadConfig()).toEqual({ kind: "ok", project });
+  });
+
+  it("rejects malformed JSON rather than throwing", () => {
+    localStorage.setItem(CONFIG_KEY, "{ not json");
+    expect(loadConfig()).toEqual({ kind: "rejected" });
+  });
+
+  it("rejects a structurally-invalid payload", () => {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ nope: true }));
+    expect(loadConfig()).toEqual({ kind: "rejected" });
+  });
+
+  it("rejects the old versioned envelope", () => {
+    // Configs used to be wrapped in `{ version, project }` and migrated forward.
+    // Neither exists now (ADR-0010), so a pre-change save is discarded cleanly
+    // rather than half-read.
+    localStorage.setItem(
+      CONFIG_KEY,
+      JSON.stringify({ version: 5, project: edited() }),
+    );
+    expect(loadConfig()).toEqual({ kind: "rejected" });
+  });
+
+  it("removes the key it rejected, so the caller reports it once", () => {
+    localStorage.setItem(CONFIG_KEY, "{ not json");
+    loadConfig();
+    expect(localStorage.getItem(CONFIG_KEY)).toBeNull();
+    expect(loadConfig()).toEqual({ kind: "empty" });
   });
 });
 
-describe("ProjectStore — v2 → v3 migration (symbolPaints)", () => {
-  // A v2 config: the Catalog + Style Cascade shape, but before the Project gained
-  // its `symbolPaints` base tier (ADR-0007 §3).
-  function v2(): string {
-    return JSON.stringify({
-      version: 2,
-      project: {
-        name: "pre-symbol-paints",
-        font: { family: "Inter" },
-        textColor: "#f8fafc",
-        background: {
-          shape: "rounded-rect",
-          fill: "#1e293b",
-          cornerRadius: 18,
-          border: { width: 4, color: "#475569" },
-        },
-        cellSize: 128,
-        devices: [
-          {
-            name: "Keyboard",
-            catalogId: "keyboard",
-            enabled: ["key-w"],
-            custom: [],
-            style: {},
-            glyphStyles: {},
+describe("ProjectStore — config validation", () => {
+  // A structurally-current config, spread over to make one field wrong.
+  function config(over: Record<string, unknown> = {}): string {
+    return JSON.stringify({ ...createDefaultProject(), ...over });
+  }
+
+  it("accepts the default project", () => {
+    expect(parseConfig(config())).not.toBeNull();
+  });
+
+  it('rejects a config still spelling "none" as a shape', () => {
+    // "none" is a Background *source*, not a fourth shape (ADR-0009). Two fields
+    // would otherwise disagree about what the tile is.
+    expect(
+      parseConfig(
+        config({
+          background: {
+            shape: "none",
+            fill: "#111111",
+            cornerRadius: 0,
+            border: { width: 0, color: "#000000" },
+            source: { kind: "shape" },
           },
-        ],
-        naming: { template: "{device}_{input}", case: "snake" },
-        filenameTemplate: "{device}_atlas",
-      },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a config whose Background source is malformed", () => {
+    expect(
+      parseConfig(
+        config({
+          background: {
+            shape: "circle",
+            fill: "#111111",
+            cornerRadius: 0,
+            border: { width: 0, color: "#000000" },
+            source: { kind: "authored" },
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a config whose image manifest is malformed", () => {
+    expect(parseConfig(config({ images: [{ id: 7 }] }))).toBeNull();
+  });
+
+  it("normalizes an empty font family to the bundled default", () => {
+    // `family` reaches the canvas unresolved, where "" is an invalid font string
+    // that silently draws in the browser default — so it is repaired on read and
+    // the next save persists the real name (ADR-0010). Asserted through
+    // `loadConfig`, since that is the arm the editor actually takes on mount.
+    localStorage.setItem(CONFIG_KEY, config({ font: { family: "" } }));
+    const loaded = loadConfig();
+    expect(loaded).toMatchObject({
+      kind: "ok",
+      project: { font: { family: DEFAULT_FONT_FAMILY } },
     });
-  }
-
-  it("backfills the default Symbol Paint Role colours", () => {
-    const project = parseConfig(v2());
-    expect(project).not.toBeNull();
-    expect(project!.symbolPaints).toEqual(DEFAULT_SYMBOL_PAINTS);
-    // The rest of the project is carried through untouched.
-    expect(project!.devices[0].enabled).toEqual(["key-w"]);
-  });
-
-  it("produces a config that passes current-version validation on re-save", () => {
-    const migrated = parseConfig(v2())!;
-    saveConfig(migrated);
-    expect(loadConfig()).toEqual(migrated);
-  });
-});
-
-describe("ProjectStore — v1 → v2 migration", () => {
-  // A v1 config: Devices were a flat list of Input label strings.
-  function v1(devices: { name: string; inputs: string[] }[]): string {
-    return JSON.stringify({
-      version: 1,
-      project: {
-        name: "legacy",
-        font: { family: "Inter" },
-        textColor: "#f8fafc",
-        background: {
-          shape: "rounded-rect",
-          fill: "#1e293b",
-          cornerRadius: 18,
-          border: { width: 4, color: "#475569" },
-        },
-        cellSize: 128,
-        devices,
-        naming: { template: "{device}_{input}", case: "snake" },
-        filenameTemplate: "{device}_atlas",
-      },
-    });
-  }
-
-  it("maps Catalog-matching labels to enabled ids and the rest to custom", () => {
-    const project = parseConfig(
-      v1([{ name: "Keyboard", inputs: ["W", "A", "MyKey"] }]),
-    );
-    expect(project).not.toBeNull();
-    const [kb] = project!.devices;
-    expect(kb.catalogId).toBe("keyboard");
-    expect(kb.enabled).toEqual(["key-w", "key-a"]);
-    expect(kb.custom).toEqual([{ id: "custom-1", label: "MyKey" }]);
-    expect(kb.style).toEqual({});
-    expect(kb.glyphStyles).toEqual({});
-    // v1 → v2 → v3 also backfills the Symbol Paint Role defaults.
-    expect(project!.symbolPaints).toEqual(DEFAULT_SYMBOL_PAINTS);
-  });
-
-  it("migrates a full pad Device to its enabled Catalog ids", () => {
-    const project = parseConfig(
-      v1([{ name: "Xbox", inputs: ["A", "B", "LB"] }]),
-    );
-    expect(project!.devices[0].enabled).toEqual([
-      "xbox-a",
-      "xbox-b",
-      "xbox-lb",
-    ]);
-    expect(project!.devices[0].custom).toEqual([]);
-  });
-
-  it("matches a shoulder Input written in the other pad's vocabulary", () => {
-    // A v1 project listed Inputs by label only. Someone who wrote "RB" on a
-    // PlayStation Device meant R1, so the alias should recover the Catalog
-    // Input instead of stranding it as a custom Input.
-    const project = parseConfig(
-      v1([{ name: "PlayStation", inputs: ["RB", "R2"] }]),
-    );
-    expect(project!.devices[0].enabled).toEqual(["ps-r1", "ps-r2"]);
-    expect(project!.devices[0].custom).toEqual([]);
-  });
-
-  it("produces a config that passes current-version validation on re-save", () => {
-    const migrated = parseConfig(v1([{ name: "Keyboard", inputs: ["W"] }]))!;
-    saveConfig(migrated);
-    // Round-trips through the v2 validator without another migration.
-    expect(loadConfig()).toEqual(migrated);
+    localStorage.clear();
   });
 });

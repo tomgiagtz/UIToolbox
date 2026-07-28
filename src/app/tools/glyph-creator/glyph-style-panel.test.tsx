@@ -178,7 +178,7 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     renderPanel({ project: { ...createDefaultProject(), images: [image] } });
     const select = screen.getByLabelText("Background source");
     const options = [...select.querySelectorAll("option")].map((o) => o.value);
-    // The two "no art" choices lead, in union order.
+    // The two "no art" choices lead, in the order the picker declares them.
     expect(options[0]).toBe("none");
     expect(options[1]).toBe("shape");
     for (const a of AUTHORED_BACKGROUNDS)

@@ -163,21 +163,21 @@ Catalog. A Preset is a starting selection, freely changed afterward.
 
 The tile a Glyph's Render Source is drawn on. Its **source** is one of:
 
-- a **shape** — rounded-rect / square / circle, with a **fill** color and
-  optional **border** (color + width);
-- an **uploaded image** — the user's own tile graphic;
-- an **authored Background** — a shipped SVG tile from the tool's gallery; or
 - **none** — nothing is drawn behind the content at all, not even inherited tile
-  art, yielding a transparent, content-only Glyph.
+  art, yielding a transparent, content-only Glyph;
+- a **shape** — a drawn primitive, with a **fill** color and optional **border**;
+- an **authored Background** — a shipped SVG tile from the tool's gallery; or
+- an **uploaded image** — the user's own tile graphic.
 
 The source is a single value, not a bag of flags — one of the four at a time
 (ADR-0009) — and it resolves through the **Style Cascade** like any other style
 property, settable at any scope. "None" is a _source_ rather than a fourth shape
 because a shape could only ever suppress the drawn primitive, leaving an
-inherited authored tile still showing. Some Catalog Inputs whose identity is their tile
-_shape_ (bumpers, triggers) default to a specific authored Background rather than
-a plain shape. Fill and border paint a shape or recolour an authored tile; an
-uploaded image draws as authored, fitted to the cell and never recoloured.
+inherited authored tile still showing. Some Catalog Inputs whose identity is
+their tile _shape_ (bumpers, triggers) default to a specific authored Background
+rather than a plain shape. Fill and border paint a shape or recolour an authored
+tile; an uploaded image draws as authored, fitted to the cell and never
+recoloured.
 
 ### Authored Background
 
@@ -230,23 +230,6 @@ identifier — mandatory, exports break otherwise) plus a user-controlled
 **template** (`{device}`, `{input}`, `{index}` tokens; default `{device}_{input}`)
 and a **case** style (snake_case / kebab-case / camelCase).
 
-## Core seams
-
-These are named here so later tickets share the vocabulary; they are **not**
-implemented by the walking-skeleton ticket.
-
-- **`generateTilesets(project) → DeviceOutput[]`** — the single high core seam.
-  Takes the full project config; returns plain data per Device (`atlasSize`, and
-  per Glyph a `spriteName` + cell rect, plus the TexturePacker metadata
-  document). All packing / naming / sizing / metadata logic lives behind it; the
-  React/Next layer is a thin shell over it.
-- **`Packer.place(glyphs, opts) → { atlasSize, placements[] }`** — swappable
-  packing strategy. v1 is a uniform grid (fixed cells, 2px gutter, each atlas
-  dimension padded up to the next power-of-two).
-- **`Exporter`** — produces the atlas PNG + TexturePacker-format JSON (ADR-0003).
-- **`ProjectStore`** — persistence: config in `localStorage`, uploaded font blob
-  in IndexedDB; both restored on load.
-
 ## Decisions
 
 See `docs/adr/`:
@@ -263,5 +246,8 @@ See `docs/adr/`:
 - **ADR-0007** — Sentinel paint roles and importable Symbol Sets.
 - **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
   content scale joins the Style Cascade.
-- **ADR-0009** — A Background's tile art is one `source` union: shape / authored /
-  uploaded image / none (amends ADR-0006).
+- **ADR-0009** — A Background's tile art is one `source` union: none / shape /
+  authored / uploaded image (amends ADR-0006).
+- **ADR-0010** — The persisted config is validated against the current shape
+  only: no version stamp, no migration; a config that fails is discarded and the
+  loss is reported (amends ADR-0009).

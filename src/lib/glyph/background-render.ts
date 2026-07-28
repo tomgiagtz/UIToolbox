@@ -23,8 +23,9 @@ import {
 /**
  * The already-rasterized tile bitmap for a resolved style, or `undefined` when
  * the Background draws no art (a plain shape or "none"), the art is unknown, or
- * it hasn't been warmed yet. Synchronous, for the draw path; warm it with {@link ensureTileBitmap}.
- * `device` (a Catalog id) selects a device-specific Authored Background.
+ * it hasn't been warmed yet. Synchronous, for the draw path; warm it with
+ * {@link ensureTileBitmap}. `device` (a Catalog id) selects a device-specific
+ * Authored Background.
  */
 export function getTileBitmap(
   style: GlyphStyle,
@@ -41,9 +42,9 @@ export function getTileBitmap(
 
 /**
  * Rasterize (and cache) the tile art a resolved style draws, resolving to the
- * bitmap — or `null` for a Background with no art, art that isn't there, or an environment
- * without rasterization (SSR / test). The renderer falls back to the plain shape
- * in every one of those cases, so a missing tile is never fatal.
+ * bitmap — or `null` for a Background with no art, art that isn't there, or an
+ * environment without rasterization (SSR / test). The renderer falls back to the
+ * plain shape in every one of those cases, so a missing tile is never fatal.
  */
 export function ensureTileBitmap(
   style: GlyphStyle,

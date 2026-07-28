@@ -74,8 +74,9 @@ function sourceFromValue(
 }
 
 /**
- * Picks where a Glyph's Background tile comes from: the drawn shape, a shipped
- * **Authored Background**, or one of the user's uploaded tile images (issue #22).
+ * Picks where a Glyph's Background tile comes from: nothing at all, the drawn
+ * shape, a shipped **Authored Background**, or one of the user's uploaded tile
+ * images (issue #22).
  *
  * The choice is an ordinary cascade property, so it is written with the same
  * scoped `patch-style` as any other and can be set at Project, Device, or Glyph

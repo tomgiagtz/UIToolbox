@@ -282,11 +282,6 @@ export function getCatalog(id: string): DeviceCatalog | undefined {
   return DEVICE_CATALOGS.find((c) => c.id === id);
 }
 
-/** Find a Catalog by Device name (used when migrating pre-Catalog saves). */
-export function getCatalogByName(name: string): DeviceCatalog | undefined {
-  return DEVICE_CATALOGS.find((c) => c.name === name);
-}
-
 /** Index a Catalog's entries by id for O(1) label / default lookup. */
 export function catalogIndex(
   catalog: DeviceCatalog,
