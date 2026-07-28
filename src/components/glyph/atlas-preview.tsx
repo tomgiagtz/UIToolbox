@@ -1,14 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { getTileBitmap } from "@/lib/glyph/background-render";
 import { getImageBitmap } from "@/lib/glyph/images";
 import { findPlacementIndexAt, gridPack } from "@/lib/glyph/packer";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import type { GlyphStyle } from "@/lib/glyph/style";
-import {
-  getBackgroundBitmap,
-  getSymbolBitmap,
-} from "@/lib/glyph/symbol-render";
+import { getSymbolBitmap } from "@/lib/glyph/symbol-render";
 import { useGlyphCanvas } from "./use-glyph-canvas";
 import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
 
@@ -153,14 +151,7 @@ export function AtlasPreview({
           image: glyph.imageId
             ? getImageBitmap(glyph.imageId, cellSize)
             : undefined,
-          backgroundImage: glyph.style.background.backgroundId
-            ? getBackgroundBitmap(
-                glyph.style.background.backgroundId,
-                glyph.style,
-                cellSize,
-                catalogId,
-              )
-            : undefined,
+          backgroundImage: getTileBitmap(glyph.style, cellSize, catalogId),
         });
       }
     },

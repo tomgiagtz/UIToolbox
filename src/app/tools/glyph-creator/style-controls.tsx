@@ -13,8 +13,14 @@ import type {
   StyleScope,
 } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
-import type { BackgroundShape, Project } from "@/lib/glyph/types";
+import type {
+  BackgroundShape,
+  BackgroundSource,
+  ImageAsset,
+  Project,
+} from "@/lib/glyph/types";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
+import { ImageUploadField } from "./image-upload-field";
 import { RenderSourceControls } from "./render-source-controls";
 
 const SHAPES: { value: BackgroundShape; label: string }[] = [
@@ -33,6 +39,105 @@ const CELL_SIZES = [32, 48, 64, 96, 128, 192, 256];
  * zero since a Render Source scaled to nothing is just an empty tile.
  */
 const CONTENT_SCALE_RANGE = { min: 0.1, max: 2, step: 0.05 };
+
+/** Stable option value for a {@link BackgroundSource} in the source picker. */
+function sourceValue(source: BackgroundSource): string {
+  if (source.kind === "authored") return `authored:${source.backgroundId}`;
+  if (source.kind === "image") return `image:${source.imageId}`;
+  return "shape";
+}
+
+/**
+ * Read a picked option value back into a {@link BackgroundSource}. An Authored
+ * Background keeps the mirror flag the Catalog gave it (`flipX`), so re-picking
+ * a bumper's own tile doesn't quietly un-mirror it.
+ */
+function sourceFromValue(
+  value: string,
+  current: BackgroundSource,
+): BackgroundSource {
+  if (value.startsWith("authored:")) {
+    const backgroundId = value.slice("authored:".length);
+    const flipX =
+      current.kind === "authored" && current.backgroundId === backgroundId
+        ? current.flipX
+        : undefined;
+    return { kind: "authored", backgroundId, ...(flipX ? { flipX } : {}) };
+  }
+  if (value.startsWith("image:")) {
+    return { kind: "image", imageId: value.slice("image:".length) };
+  }
+  return { kind: "shape" };
+}
+
+/**
+ * Picks where a Glyph's Background tile comes from: the drawn shape, a shipped
+ * **Authored Background**, or one of the user's uploaded tile images (issue #22).
+ *
+ * The choice is an ordinary cascade property, so it is written with the same
+ * scoped `patch-style` as any other and can be set at Project, Device, or Glyph
+ * scope. Picking "Shape" writes an explicit `{ kind: "shape" }` rather than
+ * clearing the field: the Catalog per-Input tier outranks the Device tier, so
+ * bumpers and triggers would otherwise just fall back to their authored tile.
+ */
+function BackgroundSourceField({
+  source,
+  images,
+  onChange,
+  onReset,
+  onUploadImage,
+}: {
+  /** The effective source at the current scope. */
+  source: BackgroundSource;
+  /** The project's uploaded images, any of which can serve as a tile. */
+  images: ImageAsset[];
+  onChange: (source: BackgroundSource) => void;
+  onReset?: () => void;
+  /** Hand an uploaded file to the editor; resolves to its manifest entry. */
+  onUploadImage: (file: File) => Promise<ImageAsset>;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <Field label="Background source" onReset={onReset}>
+        {(id) => (
+          <select
+            id={id}
+            className={inputClass}
+            value={sourceValue(source)}
+            onChange={(e) => onChange(sourceFromValue(e.target.value, source))}
+          >
+            <option value="shape">Shape</option>
+            <optgroup label="Authored">
+              {AUTHORED_BACKGROUNDS.map((a) => (
+                <option key={a.id} value={`authored:${a.id}`}>
+                  {a.label}
+                </option>
+              ))}
+            </optgroup>
+            {images.length > 0 && (
+              <optgroup label="Uploaded">
+                {images.map((image) => (
+                  <option key={image.id} value={`image:${image.id}`}>
+                    {image.fileName}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        )}
+      </Field>
+      <ImageUploadField
+        label="Upload tile image"
+        hint="The image becomes this scope's tile, fitted to the cell."
+        onUpload={(file) => {
+          void onUploadImage(file).then((asset) =>
+            onChange({ kind: "image", imageId: asset.id }),
+          );
+        }}
+      />
+    </div>
+  );
+}
 
 /** Stable option value for a {@link StyleScope} in the switcher's `<select>`. */
 function scopeValue(scope: StyleScope): string {
@@ -140,6 +245,7 @@ export function StyleControls({
   style,
   override,
   showCellSize = true,
+  onUploadImage,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -153,12 +259,19 @@ export function StyleControls({
    * popover hides it since cell size never cascades (ADR-0006).
    */
   showCellSize?: boolean;
+  /** Hand an uploaded tile image to the editor; resolves to its manifest entry. */
+  onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const bg = style.background;
-  /** An Authored Background tile is supplying the shape, not `bg.shape`. */
-  const hasTile = Boolean(bg.backgroundId);
-  /** Fill and border are live: they paint a tile's roles, or a drawn shape. */
-  const paintsApply = hasTile || bg.shape !== "none";
+  /** Tile art is supplying the shape, not `bg.shape`. */
+  const hasTile = bg.source.kind !== "shape";
+  /**
+   * Fill and border are live: they paint an Authored tile's sentinel roles, or a
+   * drawn shape. An uploaded tile draws as authored, so neither reaches it.
+   */
+  const paintsApply =
+    bg.source.kind === "authored" ||
+    (bg.source.kind === "shape" && bg.shape !== "none");
 
   /** A reset handler for `field`, or undefined when it isn't overridden here. */
   function resetFor(field: StyleField): (() => void) | undefined {
@@ -179,31 +292,13 @@ export function StyleControls({
         onReset={resetFor("textColor")}
       />
 
-      {/* Background source: an Authored Background tile, or the plain shape.
-          Picking "Shape" writes an explicit null so it overrides a tile inherited
-          from the Catalog per-Input tier (bumpers/triggers) — omitting the field
-          would just let that tile fall through again. Issue #18. */}
-      <Field label="Background source" onReset={resetFor("backgroundSource")}>
-        {(id) => (
-          <select
-            id={id}
-            className={inputClass}
-            value={bg.backgroundId ?? ""}
-            onChange={(e) =>
-              patch({
-                background: { backgroundId: e.target.value || null },
-              })
-            }
-          >
-            <option value="">Shape</option>
-            {AUTHORED_BACKGROUNDS.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
+      <BackgroundSourceField
+        source={bg.source}
+        images={project.images}
+        onChange={(source) => patch({ background: { source } })}
+        onReset={resetFor("backgroundSource")}
+        onUploadImage={onUploadImage}
+      />
 
       {/* A tile carries its own shape and corner treatment, so the shape and
           radius controls would be inert while one is selected. Fill and border
@@ -402,8 +497,12 @@ export function GlyphStylePanel({
   /** Raw sparse override stored on the Glyph. */
   override: StyleOverride;
   onClose: () => void;
-  /** Hand an uploaded custom image to the editor to register and persist. */
-  onUploadImage: (file: File) => void;
+  /**
+   * Hand an uploaded image to the editor, which registers and persists it and
+   * resolves to its manifest entry — the caller then points whatever it is
+   * editing (a Render Source, a Background tile) at that id.
+   */
+  onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const scope: StyleScope = {
     tier: "glyph",
@@ -461,6 +560,7 @@ export function GlyphStylePanel({
           style={style}
           override={override}
           showCellSize={false}
+          onUploadImage={onUploadImage}
         />
       </div>
     </section>

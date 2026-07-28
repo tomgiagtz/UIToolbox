@@ -24,7 +24,10 @@ export default defineConfig({
     // Runs against the production build so axe scans the real output.
     command: "npm run start",
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse: `npm run test:e2e` builds first, and a leftover server from an
+    // aborted run would serve the *previous* build instead — silently testing
+    // stale code. Failing loudly on a busy port is the better trade.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

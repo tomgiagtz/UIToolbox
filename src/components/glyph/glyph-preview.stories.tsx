@@ -3,6 +3,7 @@ import { GlyphPreview } from "./glyph-preview";
 import type { Background } from "@/lib/glyph/types";
 
 const roundedRect: Background = {
+  source: { kind: "shape" },
   shape: "rounded-rect",
   fill: "#1e293b",
   cornerRadius: 18,

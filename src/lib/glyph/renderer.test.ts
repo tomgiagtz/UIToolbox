@@ -34,11 +34,11 @@ function fakeCtx() {
 const style: GlyphStyle = {
   textColor: "#ffffff",
   background: {
+    source: { kind: "authored", backgroundId: "bumper" },
     shape: "rounded-rect",
     fill: "#0e7a0d",
     cornerRadius: 8,
     border: { width: 0, color: "#ffd400" },
-    backgroundId: "bumper",
   },
   symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
   contentScale: 1,
@@ -64,7 +64,10 @@ describe("renderGlyph — Authored Background tile (issue #18)", () => {
     const bitmap = {} as CanvasImageSource;
     const flipped: GlyphStyle = {
       ...style,
-      background: { ...style.background, flipX: true },
+      background: {
+        ...style.background,
+        source: { kind: "authored", backgroundId: "bumper", flipX: true },
+      },
     };
     renderGlyph(ctx, 0, 0, {
       ...base,
@@ -99,6 +102,53 @@ const BOX = 128 - 2 * Math.max(0 + 4, 128 * 0.12);
 function bitmapOf(width: number, height: number): CanvasImageSource {
   return { width, height } as unknown as CanvasImageSource;
 }
+
+describe("renderGlyph — uploaded Background tile (issue #22)", () => {
+  /** The same style, with an uploaded image as the Background source. */
+  const uploaded: GlyphStyle = {
+    ...style,
+    background: {
+      ...style.background,
+      source: { kind: "image", imageId: "img-1.png" },
+    },
+  };
+
+  it("fits the tile to the whole cell, preserving the image's aspect", () => {
+    const { ctx, spies } = fakeCtx();
+    // A wide tile: fitted to the cell width, centred vertically — not stretched
+    // to the square an Authored Background would fill.
+    const tile = bitmapOf(200, 100);
+    renderGlyph(ctx, 0, 0, {
+      ...base,
+      style: uploaded,
+      backgroundImage: tile,
+    });
+
+    expect(spies.drawImage).toHaveBeenCalledWith(tile, 0, 32, 128, 64);
+    // It replaces the plain shape, and the label still draws on top.
+    expect(spies.fill).not.toHaveBeenCalled();
+    expect(spies.fillText).toHaveBeenCalled();
+  });
+
+  it("never mirrors an uploaded tile — the flip is authored art's alone", () => {
+    const { ctx, spies } = fakeCtx();
+    renderGlyph(ctx, 0, 0, {
+      ...base,
+      style: uploaded,
+      backgroundImage: bitmapOf(128, 128),
+    });
+
+    expect(spies.scale).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the plain shape when the image has no bytes to draw", () => {
+    const { ctx, spies, calls } = fakeCtx();
+    renderGlyph(ctx, 0, 0, { ...base, style: uploaded });
+
+    expect(calls).toContain("fill");
+    expect(spies.drawImage).not.toHaveBeenCalled();
+  });
+});
 
 describe("renderGlyph — custom image Render Source (issue #20)", () => {
   it("draws a square image filling the same content box a Symbol uses", () => {

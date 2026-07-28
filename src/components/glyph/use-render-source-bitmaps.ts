@@ -1,12 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ensureTileBitmap } from "@/lib/glyph/background-render";
 import { ensureImageBitmap } from "@/lib/glyph/images";
 import type { GlyphStyle } from "@/lib/glyph/style";
-import {
-  ensureBackgroundBitmap,
-  ensureSymbolBitmap,
-} from "@/lib/glyph/symbol-render";
+import { ensureSymbolBitmap } from "@/lib/glyph/symbol-render";
+
+/**
+ * A stable key for one spec's **Background tile** art — which art, recoloured
+ * how. An uploaded tile draws as authored, so only its id varies its bitmap;
+ * an Authored Background follows the resolved Background fill + border colour.
+ * Empty for a plain shape, which needs no bitmap at all.
+ */
+function tileKey(style: GlyphStyle): string {
+  const { source, fill, border } = style.background;
+  if (source.kind === "image") return `img:${source.imageId}`;
+  if (source.kind === "authored")
+    return `bg:${source.backgroundId}:${fill}:${border.color}`;
+  return "";
+}
 
 /** One Glyph's Render Source to warm: its Symbol or image id + resolved style. */
 export interface RenderSourceSpec {
@@ -17,7 +29,8 @@ export interface RenderSourceSpec {
 
 /**
  * Warm the shared bitmap caches for `specs` — Symbol and custom-image Render
- * Sources, plus any Authored Background tiles (`style.background.backgroundId`)
+ * Sources, plus any Background tile art (`style.background.source`, whether an
+ * Authored Background or an uploaded image)
  * — returning a version number that bumps once asynchronous rasterization
  * finishes, so the caller can redraw and pick up the ready bitmaps (via
  * `getSymbolBitmap` / `getImageBitmap` / `getBackgroundBitmap`).
@@ -34,7 +47,10 @@ export function useRenderSourceBitmaps(
 ): number {
   const withSymbols = specs.filter((s) => s.symbolId);
   const withImages = specs.filter((s) => s.imageId);
-  const withBackgrounds = specs.filter((s) => s.style.background.backgroundId);
+  // An empty key is exactly "this Background is a plain shape, no art to warm",
+  // so the one switch in `tileKey` decides both which specs need a bitmap and
+  // what to key it on.
+  const withTiles = specs.filter((s) => tileKey(s.style) !== "");
   const key =
     withSymbols
       .map((s) => {
@@ -43,12 +59,7 @@ export function useRenderSourceBitmaps(
       })
       .join("|") +
     "~" +
-    withBackgrounds
-      .map(
-        (s) =>
-          `${s.style.background.backgroundId}:${s.style.background.fill}:${s.style.background.border.color}`,
-      )
-      .join("|") +
+    withTiles.map((s) => tileKey(s.style)).join("|") +
     // A custom image draws as authored, so only its id varies the bitmap — not
     // any resolved colour, and not the content scale (applied at draw time).
     "~" +
@@ -60,7 +71,7 @@ export function useRenderSourceBitmaps(
     if (
       withSymbols.length === 0 &&
       withImages.length === 0 &&
-      withBackgrounds.length === 0
+      withTiles.length === 0
     )
       return;
     let cancelled = false;
@@ -69,14 +80,7 @@ export function useRenderSourceBitmaps(
         ensureSymbolBitmap(s.symbolId!, s.style, size, device),
       ),
       ...withImages.map((s) => ensureImageBitmap(s.imageId!, size)),
-      ...withBackgrounds.map((s) =>
-        ensureBackgroundBitmap(
-          s.style.background.backgroundId!,
-          s.style,
-          size,
-          device,
-        ),
-      ),
+      ...withTiles.map((s) => ensureTileBitmap(s.style, size, device)),
     ]).then(() => {
       if (!cancelled) setVersion((v) => v + 1);
     });

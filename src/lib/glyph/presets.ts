@@ -41,8 +41,9 @@ export const DEFAULT_SYMBOL_PAINTS: SymbolPaints = {
   secondary: "#334155",
 };
 
-/** Default rounded-rect Background. */
+/** Default rounded-rect Background: the drawn shape, no tile art. */
 export const DEFAULT_BACKGROUND: Background = {
+  source: { kind: "shape" },
   shape: "rounded-rect",
   fill: "#1e293b",
   cornerRadius: 18,

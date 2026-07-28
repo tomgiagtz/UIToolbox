@@ -11,6 +11,7 @@ function base(): GlyphStyle {
   return {
     textColor: "#ffffff",
     background: {
+      source: { kind: "shape" },
       shape: "rounded-rect",
       fill: "#1e293b",
       cornerRadius: 18,
@@ -71,77 +72,92 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     expect(out.background.shape).toBe("none");
   });
 
-  it("resolves an Authored Background id from the Catalog per-Input tier (issue #18)", () => {
+  it("resolves an Authored Background source from the Catalog per-Input tier (issue #18)", () => {
     const catalog: StyleOverride = {
-      background: { backgroundId: "bumper" },
+      background: { source: { kind: "authored", backgroundId: "bumper" } },
     };
     const out = resolveStyle(base(), undefined, catalog);
-    expect(out.background.backgroundId).toBe("bumper");
+    expect(out.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+    });
     // Falls up for everything else it doesn't set.
     expect(out.background.fill).toBe(base().background.fill);
   });
 
   it("carries the Background mirror flag through the cascade (issue #18)", () => {
     const catalog: StyleOverride = {
-      background: { backgroundId: "bumper", flipX: true },
+      background: {
+        source: { kind: "authored", backgroundId: "bumper", flipX: true },
+      },
     };
     const out = resolveStyle(base(), undefined, catalog);
-    expect(out.background.backgroundId).toBe("bumper");
-    expect(out.background.flipX).toBe(true);
+    expect(out.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+      flipX: true,
+    });
   });
 
-  it("lets a Glyph override switch the Catalog's Background id", () => {
+  it("lets a Glyph override switch the Catalog's Background source", () => {
     const catalog: StyleOverride = {
-      background: { backgroundId: "bumper" },
+      background: { source: { kind: "authored", backgroundId: "bumper" } },
     };
     const glyph: StyleOverride = {
-      background: { backgroundId: "trigger" },
+      background: { source: { kind: "authored", backgroundId: "trigger" } },
     };
     const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.backgroundId).toBe("trigger");
+    expect(out.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "trigger",
+    });
   });
 
-  it("lets a Glyph override drop the Catalog's Background id with null (issue #18)", () => {
+  it("lets a Glyph override point the Background at an uploaded image (issue #22)", () => {
+    const catalog: StyleOverride = {
+      background: { source: { kind: "authored", backgroundId: "bumper" } },
+    };
+    const glyph: StyleOverride = {
+      background: { source: { kind: "image", imageId: "img-1.png" } },
+    };
+    const out = resolveStyle(base(), undefined, catalog, glyph);
+    expect(out.background.source).toEqual({
+      kind: "image",
+      imageId: "img-1.png",
+    });
+  });
+
+  it("lets a Glyph override drop the Catalog's tile by choosing the shape (issue #18)", () => {
     // Clearing the Glyph tier's own field only makes it fall back to the tile
     // again, so "no tile" needs an explicit value the cascade can carry.
     const catalog: StyleOverride = {
-      background: { backgroundId: "bumper", flipX: true },
+      background: {
+        source: { kind: "authored", backgroundId: "bumper", flipX: true },
+      },
     };
     const glyph: StyleOverride = {
-      background: { backgroundId: null, shape: "circle" },
+      background: { source: { kind: "shape" }, shape: "circle" },
     };
     const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.backgroundId).toBeUndefined();
-    // The mirror flag is meaningless with no tile, so it goes too.
-    expect(out.background.flipX).toBeUndefined();
+    // The mirror flag rode on the source, so it goes with it.
+    expect(out.background.source).toEqual({ kind: "shape" });
     expect(out.background.shape).toBe("circle");
   });
 
-  it("never resolves to 'no tile, but mirrored' when one patch sets both", () => {
+  it("treats an explicit shape source at the Device tier as no tile, not as unset", () => {
+    const device: StyleOverride = { background: { source: { kind: "shape" } } };
     const catalog: StyleOverride = {
-      background: { backgroundId: "bumper", flipX: true },
-    };
-    const glyph: StyleOverride = {
-      background: { backgroundId: null, flipX: true },
-    };
-    const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.backgroundId).toBeUndefined();
-    expect(out.background.flipX).toBeUndefined();
-  });
-
-  it("treats a null Background id at the Device tier as no tile, not as unset", () => {
-    const device: StyleOverride = { background: { backgroundId: null } };
-    const catalog: StyleOverride = {
-      background: { backgroundId: "bumper" },
+      background: { source: { kind: "authored", backgroundId: "bumper" } },
     };
     // Catalog outranks Device, so the tile still wins here...
-    expect(resolveStyle(base(), device, catalog).background.backgroundId).toBe(
-      "bumper",
-    );
-    // ...but with no Catalog tile, the Device's null resolves to no tile.
-    expect(
-      resolveStyle(base(), device, undefined).background.backgroundId,
-    ).toBeUndefined();
+    expect(resolveStyle(base(), device, catalog).background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+    });
+    // ...but with no Catalog tile, the Device's choice resolves to no tile.
+    expect(resolveStyle(base(), device, undefined).background.source).toEqual({
+      kind: "shape",
+    });
   });
 
   it("resolves each Symbol Paint Role independently through the cascade (#37)", () => {
@@ -205,6 +221,25 @@ describe("mergeOverride", () => {
       background: { border: { color: "#0f0" } },
     });
     expect(out.background?.border).toEqual({ width: 4, color: "#0f0" });
+  });
+
+  it("replaces the Background source wholesale rather than merging it (issue #22)", () => {
+    const base: StyleOverride = {
+      background: {
+        source: { kind: "authored", backgroundId: "bumper", flipX: true },
+        fill: "#111",
+      },
+    };
+    const out = mergeOverride(base, {
+      background: { source: { kind: "image", imageId: "img-1.png" } },
+    });
+    // No trace of the authored tile's mirror flag on the uploaded one...
+    expect(out.background?.source).toEqual({
+      kind: "image",
+      imageId: "img-1.png",
+    });
+    // ...while the rest of the Background patch still merges as usual.
+    expect(out.background?.fill).toBe("#111");
   });
 
   it("replaces the Render Source wholesale rather than merging it (issue #20)", () => {
@@ -275,10 +310,18 @@ describe("isOverrideFieldSet", () => {
     expect(isOverrideFieldSet({}, "contentScale")).toBe(false);
   });
 
-  it("detects a set Authored Background source", () => {
+  it("detects a set Background source", () => {
     expect(
       isOverrideFieldSet(
-        { background: { backgroundId: "bumper" } },
+        {
+          background: { source: { kind: "authored", backgroundId: "bumper" } },
+        },
+        "backgroundSource",
+      ),
+    ).toBe(true);
+    expect(
+      isOverrideFieldSet(
+        { background: { source: { kind: "shape" } } },
         "backgroundSource",
       ),
     ).toBe(true);
@@ -341,20 +384,23 @@ describe("clearOverrideField", () => {
     ).toEqual({});
   });
 
-  it("clears an Authored Background source, collapsing to empty", () => {
+  it("clears the Background source, collapsing to empty", () => {
     expect(
       clearOverrideField(
-        { background: { backgroundId: "bumper" } },
+        {
+          background: { source: { kind: "authored", backgroundId: "bumper" } },
+        },
         "backgroundSource",
       ),
     ).toEqual({});
-  });
-
-  it("drops the mirror flag together with the Background source", () => {
-    // flipX is meaningless without a tile, so clearing the source clears it too.
+    // The mirror flag rides on the source, so it can't survive it.
     expect(
       clearOverrideField(
-        { background: { backgroundId: "bumper", flipX: true } },
+        {
+          background: {
+            source: { kind: "authored", backgroundId: "bumper", flipX: true },
+          },
+        },
         "backgroundSource",
       ),
     ).toEqual({});

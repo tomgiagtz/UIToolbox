@@ -1,9 +1,7 @@
+import { ensureTileBitmap } from "@/lib/glyph/background-render";
 import { ensureImageBitmap } from "@/lib/glyph/images";
 import { renderGlyph } from "@/lib/glyph/renderer";
-import {
-  ensureBackgroundBitmap,
-  ensureSymbolBitmap,
-} from "@/lib/glyph/symbol-render";
+import { ensureSymbolBitmap } from "@/lib/glyph/symbol-render";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
 export interface AtlasRenderInputs {
@@ -48,17 +46,15 @@ export async function renderAtlasBlob(
       ? ((await ensureImageBitmap(placement.imageId, output.cellSize)) ??
         undefined)
       : undefined;
-    // An Authored Background tile rasterizes the same way, from the placement's
-    // resolved Background colours, so the exported atlas matches the live preview.
-    const backgroundId = placement.style.background.backgroundId;
-    const backgroundImage = backgroundId
-      ? ((await ensureBackgroundBitmap(
-          backgroundId,
-          placement.style,
-          output.cellSize,
-          output.catalogId,
-        )) ?? undefined)
-      : undefined;
+    // The Background tile — an Authored one recoloured from the placement's
+    // resolved Background colours, or an uploaded image — rasterizes the same way,
+    // so the exported atlas matches the live preview (#18, #22).
+    const backgroundImage =
+      (await ensureTileBitmap(
+        placement.style,
+        output.cellSize,
+        output.catalogId,
+      )) ?? undefined;
     renderGlyph(ctx, placement.rect.x, placement.rect.y, {
       label: placement.label,
       cellSize: output.cellSize,

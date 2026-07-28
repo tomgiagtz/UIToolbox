@@ -32,11 +32,12 @@ export interface RenderGlyphOptions {
    */
   image?: CanvasImageSource;
   /**
-   * The Glyph's **Authored Background** tile, already rasterized to its resolved
-   * Background colours (see `symbol-render.ts`). When present it is drawn across the
-   * whole cell in place of the plain `shape` — the tile carries its own shape +
-   * outline — with the label/Symbol composited on top (issue #18). Falls back to the
-   * plain `shape` while the bitmap is still warming.
+   * The Glyph's **Background tile** art, already rasterized (see
+   * `background-render.ts`): either an Authored Background recoloured to the
+   * resolved Background colours, or an uploaded tile image. When present it is
+   * drawn across the whole cell in place of the plain `shape` — the tile carries
+   * its own shape + outline — with the label/Symbol composited on top (#18, #22).
+   * Falls back to the plain `shape` while the bitmap is still warming.
    */
   backgroundImage?: CanvasImageSource;
 }
@@ -66,21 +67,11 @@ export function renderGlyph(
   ctx.translate(ox, oy);
   ctx.clearRect(0, 0, cellSize, cellSize);
 
-  // An Authored Background tile replaces the plain shape and carries its own outline.
-  // Until its bitmap warms, fall back to the plain shape so there's no blank flash.
+  // A tile — Authored or uploaded — replaces the plain shape and carries its own
+  // outline. Until its bitmap warms, fall back to the plain shape so there's no
+  // blank flash.
   if (backgroundImage) {
-    // Mirror left-side tiles horizontally so they face opposite the right-side
-    // ones that share the same right-facing art (issue #18). The flip wraps only
-    // the tile draw, so the label below stays upright.
-    if (background.flipX) {
-      ctx.save();
-      ctx.translate(cellSize, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(backgroundImage, 0, 0, cellSize, cellSize);
-      ctx.restore();
-    } else {
-      ctx.drawImage(backgroundImage, 0, 0, cellSize, cellSize);
-    }
+    drawTile(ctx, cellSize, backgroundImage, background.source);
   } else {
     drawBackground(ctx, cellSize, background);
   }
@@ -136,6 +127,37 @@ function contentBox(
 }
 
 /**
+ * Draw the Background tile art across the whole cell.
+ *
+ * The two kinds of art get the treatment their authorship earns. An **Authored
+ * Background** is square, tool-owned tile art, so it fills the cell exactly and
+ * honours the mirror flag that faces left-side bumpers/triggers the other way
+ * (issue #18) — the flip wraps only the tile, so the content drawn on top stays
+ * upright. An **uploaded image** is the user's own graphic of unknown aspect, so
+ * it is fitted and centred rather than stretched (issue #22).
+ */
+function drawTile(
+  ctx: Canvas2DContext,
+  cellSize: number,
+  tile: CanvasImageSource,
+  source: Background["source"],
+): void {
+  if (source.kind === "image") {
+    drawImage(ctx, cellSize, tile, cellSize);
+    return;
+  }
+  if (source.kind === "authored" && source.flipX) {
+    ctx.save();
+    ctx.translate(cellSize, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(tile, 0, 0, cellSize, cellSize);
+    ctx.restore();
+    return;
+  }
+  ctx.drawImage(tile, 0, 0, cellSize, cellSize);
+}
+
+/**
  * Draw a rasterized Symbol centred in the tile's content box, preserving its
  * square aspect.
  */
@@ -150,10 +172,11 @@ function drawSymbol(
 }
 
 /**
- * Draw a rasterized custom image centred in the tile's content box, **fitted** to
- * its own aspect: the user's art is arbitrary, so it is letterboxed inside the box
+ * Draw a rasterized user image centred in a `size`-square box, **fitted** to its
+ * own aspect: the user's art is arbitrary, so it is letterboxed inside the box
  * rather than stretched to fill it. A source reporting no intrinsic size falls back
- * to filling the box.
+ * to filling the box. Shared by the custom image Render Source (the content box)
+ * and an uploaded Background tile (the whole cell).
  */
 function drawImage(
   ctx: Canvas2DContext,

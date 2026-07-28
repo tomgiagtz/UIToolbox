@@ -169,9 +169,12 @@ The tile a Glyph's Render Source is drawn on. Its **source** is one of:
 - an **uploaded image** — the user's own tile graphic; or
 - an **authored Background** — a shipped SVG tile from the tool's gallery.
 
-The Background source resolves through the **Style Cascade** like any other style
-property. Some Catalog Inputs whose identity is their tile _shape_ (bumpers,
-triggers) default to a specific authored Background rather than a plain shape.
+The source is a single value, not a bag of flags — one of the three at a time
+(ADR-0009) — and it resolves through the **Style Cascade** like any other style
+property, settable at any scope. Some Catalog Inputs whose identity is their tile
+_shape_ (bumpers, triggers) default to a specific authored Background rather than
+a plain shape. Fill and border paint a shape or recolour an authored tile; an
+uploaded image draws as authored, fitted to the cell and never recoloured.
 
 ### Authored Background
 
@@ -257,3 +260,5 @@ See `docs/adr/`:
 - **ADR-0007** — Sentinel paint roles and importable Symbol Sets.
 - **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
   content scale joins the Style Cascade.
+- **ADR-0009** — A Background's tile art is one `source` union: shape / authored /
+  uploaded image (amends ADR-0006).

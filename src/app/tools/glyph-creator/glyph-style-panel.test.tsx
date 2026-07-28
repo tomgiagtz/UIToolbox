@@ -6,7 +6,7 @@ import { projectBaseStyle } from "@/lib/glyph/generate";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
-import type { ImageAsset, Project } from "@/lib/glyph/types";
+import type { BackgroundSource, ImageAsset, Project } from "@/lib/glyph/types";
 
 const glyph: SelectedGlyph = {
   deviceIndex: 0,
@@ -26,31 +26,38 @@ function xboxProject(images: ImageAsset[] = []): Project {
   return { ...project, images };
 }
 
+/** The manifest entry a stubbed upload resolves to. */
+const uploaded: ImageAsset = {
+  id: "img-9.png",
+  fileName: "tile.png",
+  type: "image/png",
+};
+
 /**
- * Render the panel at Glyph scope. `backgroundId` puts an Authored Background
- * tile on the resolved style, standing in for one inherited from the Catalog
- * per-Input tier (as an Xbox bumper has).
+ * Render the panel at Glyph scope. `source` puts tile art on the resolved style,
+ * standing in for one inherited from the Catalog per-Input tier (as an Xbox
+ * bumper has).
  */
 function renderPanel({
   onClose = vi.fn(),
   dispatch = vi.fn(),
-  onUploadImage = vi.fn(),
-  backgroundId,
+  onUploadImage = vi.fn(async () => uploaded),
+  source,
   project = createDefaultProject(),
   glyph: target = glyph,
   override = {},
 }: {
   onClose?: () => void;
   dispatch?: () => void;
-  onUploadImage?: (file: File) => void;
-  backgroundId?: string;
+  onUploadImage?: (file: File) => Promise<ImageAsset>;
+  source?: BackgroundSource;
   project?: Project;
   glyph?: SelectedGlyph;
   override?: StyleOverride;
 } = {}) {
   const base = projectBaseStyle(project);
-  const style = backgroundId
-    ? { ...base, background: { ...base.background, backgroundId } }
+  const style = source
+    ? { ...base, background: { ...base.background, source } }
     : base;
   const props = {
     project,
@@ -67,14 +74,11 @@ function renderPanel({
     onClose,
     onUploadImage,
     /** Re-render the same panel with a tile applied. */
-    withTile: (id: string) =>
+    withTile: (tile: BackgroundSource) =>
       rerender(
         <GlyphStylePanel
           {...props}
-          style={{
-            ...base,
-            background: { ...base.background, backgroundId: id },
-          }}
+          style={{ ...base, background: { ...base.background, source: tile } }}
         />,
       ),
   };
@@ -105,25 +109,19 @@ describe("GlyphStylePanel", () => {
     });
   });
 
-  it("offers every Authored Background as a source, plus the plain shape", () => {
-    renderPanel();
-    const select = screen.getByLabelText("Background source");
-    const options = [...select.querySelectorAll("option")].map((o) => o.value);
-    expect(options[0]).toBe("");
-    for (const a of AUTHORED_BACKGROUNDS) expect(options).toContain(a.id);
-  });
-
-  it("writes an explicit null when the source is set back to the plain shape", () => {
+  it("writes an explicit shape source when the tile is turned off", () => {
     // A Glyph that inherits a tile from the Catalog per-Input tier, the way an
     // Xbox bumper does — the case where omitting the field would be a no-op.
-    const { dispatch } = renderPanel({ backgroundId: "bumper" });
+    const { dispatch } = renderPanel({
+      source: { kind: "authored", backgroundId: "bumper" },
+    });
     const select = screen.getByLabelText("Background source");
-    expect((select as HTMLSelectElement).value).toBe("bumper");
-    fireEvent.change(select, { target: { value: "" } });
+    expect((select as HTMLSelectElement).value).toBe("authored:bumper");
+    fireEvent.change(select, { target: { value: "shape" } });
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { background: { backgroundId: null } },
+      patch: { background: { source: { kind: "shape" } } },
     });
   });
 
@@ -131,12 +129,19 @@ describe("GlyphStylePanel", () => {
     const { withTile } = renderPanel();
     expect(screen.getByText("Background shape")).toBeInTheDocument();
 
-    withTile("bumper");
+    withTile({ kind: "authored", backgroundId: "bumper" });
     // The tile carries its own shape and corners, so those controls go away —
     // but fill and border stay, since they tint the tile's paint roles.
     expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/corner radius/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Background fill")).toBeInTheDocument();
+  });
+
+  it("drops the fill and border controls for an uploaded tile, which draws as authored", () => {
+    const { withTile } = renderPanel();
+    withTile({ kind: "image", imageId: "img-1.png" });
+    expect(screen.queryByLabelText("Background fill")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
   });
 
   it("scales the Render Source through the cascade", () => {
@@ -159,6 +164,76 @@ describe("GlyphStylePanel", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("GlyphStylePanel — Background source (issue #22)", () => {
+  const image: ImageAsset = {
+    id: "img-1.png",
+    fileName: "metal.png",
+    type: "image/png",
+  };
+
+  it("offers the plain shape, every Authored Background, and each upload", () => {
+    renderPanel({ project: { ...createDefaultProject(), images: [image] } });
+    const select = screen.getByLabelText("Background source");
+    const options = [...select.querySelectorAll("option")].map((o) => o.value);
+    expect(options[0]).toBe("shape");
+    for (const a of AUTHORED_BACKGROUNDS)
+      expect(options).toContain(`authored:${a.id}`);
+    expect(options).toContain(`image:${image.id}`);
+  });
+
+  it("points the Background at an uploaded image", () => {
+    const { dispatch } = renderPanel({
+      project: { ...createDefaultProject(), images: [image] },
+    });
+    fireEvent.change(screen.getByLabelText("Background source"), {
+      target: { value: `image:${image.id}` },
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { background: { source: { kind: "image", imageId: image.id } } },
+    });
+  });
+
+  it("keeps a mirrored tile mirrored when it is re-picked", () => {
+    // Re-picking a bumper's own tile must not quietly un-flip it.
+    const { dispatch } = renderPanel({
+      source: { kind: "authored", backgroundId: "bumper", flipX: true },
+    });
+    fireEvent.change(screen.getByLabelText("Background source"), {
+      target: { value: "authored:bumper" },
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: {
+        background: {
+          source: { kind: "authored", backgroundId: "bumper", flipX: true },
+        },
+      },
+    });
+  });
+
+  it("draws a newly uploaded tile image on the Glyph", async () => {
+    const { dispatch } = renderPanel();
+    const file = new File([new Uint8Array([1])], "tile.png", {
+      type: "image/png",
+    });
+    fireEvent.change(screen.getByLabelText("Upload tile image"), {
+      target: { files: [file] },
+    });
+    await vi.waitFor(() =>
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+        patch: {
+          background: { source: { kind: "image", imageId: uploaded.id } },
+        },
+      }),
+    );
   });
 });
 

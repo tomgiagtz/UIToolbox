@@ -10,6 +10,7 @@ import {
 const style: GlyphStyle = {
   textColor: "#33cc99",
   background: {
+    source: { kind: "shape" },
     shape: "circle",
     fill: "#222222",
     cornerRadius: 0,
@@ -34,6 +35,7 @@ describe("backgroundRoleColors", () => {
     const bgStyle: GlyphStyle = {
       textColor: "#33cc99",
       background: {
+        source: { kind: "shape" },
         shape: "rounded-rect",
         fill: "#0e7a0d",
         cornerRadius: 8,
@@ -59,6 +61,7 @@ describe("backgroundRoleColors", () => {
       backgroundRoleColors({
         textColor: "#000000",
         background: {
+          source: { kind: "shape" },
           shape: "rounded-rect",
           fill: "#0e7a0d",
           cornerRadius: 0,
