@@ -15,7 +15,7 @@
  * `cellSize` and the font are deliberately **not** part of this cascade — they
  * stay Project-global (see ADR-0006).
  */
-import type { Background } from "@/lib/glyph/types";
+import type { Background, BackgroundSource } from "@/lib/glyph/types";
 
 /**
  * The three **Paint Role** colours a Symbol's sentinel shapes resolve to
@@ -63,22 +63,22 @@ export interface GlyphStyle {
 
 /** A sparse patch of a {@link Background}; unset fields fall up the cascade. */
 export interface BackgroundOverride {
+  /**
+   * Where this tier draws its tile from (issue #22). Replaced wholesale, never
+   * merged — a source is one choice, so patching an `image` onto an `authored`
+   * base must not leave a tile that is half of each.
+   *
+   * Setting it to `{ kind: "shape" }` is meaningfully different from omitting it:
+   * the Catalog per-Input tier outranks the Device tier, so bumpers and triggers
+   * carry a tile by default and *omitting* the field just lets that tile fall
+   * through. Only an explicit "shape" turns it off, which is what makes a
+   * per-Glyph shape change stick.
+   */
+  source?: BackgroundSource;
   shape?: Background["shape"];
   fill?: string;
   cornerRadius?: number;
   border?: Partial<Background["border"]>;
-  /**
-   * An Authored Background tile id (see {@link Background.backgroundId}), or
-   * `null` for "no tile — draw the plain shape".
-   *
-   * The `null` matters because the Catalog per-Input tier outranks the Device
-   * tier: bumpers and triggers carry a tile by default, and *omitting* the field
-   * at a higher tier just lets that tile fall through. Only an explicit `null`
-   * can turn it off, which is what makes a per-Glyph shape change stick.
-   */
-  backgroundId?: string | null;
-  /** Mirror the Authored Background tile horizontally; see {@link Background.flipX}. */
-  flipX?: boolean;
 }
 
 /**
@@ -177,7 +177,7 @@ export function isOverrideFieldSet(
     case "borderColor":
       return override.background?.border?.color !== undefined;
     case "backgroundSource":
-      return override.background?.backgroundId !== undefined;
+      return override.background?.source !== undefined;
     case "symbolFill":
       return override.symbolPaints?.fill !== undefined;
     case "symbolBorder":
@@ -230,7 +230,7 @@ export function clearOverrideField(
   if (!next.background) return next;
   const bg: BackgroundOverride = { ...next.background };
   if (field === "shape") delete bg.shape;
-  else if (field === "backgroundSource") clearTile(bg);
+  else if (field === "backgroundSource") delete bg.source;
   else if (field === "fill") delete bg.fill;
   else if (field === "cornerRadius") delete bg.cornerRadius;
   else if (field === "borderWidth" || field === "borderColor") {
@@ -281,22 +281,6 @@ export function resolveStyle(
   return { textColor, background, symbolPaints, contentScale };
 }
 
-/**
- * Drop an Authored Background tile and its mirror flag together, in place.
- *
- * `flipX` says how to draw a tile, so it is meaningless without a `backgroundId`
- * — the two are always cleared as a unit. Shared by the resolver (dropping a
- * tile inherited from a lower tier) and the override editor (dropping a tier's
- * own tile): different operations, same invariant.
- */
-function clearTile(bg: {
-  backgroundId?: string | null;
-  flipX?: boolean;
-}): void {
-  delete bg.backgroundId;
-  delete bg.flipX;
-}
-
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */
 function applyBackground(
   bg: Background,
@@ -304,15 +288,9 @@ function applyBackground(
 ): Background {
   const next: Background = { ...bg, border: { ...bg.border } };
   if (patch.shape !== undefined) next.shape = patch.shape;
-  if (patch.backgroundId === null) {
-    // Explicit "no tile". A mirror in the same patch goes with it, so the pair
-    // can never resolve to "no tile, but flipped".
-    clearTile(next);
-  } else {
-    if (patch.backgroundId !== undefined)
-      next.backgroundId = patch.backgroundId;
-    if (patch.flipX !== undefined) next.flipX = patch.flipX;
-  }
+  // One choice, replaced whole: a tier that names a source says everything about
+  // where the tile comes from, including its mirror flag.
+  if (patch.source !== undefined) next.source = patch.source;
   if (patch.fill !== undefined) next.fill = patch.fill;
   if (patch.cornerRadius !== undefined) next.cornerRadius = patch.cornerRadius;
   if (patch.border) {

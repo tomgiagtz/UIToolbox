@@ -7,6 +7,7 @@ import { AtlasPreview, type PreviewGlyph } from "./atlas-preview";
 const style: GlyphStyle = {
   textColor: "#ffffff",
   background: {
+    source: { kind: "shape" },
     shape: "rounded-rect",
     fill: "#222222",
     cornerRadius: 16,

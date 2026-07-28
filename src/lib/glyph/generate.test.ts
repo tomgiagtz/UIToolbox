@@ -36,6 +36,7 @@ function project(over: Partial<Project> = {}): Project {
     font: { family: "TestFont" },
     textColor: "#ffffff",
     background: {
+      source: { kind: "shape" },
       shape: "rounded-rect",
       fill: "#000000",
       cornerRadius: 12,
@@ -97,19 +98,23 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     ]);
   });
 
-  it("threads the bumper's Authored Background id onto the placement style (#18)", () => {
+  it("threads the bumper's Authored Background onto the placement style (#18)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
     // The Catalog per-Input default rides in the resolved Background, not on a
     // separate field like symbolId, so it flows to the compositor for free.
-    expect(lb.style.background.backgroundId).toBe("bumper");
-    expect(a.style.background.backgroundId).toBeUndefined();
-    expect(paddle.style.background.backgroundId).toBeUndefined();
+    expect(lb.style.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+      flipX: true,
+    });
+    expect(a.style.background.source).toEqual({ kind: "shape" });
+    expect(paddle.style.background.source).toEqual({ kind: "shape" });
 
     const [out] = generateTilesets(project({ devices: [xbox] }));
-    expect(out.placements.map((p) => p.style.background.backgroundId)).toEqual([
-      undefined,
-      "bumper",
-      undefined,
+    expect(out.placements.map((p) => p.style.background.source.kind)).toEqual([
+      "shape",
+      "authored",
+      "shape",
     ]);
   });
 });
@@ -473,8 +478,11 @@ describe("resolveScopeStyle", () => {
     const inputs = resolveDeviceInputs(proj.devices[0], proj);
     const lb = inputs.find((i) => i.id === "xbox-lb");
     const a = inputs.find((i) => i.id === "xbox-a");
-    expect(lb?.style.background.backgroundId).toBe("bumper");
-    expect(lb?.style.background.flipX).toBe(true);
+    expect(lb?.style.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+      flipX: true,
+    });
     // A face button has no backer, so it does take the device-wide circle.
     expect(a?.style.background.shape).toBe("circle");
   });
@@ -483,12 +491,12 @@ describe("resolveScopeStyle", () => {
     const proj = projectReducer(xboxProject(), {
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
-      patch: { background: { backgroundId: null, shape: "circle" } },
+      patch: { background: { source: { kind: "shape" }, shape: "circle" } },
     });
     const lb = resolveDeviceInputs(proj.devices[0], proj).find(
       (i) => i.id === "xbox-lb",
     );
-    expect(lb?.style.background.backgroundId).toBeUndefined();
+    expect(lb?.style.background.source).toEqual({ kind: "shape" });
     expect(lb?.style.background.shape).toBe("circle");
   });
 

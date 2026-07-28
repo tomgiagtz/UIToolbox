@@ -70,6 +70,132 @@ describe("ProjectStore — config (localStorage)", () => {
   });
 });
 
+describe("ProjectStore — v4 → v5 migration (Background source union)", () => {
+  // A v4 config: before the Background named its tile art with a `source` union,
+  // it carried an optional `backgroundId` + `flipX` pair — and, inside a sparse
+  // override, a `null` id meaning "no tile, draw the shape" (issue #22).
+  function v4(
+    background: Record<string, unknown>,
+    device: object = {},
+  ): string {
+    return JSON.stringify({
+      version: 4,
+      project: {
+        name: "pre-source",
+        font: { family: "Inter" },
+        textColor: "#f8fafc",
+        background: {
+          shape: "rounded-rect",
+          fill: "#1e293b",
+          cornerRadius: 18,
+          border: { width: 4, color: "#475569" },
+          ...background,
+        },
+        symbolPaints: DEFAULT_SYMBOL_PAINTS,
+        contentScale: 1,
+        images: [],
+        cellSize: 128,
+        devices: [
+          {
+            name: "Xbox",
+            catalogId: "xbox",
+            enabled: ["xbox-lb"],
+            custom: [],
+            style: {},
+            glyphStyles: {},
+            ...device,
+          },
+        ],
+        naming: { template: "{device}_{input}", case: "snake" },
+        filenameTemplate: "{device}_atlas",
+      },
+    });
+  }
+
+  it("gives a tile-less Background the plain shape source", () => {
+    const project = parseConfig(v4({}))!;
+    expect(project.background.source).toEqual({ kind: "shape" });
+    // Nothing else about the Background moves.
+    expect(project.background.shape).toBe("rounded-rect");
+    expect(project.background.cornerRadius).toBe(18);
+  });
+
+  it("rewrites a saved Authored Background, mirror flag and all", () => {
+    const project = parseConfig(v4({ backgroundId: "bumper", flipX: true }))!;
+    expect(project.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+      flipX: true,
+    });
+  });
+
+  it("rewrites Device and per-Glyph overrides too", () => {
+    const project = parseConfig(
+      v4(
+        {},
+        {
+          style: { background: { backgroundId: "trigger", fill: "#111111" } },
+          glyphStyles: {
+            // The pre-v5 spelling of "no tile — draw the shape".
+            "xbox-lb": { background: { backgroundId: null, shape: "circle" } },
+          },
+        },
+      ),
+    )!;
+    const device = project.devices[0];
+    expect(device.style.background).toEqual({
+      source: { kind: "authored", backgroundId: "trigger" },
+      fill: "#111111",
+    });
+    expect(device.glyphStyles["xbox-lb"].background).toEqual({
+      source: { kind: "shape" },
+      shape: "circle",
+    });
+  });
+
+  it("leaves an override that never named a tile alone", () => {
+    const project = parseConfig(
+      v4({}, { style: { background: { shape: "circle" } } }),
+    )!;
+    // Still sparse: an unset source falls up the cascade, so it must not be
+    // backfilled with an explicit "shape" that would outrank the Catalog tier.
+    expect(project.devices[0].style.background).toEqual({ shape: "circle" });
+  });
+
+  it("drops a mirror flag that never named a tile", () => {
+    const project = parseConfig(
+      v4({}, { style: { background: { flipX: true, shape: "circle" } } }),
+    )!;
+    // `flipX` only ever meant something beside a `backgroundId`. With no id to
+    // describe, v5 has nowhere to keep it — and it must not linger as a field
+    // `BackgroundOverride` no longer has.
+    expect(project.devices[0].style.background).toEqual({ shape: "circle" });
+  });
+
+  it("produces a config that passes current-version validation on re-save", () => {
+    const migrated = parseConfig(v4({ backgroundId: "bumper" }))!;
+    saveConfig(migrated);
+    expect(loadConfig()).toEqual(migrated);
+  });
+
+  it("rejects a current-version config whose Background source is malformed", () => {
+    const bad = JSON.stringify({
+      version: 5,
+      project: {
+        ...JSON.parse(v4({})).project,
+        background: {
+          shape: "circle",
+          fill: "#111111",
+          cornerRadius: 0,
+          border: { width: 0, color: "#000000" },
+          source: { kind: "authored" },
+        },
+      },
+    });
+    expect(parseConfig(bad)).toBeNull();
+  });
+});
+
 describe("ProjectStore — v3 → v4 migration (content scale + images)", () => {
   // A v3 config: before the Project gained a content scale and an image manifest
   // (issue #20).

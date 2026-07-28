@@ -7,9 +7,7 @@ import { isOverrideFieldSet } from "@/lib/glyph/style";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
 import type { ImageAsset } from "@/lib/glyph/types";
 import { ResetButton, inputClass } from "./controls-ui";
-
-/** File types the image picker accepts — raster art plus SVG. */
-const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml";
+import { ImageUploadField } from "./image-upload-field";
 
 /**
  * Picks a Glyph's **Render Source** (ADR-0004): its font-drawn label, its bundled
@@ -43,8 +41,11 @@ export function RenderSourceControls({
   images: ImageAsset[];
   /** Raw sparse override at `scope`, for the reset control. */
   override: StyleOverride;
-  /** Hand an uploaded file to the editor, which registers and persists it. */
-  onUploadImage: (file: File) => void;
+  /**
+   * Hand an uploaded file to the editor, which registers and persists it and
+   * resolves to its manifest entry — this Glyph then draws that image.
+   */
+  onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const groupId = useId();
   const isOverridden = isOverrideFieldSet(override, "renderSource");
@@ -144,26 +145,17 @@ export function RenderSourceControls({
         </div>
       )}
 
-      <div className="mt-1.5 flex flex-col gap-1.5">
-        <label htmlFor={`${groupId}-upload`} className="text-sm font-medium">
-          Upload image
-        </label>
-        <input
-          id={`${groupId}-upload`}
-          type="file"
-          accept={IMAGE_ACCEPT}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUploadImage(file);
-            // Clear the input so re-picking the same file still fires a change.
-            e.target.value = "";
+      <div className="mt-1.5">
+        <ImageUploadField
+          label="Upload image"
+          hint="The image is drawn on this Glyph's tile; size it with Content scale below."
+          // An upload is also a choice: the Glyph draws what was just uploaded.
+          onUpload={(file) => {
+            void onUploadImage(file).then((asset) =>
+              patch({ kind: "image", imageId: asset.id }),
+            );
           }}
-          className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
         />
-        <p className="text-xs text-muted-foreground">
-          PNG, JPEG, WebP, or SVG. Uploads stay in your browser and are drawn on
-          the Glyph&apos;s tile. Size them with Content scale below.
-        </p>
       </div>
     </fieldset>
   );

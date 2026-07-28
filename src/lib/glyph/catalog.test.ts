@@ -233,8 +233,9 @@ describe("Shoulder Inputs carry cross-pad aliases", () => {
 
 describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", () => {
   function backgroundOf(catalogId: string, inputId: string) {
-    return catalogIndex(getCatalog(catalogId)!).get(inputId)?.defaultStyle
-      ?.background?.backgroundId;
+    const source = catalogIndex(getCatalog(catalogId)!).get(inputId)
+      ?.defaultStyle?.background?.source;
+    return source?.kind === "authored" ? source.backgroundId : undefined;
   }
 
   it("defaults both Xbox bumpers to the bumper tile", () => {
@@ -265,8 +266,9 @@ describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", 
 
   it("mirrors the left-side bumper/trigger so it faces opposite the right-side one", () => {
     function flipOf(catalogId: string, inputId: string) {
-      return catalogIndex(getCatalog(catalogId)!).get(inputId)?.defaultStyle
-        ?.background?.flipX;
+      const source = catalogIndex(getCatalog(catalogId)!).get(inputId)
+        ?.defaultStyle?.background?.source;
+      return source?.kind === "authored" ? source.flipX : undefined;
     }
     // Both sides share one right-facing tile; only the left ones are flipped.
     expect(flipOf("xbox", "xbox-lb")).toBe(true);
@@ -289,8 +291,9 @@ describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", 
     const shipped = new Set(AUTHORED_BACKGROUNDS.map((b) => b.id));
     for (const catalog of DEVICE_CATALOGS) {
       for (const input of catalog.inputs) {
-        const id = input.defaultStyle?.background?.backgroundId;
-        if (id) expect(shipped.has(id)).toBe(true);
+        const source = input.defaultStyle?.background?.source;
+        if (source?.kind === "authored")
+          expect(shipped.has(source.backgroundId)).toBe(true);
       }
     }
   });

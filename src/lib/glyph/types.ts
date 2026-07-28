@@ -14,8 +14,44 @@ import type {
 /** The shape of a Glyph's Background tile. "none" yields a label-only Glyph. */
 export type BackgroundShape = "rounded-rect" | "square" | "circle" | "none";
 
-/** The tile a Glyph's label is drawn on: shape + fill + optional border. */
+/**
+ * Where a Glyph's Background tile art comes from (issue #22) — the drawn
+ * {@link BackgroundShape}, a shipped **Authored Background** SVG, or one of the
+ * user's uploaded images. Exactly one at a time, so the three can never disagree
+ * about what a tile is.
+ *
+ * A source that can't be honoured falls back to the plain shape rather than
+ * failing: an image whose bytes aren't present, or an unknown Authored id, draws
+ * as `shape` would.
+ */
+export type BackgroundSource =
+  /** The primitive named by {@link Background.shape}. */
+  | { kind: "shape" }
+  /**
+   * A shipped Authored Background tile, drawn from its SVG with the fill/border
+   * sentinels recoloured to this Background's `fill` / `border.color`.
+   * Bumper/trigger Inputs default to one via the Catalog per-Input tier (#18).
+   */
+  | {
+      kind: "authored";
+      backgroundId: string;
+      /**
+       * Mirror the tile horizontally when drawn. The shipped bumper/trigger tiles
+       * are right-facing, so the left-side Inputs (LB, LT) set this to face the
+       * shape the other way (issue #18).
+       */
+      flipX?: boolean;
+    }
+  /**
+   * A user-uploaded tile image, referenced by {@link ImageAsset} id. Drawn as
+   * authored — never recoloured — fitted to the whole cell (issue #22).
+   */
+  | { kind: "image"; imageId: string };
+
+/** The tile a Glyph's Render Source is drawn on: source + fill + optional border. */
 export interface Background {
+  /** Where the tile art comes from; defaults to the drawn {@link shape}. */
+  source: BackgroundSource;
   shape: BackgroundShape;
   /** CSS color of the fill. Ignored when shape is "none". */
   fill: string;
@@ -26,20 +62,6 @@ export interface Background {
     width: number;
     color: string;
   };
-  /**
-   * An **Authored Background** tile id (a shipped SVG from the gallery). When set,
-   * the tile is drawn from that SVG — its fill/border sentinels recoloured to this
-   * Background's `fill` / `border.color` — in place of the `shape` primitive.
-   * Bumper/trigger Inputs default to one via the Catalog per-Input tier (issue #18).
-   */
-  backgroundId?: string;
-  /**
-   * Mirror the Authored Background tile horizontally when drawn. The shipped
-   * bumper/trigger tiles are right-facing, so the left-side Inputs (LB, LT) set
-   * this to face the shape the other way (issue #18). No effect without a
-   * {@link backgroundId}.
-   */
-  flipX?: boolean;
 }
 
 /** Case style applied when rendering a Sprite Name. */

@@ -18,9 +18,14 @@ import {
   DEFAULT_CONTENT_SCALE,
   DEFAULT_SYMBOL_PAINTS,
 } from "@/lib/glyph/presets";
-import type { SymbolPaints } from "@/lib/glyph/style";
+import type {
+  BackgroundOverride,
+  StyleOverride,
+  SymbolPaints,
+} from "@/lib/glyph/style";
 import type {
   Background,
+  BackgroundSource,
   CustomInput,
   DeviceConfig,
   ImageAsset,
@@ -39,8 +44,11 @@ const CONFIG_KEY = "uitoolbox.glyph-creator.project";
  * - v4: Project gains `contentScale` (the cascade's base Render Source scale) and
  *   the `images` manifest for custom image Render Sources (issue #20). Older saves
  *   backfill the unscaled default and an empty manifest.
+ * - v5: the Background's tile art becomes a `source` union — shape / authored /
+ *   uploaded image (issue #22) — replacing the `backgroundId` + `flipX` pair.
+ *   Older saves rewrite that pair, at every cascade tier, into the union.
  */
-const CONFIG_VERSION = 4;
+const CONFIG_VERSION = 5;
 
 interface PersistedConfig {
   version: number;
@@ -89,15 +97,20 @@ function migrateConfig(version: number, project: unknown): Project | null {
     return isProject(project) ? project : null;
   }
   // Each older version migrates into the next, so one step is written per bump.
+  if (version === 4) {
+    return isProjectV4(project) ? migrateV4(project) : null;
+  }
   if (version === 3) {
-    return isProjectV3(project) ? migrateV3(project) : null;
+    return isProjectV3(project) ? migrateV4(migrateV3(project)) : null;
   }
   if (version === 2) {
-    return isProjectV2(project) ? migrateV3(migrateV2(project)) : null;
+    return isProjectV2(project)
+      ? migrateV4(migrateV3(migrateV2(project)))
+      : null;
   }
   if (version === 1) {
     return isProjectV1(project)
-      ? migrateV3(migrateV2(migrateV1(project)))
+      ? migrateV4(migrateV3(migrateV2(migrateV1(project))))
       : null;
   }
   return null;
@@ -285,7 +298,12 @@ function isPersistedConfig(value: unknown): value is PersistedConfig {
   );
 }
 
-function isBackground(value: unknown): value is Background {
+/**
+ * The Background fields every version has carried. Split from the `source` union
+ * (v5) so the v4-and-older validators can share it — those saves have everything
+ * here and nothing there.
+ */
+function isBackgroundCore(value: unknown): value is LegacyBackground {
   if (!isRecord(value)) return false;
   const shapes = ["rounded-rect", "square", "circle", "none"];
   return (
@@ -295,6 +313,21 @@ function isBackground(value: unknown): value is Background {
     isRecord(value.border) &&
     typeof value.border.width === "number" &&
     typeof value.border.color === "string"
+  );
+}
+
+function isBackgroundSource(value: unknown): value is BackgroundSource {
+  if (!isRecord(value)) return false;
+  if (value.kind === "shape") return true;
+  if (value.kind === "authored") return typeof value.backgroundId === "string";
+  return value.kind === "image" && typeof value.imageId === "string";
+}
+
+function isBackground(value: unknown): value is Background {
+  return (
+    isRecord(value) &&
+    isBackgroundCore(value) &&
+    isBackgroundSource(value.source)
   );
 }
 
@@ -351,7 +384,9 @@ function hasProjectCommonFields(
     isRecord(value.font) &&
     typeof value.font.family === "string" &&
     typeof value.textColor === "string" &&
-    isBackground(value.background) &&
+    // Only the fields every version shares: v5 adds the `source` union on top,
+    // and `isProject` is what insists on it.
+    isBackgroundCore(value.background) &&
     typeof value.cellSize === "number" &&
     Array.isArray(value.devices) &&
     isNaming(value.naming) &&
@@ -369,6 +404,17 @@ function isImageAsset(value: unknown): value is ImageAsset {
 }
 
 function isProject(value: unknown): value is Project {
+  return isProjectV4(value) && isBackground(value.background);
+}
+
+/**
+ * A v4 Project: the current shape with the pre-union Background — an optional
+ * Authored Background id + mirror flag instead of the `source` union added in v5.
+ * {@link migrateV4} rewrites the pair, at every cascade tier.
+ */
+type ProjectV4 = Omit<Project, "background"> & { background: LegacyBackground };
+
+function isProjectV4(value: unknown): value is ProjectV4 {
   return (
     isProjectV3(value) &&
     typeof (value as Record<string, unknown>).contentScale === "number" &&
@@ -378,10 +424,10 @@ function isProject(value: unknown): value is Project {
 }
 
 /**
- * A v3 Project: the current shape minus the content scale and image manifest
+ * A v3 Project: the v4 shape minus the content scale and image manifest
  * (added in v4). {@link migrateV3} backfills both.
  */
-type ProjectV3 = Omit<Project, "contentScale" | "images">;
+type ProjectV3 = Omit<ProjectV4, "contentScale" | "images">;
 
 function isProjectV3(value: unknown): value is ProjectV3 {
   return (
@@ -391,11 +437,80 @@ function isProjectV3(value: unknown): value is ProjectV3 {
   );
 }
 
-function migrateV3(project: ProjectV3): Project {
+function migrateV3(project: ProjectV3): ProjectV4 {
   return {
     ...project,
     contentScale: DEFAULT_CONTENT_SCALE,
     images: [],
+  };
+}
+
+// --- v4 → v5 migration -----------------------------------------------------
+//
+// Before v5 a Background named its tile art with an optional `backgroundId` plus
+// a `flipX` mirror — and, inside a sparse override, a `null` id meaning "no tile,
+// draw the shape". v5 replaces all of that with one {@link BackgroundSource}
+// union, so a saved Authored Background has to be rewritten wherever it can
+// appear: the Project base, a Device override, or a per-Glyph override.
+
+/** The pre-v5 Background: the shared fields plus the tile pair it named art with. */
+type LegacyBackground = Omit<Background, "source"> & LegacyTile;
+
+/** The pre-v5 tile fields. A `null` id is the override tier's "no tile". */
+interface LegacyTile {
+  backgroundId?: string | null;
+  flipX?: boolean;
+}
+
+/**
+ * The {@link BackgroundSource} a pre-v5 tile pair meant, or `undefined` when it
+ * named no tile at all — which at the Project tier means the plain shape, and in
+ * a sparse override means "unset, fall up the cascade".
+ */
+function legacySource(tile: LegacyTile): BackgroundSource | undefined {
+  if (tile.backgroundId === undefined) return undefined;
+  if (tile.backgroundId === null) return { kind: "shape" };
+  return {
+    kind: "authored",
+    backgroundId: tile.backgroundId,
+    ...(tile.flipX ? { flipX: true } : {}),
+  };
+}
+
+function migrateV4(project: ProjectV4): Project {
+  const { backgroundId, flipX, ...background } = project.background;
+  return {
+    ...project,
+    background: {
+      ...background,
+      source: legacySource({ backgroundId, flipX }) ?? { kind: "shape" },
+    },
+    devices: project.devices.map((device) => ({
+      ...device,
+      style: migrateOverrideV4(device.style),
+      glyphStyles: Object.fromEntries(
+        Object.entries(device.glyphStyles).map(([id, override]) => [
+          id,
+          migrateOverrideV4(override),
+        ]),
+      ),
+    })),
+  };
+}
+
+/** Rewrite one sparse override's pre-v5 tile pair into a Background `source`. */
+function migrateOverrideV4(override: StyleOverride): StyleOverride {
+  const legacy = override.background as
+    (BackgroundOverride & LegacyTile) | undefined;
+  if (!legacy) return override;
+  // Both legacy fields go, even when they don't amount to a source: a `flipX`
+  // with no id described a tile this tier never named, and v5 has nowhere to
+  // keep it.
+  const { backgroundId, flipX, ...background } = legacy;
+  const source = legacySource({ backgroundId, flipX });
+  return {
+    ...override,
+    background: source ? { ...background, source } : background,
   };
 }
 

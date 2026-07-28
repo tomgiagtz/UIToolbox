@@ -22,7 +22,7 @@ import {
 import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
-import type { Project } from "@/lib/glyph/types";
+import type { ImageAsset, Project } from "@/lib/glyph/types";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import {
   clear as clearPersisted,
@@ -304,24 +304,20 @@ export function GlyphCreator() {
   }
 
   /**
-   * Take an uploaded custom image as a Glyph's Render Source: register its bytes
-   * for drawing, add it to the project's shared manifest, point the selected
-   * Glyph at it, and persist it so it survives a reload (ADR-0008).
+   * Take an uploaded image into the project: register its bytes for drawing, add
+   * it to the shared manifest, and persist it so it survives a reload (ADR-0008).
+   * Resolves to the manifest entry, and it's the caller that decides what the
+   * upload is *for* — a Glyph's Render Source or a Background tile (#20, #22) —
+   * since only it knows the scope being edited.
    */
-  async function onUploadImage(file: File) {
+  async function onUploadImage(file: File): Promise<ImageAsset> {
     const asset = imageAssetFor(project.images, file);
     // Register before dispatching, so the redraw the patch triggers already has
     // bytes to rasterize.
     putImage(asset.id, file);
     dispatch({ type: "add-image", image: asset });
-    if (selectedGlyphScope) {
-      dispatch({
-        type: "patch-style",
-        scope: selectedGlyphScope,
-        patch: { renderSource: { kind: "image", imageId: asset.id } },
-      });
-    }
     await saveImage({ ...asset, blob: file });
+    return asset;
   }
 
   /** The persisted bytes for the project's images, for bundling into a save. */
@@ -522,6 +518,7 @@ export function GlyphCreator() {
                       scope={validScope}
                       style={scopeStyle}
                       override={scopeOverride}
+                      onUploadImage={onUploadImage}
                     />
                   </div>
                 </PanelSection>

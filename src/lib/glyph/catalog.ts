@@ -182,7 +182,13 @@ function pad(
       ...(backgroundId
         ? {
             defaultStyle: {
-              background: { backgroundId, ...(flipX ? { flipX: true } : {}) },
+              background: {
+                source: {
+                  kind: "authored" as const,
+                  backgroundId,
+                  ...(flipX ? { flipX: true } : {}),
+                },
+              },
             },
           }
         : {}),

@@ -1,11 +1,9 @@
 "use client";
 
 import { useRef, type CSSProperties } from "react";
+import { getTileBitmap } from "@/lib/glyph/background-render";
 import { renderGlyph } from "@/lib/glyph/renderer";
-import {
-  getBackgroundBitmap,
-  getSymbolBitmap,
-} from "@/lib/glyph/symbol-render";
+import { getSymbolBitmap } from "@/lib/glyph/symbol-render";
 import type { SymbolPaints } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 import { useGlyphCanvas } from "./use-glyph-canvas";
@@ -73,9 +71,11 @@ export function GlyphPreview({
     contentScale,
   };
 
-  // Warm the shared Render Source bitmap cache and redraw once it is ready.
+  // Warm the shared Render Source bitmap cache and redraw once it is ready. The
+  // spec is passed unconditionally: even a label-only Glyph can carry tile art in
+  // its Background, which needs warming just the same.
   const bitmapsVersion = useRenderSourceBitmaps(
-    symbolId ? [{ symbolId, style: glyphStyle }] : [],
+    [{ symbolId, style: glyphStyle }],
     cellSize,
     device,
   );
@@ -93,14 +93,7 @@ export function GlyphPreview({
         symbol: symbolId
           ? getSymbolBitmap(symbolId, glyphStyle, cellSize, device)
           : undefined,
-        backgroundImage: background.backgroundId
-          ? getBackgroundBitmap(
-              background.backgroundId,
-              glyphStyle,
-              cellSize,
-              device,
-            )
-          : undefined,
+        backgroundImage: getTileBitmap(glyphStyle, cellSize, device),
       }),
     [
       label,

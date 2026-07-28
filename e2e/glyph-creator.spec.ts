@@ -276,6 +276,51 @@ test.describe("Input Glyph Creator", () => {
     expect(after.equals(before)).toBe(false);
   });
 
+  test("draws an uploaded Background tile in preview + export (#22)", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+
+    const pngOnly = async (dialog: ReturnType<Page["getByRole"]>) => {
+      await dialog.getByRole("checkbox", { name: /Metadata/ }).uncheck();
+    };
+    const before = await readDownload(await exportFrom(page, pngOnly));
+
+    await preview.click();
+    const panel = page.getByRole("region", { name: /edit glyph/i });
+    await expect(panel).toBeVisible();
+
+    const pixels = () =>
+      preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
+    const beforePixels = await pixels();
+
+    // Exact: once the source is overridden here, its reset control shares the
+    // field's name ("Reset Background source to inherited").
+    const source = panel.getByLabel("Background source", { exact: true });
+    await expect(source).toHaveValue("shape");
+    await panel.getByLabel("Upload tile image").setInputFiles(IMAGE_PATH);
+
+    // The upload became this Glyph's tile.
+    await expect(source).toHaveValue(/^image:img-1\.svg$/);
+    // Fill and border tint a shape or an Authored tile; an uploaded one draws
+    // as authored, so those controls step aside.
+    await expect(panel.getByLabel("Background fill")).toHaveCount(0);
+
+    // The live preview redrew with the tile. Rasterization is asynchronous, so
+    // poll rather than reading the canvas once.
+    await expect
+      .poll(pixels, { message: "preview should redraw with the tile" })
+      .not.toBe(beforePixels);
+
+    // The exported atlas differs from the baseline: the compositor drew it too.
+    const after = await readDownload(await exportFrom(page, pngOnly));
+    expect(after.equals(before)).toBe(false);
+  });
+
   test("has no WCAG 2.1 AA violations", async ({ page }, testInfo) => {
     await page.goto("/tools/glyph-creator");
     await page.getByLabel("Font file").setInputFiles(FONT_PATH);
