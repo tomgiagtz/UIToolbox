@@ -179,8 +179,8 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     const select = screen.getByLabelText("Background source");
     const options = [...select.querySelectorAll("option")].map((o) => o.value);
     // The two "no art" choices lead, in union order.
-    expect(options[0]).toBe("shape");
-    expect(options[1]).toBe("none");
+    expect(options[0]).toBe("none");
+    expect(options[1]).toBe("shape");
     for (const a of AUTHORED_BACKGROUNDS)
       expect(options).toContain(`authored:${a.id}`);
     expect(options).toContain(`image:${image.id}`);

@@ -28,10 +28,10 @@ A Background names its tile art with **one** discriminated union:
 
 ```ts
 type BackgroundSource =
+  | { kind: "none" } // nothing at all
   | { kind: "shape" } // the drawn primitive
   | { kind: "authored"; backgroundId: string; flipX?: boolean }
-  | { kind: "image"; imageId: string } // an uploaded tile
-  | { kind: "none" }; // nothing at all
+  | { kind: "image"; imageId: string }; // an uploaded tile
 ```
 
 - It is an ordinary Style Cascade property, settable at **any scope** — Project,
