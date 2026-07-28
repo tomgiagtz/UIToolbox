@@ -10,7 +10,8 @@ import { ensureSymbolBitmap } from "@/lib/glyph/symbol-render";
  * A stable key for one spec's **Background tile** art — which art, recoloured
  * how. An uploaded tile draws as authored, so only its id varies its bitmap;
  * an Authored Background follows the resolved Background fill + border colour.
- * Empty for a plain shape, which needs no bitmap at all.
+ * Empty for the two sources that need no bitmap at all: a plain shape, and
+ * "none", which draws nothing.
  */
 function tileKey(style: GlyphStyle): string {
   const { source, fill, border } = style.background;

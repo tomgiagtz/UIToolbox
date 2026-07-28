@@ -15,6 +15,7 @@
  */
 import { catalogNameIndex, getCatalogByName } from "@/lib/glyph/catalog";
 import {
+  DEFAULT_BACKGROUND,
   DEFAULT_CONTENT_SCALE,
   DEFAULT_SYMBOL_PAINTS,
 } from "@/lib/glyph/presets";
@@ -25,6 +26,7 @@ import type {
 } from "@/lib/glyph/style";
 import type {
   Background,
+  BackgroundShape,
   BackgroundSource,
   CustomInput,
   DeviceConfig,
@@ -45,8 +47,10 @@ const CONFIG_KEY = "uitoolbox.glyph-creator.project";
  *   the `images` manifest for custom image Render Sources (issue #20). Older saves
  *   backfill the unscaled default and an empty manifest.
  * - v5: the Background's tile art becomes a `source` union — shape / authored /
- *   uploaded image (issue #22) — replacing the `backgroundId` + `flipX` pair.
- *   Older saves rewrite that pair, at every cascade tier, into the union.
+ *   uploaded image / none (issue #22) — replacing the `backgroundId` + `flipX`
+ *   pair and the `shape: "none"` spelling of "draw nothing". Older saves rewrite
+ *   both, at every cascade tier, into the union; a saved id wins over a "none"
+ *   shape, because that is what v4 drew.
  */
 const CONFIG_VERSION = 5;
 
@@ -298,14 +302,26 @@ function isPersistedConfig(value: unknown): value is PersistedConfig {
   );
 }
 
+/** The shape vocabulary a v5 Background may use. */
+const SHAPES: readonly string[] = ["rounded-rect", "square", "circle"];
+/**
+ * v4-and-older saves spell "draw nothing" as a fourth shape. v5 moved that into
+ * the `source` union, so the legacy validators must still accept it and the
+ * current-version one must not.
+ */
+const LEGACY_SHAPES: readonly string[] = [...SHAPES, "none"];
+
 /**
  * The Background fields every version has carried. Split from the `source` union
  * (v5) so the v4-and-older validators can share it — those saves have everything
- * here and nothing there.
+ * here and nothing there — and parameterized on `shapes` because the two paths
+ * no longer agree on what a shape is.
  */
-function isBackgroundCore(value: unknown): value is LegacyBackground {
+function isBackgroundCore(
+  value: unknown,
+  shapes: readonly string[],
+): value is LegacyBackground {
   if (!isRecord(value)) return false;
-  const shapes = ["rounded-rect", "square", "circle", "none"];
   return (
     shapes.includes(value.shape as string) &&
     typeof value.fill === "string" &&
@@ -318,7 +334,7 @@ function isBackgroundCore(value: unknown): value is LegacyBackground {
 
 function isBackgroundSource(value: unknown): value is BackgroundSource {
   if (!isRecord(value)) return false;
-  if (value.kind === "shape") return true;
+  if (value.kind === "shape" || value.kind === "none") return true;
   if (value.kind === "authored") return typeof value.backgroundId === "string";
   return value.kind === "image" && typeof value.imageId === "string";
 }
@@ -326,7 +342,7 @@ function isBackgroundSource(value: unknown): value is BackgroundSource {
 function isBackground(value: unknown): value is Background {
   return (
     isRecord(value) &&
-    isBackgroundCore(value) &&
+    isBackgroundCore(value, SHAPES) &&
     isBackgroundSource(value.source)
   );
 }
@@ -386,7 +402,7 @@ function hasProjectCommonFields(
     typeof value.textColor === "string" &&
     // Only the fields every version shares: v5 adds the `source` union on top,
     // and `isProject` is what insists on it.
-    isBackgroundCore(value.background) &&
+    isBackgroundCore(value.background, LEGACY_SHAPES) &&
     typeof value.cellSize === "number" &&
     Array.isArray(value.devices) &&
     isNaming(value.naming) &&
@@ -403,6 +419,12 @@ function isImageAsset(value: unknown): value is ImageAsset {
   );
 }
 
+/**
+ * Both halves are load-bearing. `isProjectV4` accepts the legacy shape
+ * vocabulary by design (it validates v4-and-older saves too), so `isBackground`
+ * — the current-version check — is the only thing rejecting a v5 payload that
+ * still spells "no tile" as `shape: "none"`. Don't collapse this to one call.
+ */
 function isProject(value: unknown): value is Project {
   return isProjectV4(value) && isBackground(value.background);
 }
@@ -449,32 +471,60 @@ function migrateV3(project: ProjectV3): ProjectV4 {
 //
 // Before v5 a Background named its tile art with an optional `backgroundId` plus
 // a `flipX` mirror — and, inside a sparse override, a `null` id meaning "no tile,
-// draw the shape". v5 replaces all of that with one {@link BackgroundSource}
-// union, so a saved Authored Background has to be rewritten wherever it can
-// appear: the Project base, a Device override, or a per-Glyph override.
+// draw the shape". "Draw nothing at all" was a fourth *shape*, `shape: "none"`.
+// v5 replaces all of that with one {@link BackgroundSource} union, so both
+// spellings have to be rewritten wherever they can appear: the Project base, a
+// Device override, or a per-Glyph override.
 
-/** The pre-v5 Background: the shared fields plus the tile pair it named art with. */
-type LegacyBackground = Omit<Background, "source"> & LegacyTile;
+/** v4's fourth shape, which v5 spells `source: { kind: "none" }`. */
+type LegacyShape = BackgroundShape | "none";
+
+/**
+ * The pre-v5 Background: the shared fields, the old shape vocabulary, and the
+ * tile pair it named art with.
+ */
+type LegacyBackground = Omit<Background, "source" | "shape"> & {
+  shape: LegacyShape;
+} & LegacyTile;
 
 /** The pre-v5 tile fields. A `null` id is the override tier's "no tile". */
 interface LegacyTile {
   backgroundId?: string | null;
   flipX?: boolean;
+  shape?: LegacyShape;
 }
 
 /**
- * The {@link BackgroundSource} a pre-v5 tile pair meant, or `undefined` when it
+ * The {@link BackgroundSource} a pre-v5 Background meant, or `undefined` when it
  * named no tile at all — which at the Project tier means the plain shape, and in
  * a sparse override means "unset, fall up the cascade".
+ *
+ * The order is what v4 *drew*: `renderGlyph` painted tile art whenever it had a
+ * bitmap and never consulted `shape`, so a saved id outranked `shape: "none"`.
+ * Reading the shape first would silently blank every saved bumper and trigger
+ * whose tier also carried it.
  */
 function legacySource(tile: LegacyTile): BackgroundSource | undefined {
-  if (tile.backgroundId === undefined) return undefined;
+  if (typeof tile.backgroundId === "string") {
+    return {
+      kind: "authored",
+      backgroundId: tile.backgroundId,
+      ...(tile.flipX ? { flipX: true } : {}),
+    };
+  }
+  if (tile.shape === "none") return { kind: "none" };
   if (tile.backgroundId === null) return { kind: "shape" };
-  return {
-    kind: "authored",
-    backgroundId: tile.backgroundId,
-    ...(tile.flipX ? { flipX: true } : {}),
-  };
+  return undefined;
+}
+
+/**
+ * A v4 shape in the v5 vocabulary. "none" moved into the `source` union, and the
+ * field it vacates takes the default primitive — inert, because the source that
+ * replaced it draws nothing that reads `shape`. It surfaces only if the user
+ * later picks "Shape", where the tool's default is the right answer.
+ */
+function currentShape(shape: LegacyShape): BackgroundShape {
+  return shape === "none" ? DEFAULT_BACKGROUND.shape : shape;
 }
 
 function migrateV4(project: ProjectV4): Project {
@@ -483,7 +533,12 @@ function migrateV4(project: ProjectV4): Project {
     ...project,
     background: {
       ...background,
-      source: legacySource({ backgroundId, flipX }) ?? { kind: "shape" },
+      shape: currentShape(background.shape),
+      source: legacySource({
+        backgroundId,
+        flipX,
+        shape: background.shape,
+      }) ?? { kind: "shape" },
     },
     devices: project.devices.map((device) => ({
       ...device,
@@ -498,19 +553,27 @@ function migrateV4(project: ProjectV4): Project {
   };
 }
 
-/** Rewrite one sparse override's pre-v5 tile pair into a Background `source`. */
+/** Rewrite one sparse override's pre-v5 tile spellings into a `source`. */
 function migrateOverrideV4(override: StyleOverride): StyleOverride {
   const legacy = override.background as
-    (BackgroundOverride & LegacyTile) | undefined;
+    (Omit<BackgroundOverride, "shape"> & LegacyTile) | undefined;
   if (!legacy) return override;
-  // Both legacy fields go, even when they don't amount to a source: a `flipX`
+  // Both tile fields go, even when they don't amount to a source: a `flipX`
   // with no id described a tile this tier never named, and v5 has nowhere to
   // keep it.
   const { backgroundId, flipX, ...background } = legacy;
-  const source = legacySource({ backgroundId, flipX });
+  const source = legacySource({ backgroundId, flipX, shape: background.shape });
+  // "none" is no longer a shape — the source carries it — and the key it vacates
+  // is *removed*, never defaulted. Backfilling a real shape would newly pin that
+  // property at this tier, so a later Project-level shape change would silently
+  // stop reaching this Glyph, and the user would get a reset control for an
+  // override they never made.
+  if (background.shape === "none") delete background.shape;
   return {
     ...override,
-    background: source ? { ...background, source } : background,
+    background: (source
+      ? { ...background, source }
+      : background) as BackgroundOverride,
   };
 }
 

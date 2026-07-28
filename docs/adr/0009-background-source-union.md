@@ -28,6 +28,7 @@ A Background names its tile art with **one** discriminated union:
 
 ```ts
 type BackgroundSource =
+  | { kind: "none" } // nothing at all
   | { kind: "shape" } // the drawn primitive
   | { kind: "authored"; backgroundId: string; flipX?: boolean }
   | { kind: "image"; imageId: string }; // an uploaded tile
@@ -41,6 +42,13 @@ type BackgroundSource =
 - `{ kind: "shape" }` is the explicit "no tile" the `null` id used to spell. The
   distinction that mattered survives: _omitting_ the field falls up the cascade,
   _setting_ it to `shape` overrides an inherited tile.
+- **"Draw nothing" is a source, not a fourth shape.** It used to be
+  `shape: "none"`, and that was the wrong axis: the renderer drew tile art
+  whenever it had a bitmap and never consulted the shape, so "none" on a bumper
+  still drew the bumper tile. A shape can only ever suppress the primitive, and
+  the Catalog per-Input tier outranks the Device tier — so only a source can turn
+  off inherited art. `{ kind: "none" }` draws no primitive **and** no tile,
+  leaving a transparent, content-only Glyph at whatever scope sets it.
 - An **uploaded tile** references an `ImageAsset` id — the same manifest,
   registry, IndexedDB store and ZIP bundling that custom image Render Sources use
   (ADR-0008). One upload can serve as one Glyph's artwork and another's tile.
@@ -64,7 +72,15 @@ type BackgroundSource =
 - The persisted config schema moves to **v5**: a saved `backgroundId` + `flipX`
   pair is rewritten into the union at every tier it can appear — the Project base,
   a Device override, a per-Glyph override — including the `null` spelling of "no
-  tile".
+  tile" and the `shape: "none"` spelling of "nothing at all". A saved id **wins**
+  over a "none" shape at the same tier, because that is what v4 drew. The one
+  case whose rendering changes is an override that said `shape: "none"` while
+  inheriting an Authored Background: it used to draw the tile anyway, and now
+  draws nothing — which is the bug this variant exists to fix.
+- `BackgroundShape` narrows to the three real primitives, so the drawing switch is
+  total and the Style tab's shape control offers only shapes. The validators for
+  v4-and-older still accept the old vocabulary; the current-version one must not,
+  which is why the two share a shape-list parameter rather than a constant.
 - Uploaded tiles inherit the custom image lifecycle wholesale, including its
   current limitation: an image no Glyph references still occupies storage and
   still ships in the ZIP.

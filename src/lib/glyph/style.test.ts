@@ -67,9 +67,9 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
 
   it("lets an explicit Glyph override outrank a Catalog per-Input default", () => {
     const catalog: StyleOverride = { background: { shape: "square" } };
-    const glyph: StyleOverride = { background: { shape: "none" } };
+    const glyph: StyleOverride = { background: { shape: "circle" } };
     const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.shape).toBe("none");
+    expect(out.background.shape).toBe("circle");
   });
 
   it("resolves an Authored Background source from the Catalog per-Input tier (issue #18)", () => {
@@ -142,6 +142,19 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     // The mirror flag rode on the source, so it goes with it.
     expect(out.background.source).toEqual({ kind: "shape" });
     expect(out.background.shape).toBe("circle");
+  });
+
+  it('lets a Glyph override turn off an inherited tile entirely with "none"', () => {
+    // The reason "none" is a source and not a shape: a shape could only ever
+    // suppress the primitive, so it left the Catalog's tile drawing underneath.
+    const catalog: StyleOverride = {
+      background: {
+        source: { kind: "authored", backgroundId: "bumper", flipX: true },
+      },
+    };
+    const glyph: StyleOverride = { background: { source: { kind: "none" } } };
+    const out = resolveStyle(base(), undefined, catalog, glyph);
+    expect(out.background.source).toEqual({ kind: "none" });
   });
 
   it("treats an explicit shape source at the Device tier as no tile, not as unset", () => {

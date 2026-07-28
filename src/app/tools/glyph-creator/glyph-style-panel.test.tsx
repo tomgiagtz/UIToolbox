@@ -174,11 +174,13 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     type: "image/png",
   };
 
-  it("offers the plain shape, every Authored Background, and each upload", () => {
+  it("offers the plain shape, none, every Authored Background, and each upload", () => {
     renderPanel({ project: { ...createDefaultProject(), images: [image] } });
     const select = screen.getByLabelText("Background source");
     const options = [...select.querySelectorAll("option")].map((o) => o.value);
-    expect(options[0]).toBe("shape");
+    // The two "no art" choices lead, in union order.
+    expect(options[0]).toBe("none");
+    expect(options[1]).toBe("shape");
     for (const a of AUTHORED_BACKGROUNDS)
       expect(options).toContain(`authored:${a.id}`);
     expect(options).toContain(`image:${image.id}`);
@@ -215,6 +217,42 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
         },
       },
     });
+  });
+
+  it('turns the Background off entirely with "none"', () => {
+    const { dispatch } = renderPanel({
+      source: { kind: "authored", backgroundId: "bumper" },
+    });
+    fireEvent.change(screen.getByLabelText("Background source"), {
+      target: { value: "none" },
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { background: { source: { kind: "none" } } },
+    });
+  });
+
+  it('round-trips a "none" source back into the picker', () => {
+    // The option value and the union have to agree in both directions, or the
+    // terminal "shape" fallback silently swallows the selection.
+    renderPanel({ source: { kind: "none" } });
+    expect(
+      (screen.getByLabelText("Background source") as HTMLSelectElement).value,
+    ).toBe("none");
+  });
+
+  it("hides every Background control while nothing is drawn", () => {
+    const { withTile } = renderPanel();
+    expect(screen.getByText("Background shape")).toBeInTheDocument();
+
+    withTile({ kind: "none" });
+    // Nothing is drawn, so there is nothing left to configure — not even the
+    // paints, which an Authored tile would still use.
+    expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/corner radius/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Background fill")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
   });
 
   it("draws a newly uploaded tile image on the Glyph", async () => {

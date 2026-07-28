@@ -46,7 +46,7 @@ export const NoBackground: Story = {
   args: {
     label: "→",
     textColor: "#0f172a",
-    background: { ...roundedRect, shape: "none" },
+    background: { ...roundedRect, source: { kind: "none" } },
   },
 };
 

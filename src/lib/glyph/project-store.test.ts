@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
 import {
+  DEFAULT_BACKGROUND,
   DEFAULT_CONTENT_SCALE,
   DEFAULT_SYMBOL_PAINTS,
   createDefaultProject,
@@ -162,6 +163,39 @@ describe("ProjectStore — v4 → v5 migration (Background source union)", () =>
     expect(project.devices[0].style.background).toEqual({ shape: "circle" });
   });
 
+  it('promotes the pre-v5 "none" shape into the source union', () => {
+    const project = parseConfig(v4({ shape: "none" }))!;
+    expect(project.background.source).toEqual({ kind: "none" });
+    // `shape` is required and can no longer be "none", so the field it vacates
+    // takes the default primitive. Inert while the source draws nothing; it
+    // surfaces only if the user later picks "Shape".
+    expect(project.background.shape).toBe(DEFAULT_BACKGROUND.shape);
+  });
+
+  it('lets a saved tile outrank a "none" shape, as v4 drew it', () => {
+    // v4's renderer painted tile art whenever it had a bitmap and never looked
+    // at `shape` — so reading the shape first here would blank every saved
+    // bumper and trigger whose tier also carried "none".
+    const project = parseConfig(v4({ backgroundId: "bumper", shape: "none" }))!;
+    expect(project.background.source).toEqual({
+      kind: "authored",
+      backgroundId: "bumper",
+    });
+    expect(project.background.shape).toBe(DEFAULT_BACKGROUND.shape);
+  });
+
+  it('rewrites a "none" shape inside a sparse override, dropping the key', () => {
+    const project = parseConfig(
+      v4({}, { style: { background: { shape: "none" } } }),
+    )!;
+    // toEqual, not toMatchObject: a leftover `shape` key would newly pin that
+    // property at this tier, so a later Project-level shape change would stop
+    // reaching these Glyphs.
+    expect(project.devices[0].style.background).toEqual({
+      source: { kind: "none" },
+    });
+  });
+
   it("drops a mirror flag that never named a tile", () => {
     const project = parseConfig(
       v4({}, { style: { background: { flipX: true, shape: "circle" } } }),
@@ -176,6 +210,32 @@ describe("ProjectStore — v4 → v5 migration (Background source union)", () =>
     const migrated = parseConfig(v4({ backgroundId: "bumper" }))!;
     saveConfig(migrated);
     expect(loadConfig()).toEqual(migrated);
+  });
+
+  it('round-trips a migrated "none" Background through a re-save', () => {
+    const migrated = parseConfig(v4({ shape: "none" }))!;
+    saveConfig(migrated);
+    expect(loadConfig()).toEqual(migrated);
+  });
+
+  it('rejects a current-version config still spelling "none" as a shape', () => {
+    // The v1-v4 validators accept the legacy shape vocabulary by design, so
+    // `isBackground` is the only thing standing between a stale spelling and a
+    // v5 config that two fields disagree about.
+    const bad = JSON.stringify({
+      version: 5,
+      project: {
+        ...JSON.parse(v4({})).project,
+        background: {
+          shape: "none",
+          fill: "#111111",
+          cornerRadius: 0,
+          border: { width: 0, color: "#000000" },
+          source: { kind: "shape" },
+        },
+      },
+    });
+    expect(parseConfig(bad)).toBeNull();
   });
 
   it("rejects a current-version config whose Background source is malformed", () => {
@@ -252,6 +312,25 @@ describe("ProjectStore — v3 → v4 migration (content scale + images)", () => 
       project: JSON.parse(v3({ contentScale: 1, images: [{ id: 7 }] })).project,
     });
     expect(parseConfig(bad)).toBeNull();
+  });
+
+  it('still accepts the legacy "none" shape this far back, then promotes it', () => {
+    // The validators for v4-and-older share one core check with the current
+    // version but not its shape vocabulary. A v3 save predates the source union
+    // entirely, so "none" must survive validation here and be folded into the
+    // union by the time it lands.
+    const project = parseConfig(
+      v3({
+        background: {
+          shape: "none",
+          fill: "#1e293b",
+          cornerRadius: 18,
+          border: { width: 4, color: "#475569" },
+        },
+      }),
+    )!;
+    expect(project.background.source).toEqual({ kind: "none" });
+    expect(project.background.shape).toBe(DEFAULT_BACKGROUND.shape);
   });
 
   it("round-trips an image manifest and a scaled Glyph", () => {

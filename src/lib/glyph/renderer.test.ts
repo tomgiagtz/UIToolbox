@@ -93,6 +93,38 @@ describe("renderGlyph — Authored Background tile (issue #18)", () => {
   });
 });
 
+describe('renderGlyph — a "none" Background source', () => {
+  const none: GlyphStyle = {
+    ...style,
+    background: { ...style.background, source: { kind: "none" } },
+  };
+
+  it("draws no background at all, but still draws the content", () => {
+    const { ctx, spies, calls } = fakeCtx();
+    renderGlyph(ctx, 0, 0, { ...base, style: none });
+
+    // No filled primitive — contrast with the plain-shape fallback above.
+    expect(calls).not.toContain("fill");
+    expect(spies.drawImage).not.toHaveBeenCalled();
+    // The Glyph is transparent behind its content, not empty.
+    expect(spies.fillText).toHaveBeenCalled();
+  });
+
+  it("ignores a tile bitmap it is handed anyway", () => {
+    const { ctx, spies, calls } = fakeCtx();
+    renderGlyph(ctx, 0, 0, {
+      ...base,
+      style: none,
+      backgroundImage: {} as CanvasImageSource,
+    });
+
+    // "Nothing is drawn" is decided before the tile-vs-shape branch, not inside
+    // the shape path — so a stale bitmap can't put a background back.
+    expect(spies.drawImage).not.toHaveBeenCalled();
+    expect(calls).not.toContain("fill");
+  });
+});
+
 // The content box the renderer draws a Render Source in, at cellSize 128 with no
 // border: `cellSize - 2 * max(borderWidth + 4, cellSize * 0.12)`. Restated here so
 // the geometry assertions below fail loudly if that box ever moves.
