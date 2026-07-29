@@ -5,6 +5,8 @@ import {
   getImageBitmap,
   getImageBlob,
   hasImage,
+  type ImageAppearance,
+  imageAppearanceKey,
   imageAssetFor,
   nextImageId,
   putImage,
@@ -65,6 +67,37 @@ describe("the runtime image registry", () => {
     putImage("img-1.png", new Blob(["art"]));
     clearImages();
     expect(hasImage("img-1.png")).toBe(false);
+  });
+});
+
+describe("imageAppearanceKey", () => {
+  const base: ImageAppearance = { id: "img-1.png", size: 128 };
+
+  it("keys a different image separately", () => {
+    expect(imageAppearanceKey({ ...base, id: "img-2.png" })).not.toBe(
+      imageAppearanceKey(base),
+    );
+  });
+
+  it("keys a different cell size separately", () => {
+    // The bitmap is decoded at the size, so sharing a key would draw an
+    // upscaled bitmap from the previous cell size.
+    expect(imageAppearanceKey({ ...base, size: 64 })).not.toBe(
+      imageAppearanceKey(base),
+    );
+  });
+
+  it("keys two equal appearances the same, so they share one decode", () => {
+    expect(imageAppearanceKey({ ...base })).toBe(imageAppearanceKey(base));
+  });
+
+  it("takes nothing but the id and the size", () => {
+    // Notably not the content scale: the renderer scales at draw time, so
+    // dragging the scale slider must not re-rasterize. Guarding the whole key
+    // rather than one absent field — anything added to the appearance has to
+    // earn its place here.
+    expect(Object.keys(base)).toEqual(["id", "size"]);
+    expect(imageAppearanceKey(base)).toBe("img-1.png|128");
   });
 });
 

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import {
+  appearanceKey,
   backgroundRoleColors,
   recolorSymbolSvg,
+  type AssetAppearance,
   symbolInner,
   symbolRoleColors,
 } from "@/lib/glyph/symbol-render";
@@ -113,6 +115,53 @@ describe("recolorSymbolSvg", () => {
         secondary: "currentColor",
       }),
     ).toBe('<circle style="fill:currentColor;"/>');
+  });
+});
+
+describe("appearanceKey", () => {
+  const base: AssetAppearance = {
+    namespace: "sym",
+    id: "dpad-up",
+    colors: { fill: "#111111", border: "#222222", secondary: "#333333" },
+    size: 128,
+  };
+
+  // Every field the art depends on: sharing a key with any of these changed
+  // would draw a stale bitmap, which nothing above the cache could notice.
+  const distinct: [string, AssetAppearance][] = [
+    ["namespace", { ...base, namespace: "bg" }],
+    ["id", { ...base, id: "dpad-down" }],
+    ["size", { ...base, size: 64 }],
+    ["fill", { ...base, colors: { ...base.colors, fill: "#ffffff" } }],
+    ["border", { ...base, colors: { ...base.colors, border: "#ffffff" } }],
+    [
+      "secondary",
+      { ...base, colors: { ...base.colors, secondary: "#ffffff" } },
+    ],
+    ["device", { ...base, device: "playstation" }],
+  ];
+
+  it.each(distinct)("keys a different %s separately", (_field, appearance) => {
+    expect(appearanceKey(appearance)).not.toBe(appearanceKey(base));
+  });
+
+  it("keys two equal appearances the same, so they share one decode", () => {
+    expect(appearanceKey({ ...base, colors: { ...base.colors } })).toBe(
+      appearanceKey(base),
+    );
+  });
+
+  it("keys an absent device the same as an explicit undefined", () => {
+    expect(appearanceKey({ ...base, device: undefined })).toBe(
+      appearanceKey(base),
+    );
+  });
+
+  it("does not let a field's value bleed across the separator", () => {
+    // A naive join would make id "a" + device "b" collide with id "a|b".
+    expect(appearanceKey({ ...base, id: "a", device: "b" })).not.toBe(
+      appearanceKey({ ...base, id: "b|a", device: undefined }),
+    );
   });
 });
 

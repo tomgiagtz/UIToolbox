@@ -10,6 +10,11 @@
  * Colour model: each role resolves to its own colour from the Glyph's resolved
  * `symbolPaints` cascade group — fill / border / secondary independently (ADR-0007
  * §3). Non-sentinel paints pass through as authored.
+ *
+ * **Authored Background** tiles (issue #18) are recoloured and rasterized here
+ * too. They're a distinct concept — the tile a Symbol is drawn *on* — but the
+ * sentinel model and the cache are identical, so only their role-colour source
+ * differs (see {@link backgroundRoleColors}).
  */
 import { createBitmapCache, decodeToBitmap } from "@/lib/glyph/bitmap-cache";
 import type { GlyphStyle } from "@/lib/glyph/style";
@@ -79,11 +84,17 @@ export function symbolInner(svg: string): SymbolInner | null {
 //
 // Rasterizing an SVG needs the DOM (Image decode) + createImageBitmap, so it only
 // runs in the browser; under jsdom/SSR the shared cache makes it a no-op and the
-// renderer falls back to the label. Bitmaps are cached by symbol id + role
-// colours + size so the preview and compositor share one decode per appearance.
+// renderer falls back to the label. Bitmaps are cached by namespace + asset id +
+// role colours + size, so the preview and compositor share one decode per
+// appearance.
+//
+// "Asset" here covers both sentinel-painted SVGs this module rasterizes — a
+// Symbol and an Authored Background tile. They stay distinct concepts (a Symbol
+// is drawn *on* a tile), but they recolour and cache identically, and the
+// glossary has no word for that overlap.
 
 /** One asset's drawable appearance: which asset, recoloured how, at what size. */
-interface SymbolAppearance {
+export interface AssetAppearance {
   /** Separates Symbols from Authored Background tiles, which share id space. */
   namespace: "sym" | "bg";
   id: string;
@@ -93,11 +104,62 @@ interface SymbolAppearance {
   device?: string;
 }
 
-const bitmaps = createBitmapCache<SymbolAppearance>(
-  ({ namespace, device, id, colors, size }) =>
-    `${namespace}|${device ?? ""}|${id}|${colors.fill}|${colors.border}|${colors.secondary}|${size}`,
-  ({ id, colors, size, device }) => rasterize(id, colors, size, device),
-);
+/**
+ * Flatten an appearance to its cache key. Every field that changes what the
+ * bitmap looks like has to appear here, or two different appearances share one
+ * decode and the wrong art draws — hence the direct test.
+ */
+export function appearanceKey({
+  namespace,
+  device,
+  id,
+  colors,
+  size,
+}: AssetAppearance): string {
+  return `${namespace}|${device ?? ""}|${id}|${colors.fill}|${colors.border}|${colors.secondary}|${size}`;
+}
+
+const bitmaps = createBitmapCache(appearanceKey, rasterize);
+
+/**
+ * One kind of asset's draw-path pair, bound to the shared cache: its key
+ * namespace plus how a Glyph's resolved style supplies the role colours.
+ * Symbols and Authored Background tiles differ in nothing else.
+ */
+function assetBitmaps(
+  namespace: AssetAppearance["namespace"],
+  roleColors: (style: GlyphStyle) => RoleColors,
+) {
+  const appearance = (
+    id: string,
+    style: GlyphStyle,
+    size: number,
+    device?: string,
+  ): AssetAppearance => ({
+    namespace,
+    id,
+    colors: roleColors(style),
+    size,
+    device,
+  });
+
+  return {
+    get: (id: string, style: GlyphStyle, size: number, device?: string) =>
+      bitmaps.get(appearance(id, style, size, device)),
+    ensure: (id: string, style: GlyphStyle, size: number, device?: string) =>
+      bitmaps.ensure(appearance(id, style, size, device)),
+  };
+}
+
+/** Symbols, recoloured through the `symbolPaints` cascade group (ADR-0007 §3). */
+const symbols = assetBitmaps("sym", symbolRoleColors);
+
+/**
+ * Authored Background tiles, recoloured through the Background fill / border so
+ * the shipped bumper and trigger tiles restyle with the ordinary Background
+ * controls (issue #18).
+ */
+const backgrounds = assetBitmaps("bg", backgroundRoleColors);
 
 /**
  * The already-rasterized bitmap for a Symbol at a Glyph's resolved appearance and
@@ -105,20 +167,7 @@ const bitmaps = createBitmapCache<SymbolAppearance>(
  * path; warm the cache first with {@link ensureSymbolBitmap}. Pass the Device's
  * Catalog id so a device-specific Symbol override resolves the same as elsewhere.
  */
-export function getSymbolBitmap(
-  symbolId: string,
-  style: GlyphStyle,
-  size: number,
-  device?: string,
-): ImageBitmap | undefined {
-  return bitmaps.get({
-    namespace: "sym",
-    id: symbolId,
-    colors: symbolRoleColors(style),
-    size,
-    device,
-  });
-}
+export const getSymbolBitmap = symbols.get;
 
 /**
  * Rasterize (and cache) a Symbol at a Glyph's resolved appearance and size,
@@ -126,20 +175,7 @@ export function getSymbolBitmap(
  * isn't available (SSR / test). `device` (a Catalog id) selects a device-specific
  * Symbol override.
  */
-export function ensureSymbolBitmap(
-  symbolId: string,
-  style: GlyphStyle,
-  size: number,
-  device?: string,
-): Promise<ImageBitmap | null> {
-  return bitmaps.ensure({
-    namespace: "sym",
-    id: symbolId,
-    colors: symbolRoleColors(style),
-    size,
-    device,
-  });
-}
+export const ensureSymbolBitmap = symbols.ensure;
 
 /**
  * The already-rasterized bitmap for an Authored Background tile at a Glyph's
@@ -147,20 +183,7 @@ export function ensureSymbolBitmap(
  * Synchronous draw-path peer of {@link getSymbolBitmap}; warm with
  * {@link ensureBackgroundBitmap} (issue #18).
  */
-export function getBackgroundBitmap(
-  backgroundId: string,
-  style: GlyphStyle,
-  size: number,
-  device?: string,
-): ImageBitmap | undefined {
-  return bitmaps.get({
-    namespace: "bg",
-    id: backgroundId,
-    colors: backgroundRoleColors(style),
-    size,
-    device,
-  });
-}
+export const getBackgroundBitmap = backgrounds.get;
 
 /**
  * Rasterize (and cache) an Authored Background tile at a Glyph's resolved Background
@@ -168,28 +191,15 @@ export function getBackgroundBitmap(
  * sentinels via {@link backgroundRoleColors} so it follows the Background fill /
  * border (issue #18).
  */
-export function ensureBackgroundBitmap(
-  backgroundId: string,
-  style: GlyphStyle,
-  size: number,
-  device?: string,
-): Promise<ImageBitmap | null> {
-  return bitmaps.ensure({
-    namespace: "bg",
-    id: backgroundId,
-    colors: backgroundRoleColors(style),
-    size,
-    device,
-  });
-}
+export const ensureBackgroundBitmap = backgrounds.ensure;
 
-async function rasterize(
-  symbolId: string,
-  colors: RoleColors,
-  size: number,
-  device?: string,
-): Promise<ImageBitmap | null> {
-  const svg = getSymbolSvg(symbolId, device);
+async function rasterize({
+  id,
+  colors,
+  size,
+  device,
+}: AssetAppearance): Promise<ImageBitmap | null> {
+  const svg = getSymbolSvg(id, device);
   if (!svg) return null;
 
   // Give the SVG an intrinsic pixel size so the Image decodes at `size` and the
