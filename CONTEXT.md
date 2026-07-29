@@ -1,9 +1,8 @@
 # UIToolbox — Context
 
 UIToolbox is a collection of browser-based tools for game developers. The first
-(and, today, only) tool is the **Input Glyph Creator**: it turns a font + style
-
-- a list of controls into engine-ready sprite atlases of input prompts.
+(and, today, only) tool is the **Input Glyph Creator**: it turns a font, a style,
+and a list of controls into engine-ready sprite atlases of input prompts.
 
 Everything runs client-side — no accounts, no server-side generation, no upload
 of the user's fonts or settings.
@@ -57,8 +56,8 @@ source of its **Sprite Name**.
 A user-uploaded image or SVG drawn as one Glyph's Render Source. Unlike a
 **Symbol** it is never recoloured — it draws as authored — and unlike a Symbol it
 is fitted to its own aspect rather than filling the square content box. The
-project config carries only a **manifest** (id, filename, type); the bytes live in
-IndexedDB and travel inside the ZIP project save file (ADR-0008).
+project config carries only a **manifest** describing the image; the bytes live
+in IndexedDB and travel inside the ZIP project save file (ADR-0008).
 
 ### Content scale
 
@@ -88,8 +87,8 @@ them, rather than depicting its own Input alone — the d-pad Symbols draw all f
 arms with one highlighted. Correct in an exported **Glyph**, where the cell
 stands on its own, but a **Device Layout** skips it: the Layout already draws the
 cluster as separate nodes, so nesting the art inside one of them would show a
-whole d-pad inside a quarter of itself. Marked `depicts: "cluster"` in the Symbol
-Set manifest.
+whole d-pad inside a quarter of itself. Marked as cluster art in the Symbol Set
+manifest.
 
 _Avoid:_ "composite Symbol", "group icon" — cluster art is about what the art
 _depicts_, not how it is built.
@@ -113,13 +112,13 @@ _Avoid:_ "sprite sheet" (that's the exported **Sprite Atlas**), "icon pack".
 
 ### Paint Role
 
-The job a Symbol shape's colour encodes, via an exact **RGB sentinel**: `#f00` →
-**fill** (primary ink), `#00f` → **border** (outline), `#0f0` → **secondary**
-(highlight). The classifier keys on colour, not fill-vs-stroke, with three
-outcomes: a sentinel is a **role** (recoloured via the Style Cascade); `none` /
-`transparent` is **ignored**; any other visible colour is **unknown** — kept as
-authored (literal pass-through) and **flagged** (a non-blocking warning), so an
-off-primary export never fails silently. See ADR-0007.
+The job a Symbol shape's colour encodes, via an exact **RGB sentinel** — one
+reserved colour per role: **fill** (primary ink), **border** (outline),
+**secondary** (highlight). The classifier keys on colour, not fill-vs-stroke,
+with three outcomes: a sentinel is a **role** (recoloured via the Style Cascade);
+`none` / `transparent` is **ignored**; any other visible colour is **unknown** —
+kept as authored (literal pass-through) and **flagged** (a non-blocking warning),
+so an off-primary export never fails silently. See ADR-0007.
 
 _Avoid:_ "tint" — a role is a slot the cascade fills, not a single wash colour.
 
@@ -155,9 +154,9 @@ _Avoid:_ "silhouette", "controller art" — the Layout is schematic, not artwork
 ### Preset
 
 The **default-enabled subset** of a Device's Catalog — which Inputs start enabled
-when the tool loads. The Keyboard Preset enables ~24 common gaming keys (the rest
-of the board sits disabled in the Layout); the pad Presets enable their whole
-Catalog. A Preset is a starting selection, freely changed afterward.
+when the tool loads. The Keyboard Preset enables a small common-in-games subset
+(the rest of the board sits disabled in the Layout); the pad Presets enable
+their whole Catalog. A Preset is a starting selection, freely changed afterward.
 
 ### Background
 
@@ -194,16 +193,15 @@ How a Glyph's style + Render Source are resolved, lowest precedence to highest:
 **Project** defaults → **Device** overrides → **Catalog per-Input default** →
 **Glyph** overrides.
 
-Each level is a sparse subset; anything unset falls up the chain. Every Background
-property (source, shape, corner radius, fill, border width+color), the text
-color, and the **content scale** can be set at any level. The **Render Source**
-resolves through the same tiers but is only _set_ per Glyph: the tiers above it
-supply a Catalog default, and "every Glyph on this Device draws its label" isn't
-a thing the tool offers. The **Catalog per-Input default** tier is what lets
-a bumper keep its authored Background even when its Device is set to "circle" —
-the shipped per-Input default outranks a device-wide override, and only an
-explicit Glyph edit outranks it. `cellSize` and the **font** are the exception:
-they stay Project-global (uniform grid, one font).
+Each level is a sparse subset; anything unset falls up the chain. Every style
+property can be set at any level. The **Render Source** resolves through the
+same tiers but is only _set_ per Glyph: the tiers above it supply a Catalog
+default, and "every Glyph on this Device draws its label" isn't a thing the tool
+offers. The **Catalog per-Input default** tier is what lets a bumper keep its
+authored Background even when its Device sets a plain shape for everything — the
+shipped per-Input default outranks a device-wide override, and only an explicit
+Glyph edit outranks it. The grid **cell size** and the **font** are the
+exception: they stay Project-global (uniform grid, one font).
 
 ### Sprite Atlas
 
@@ -227,8 +225,8 @@ which is the editable config plus its assets rather than engine-ready output.
 The identifier the game engine uses to look up a Glyph inside a Sprite Atlas.
 Derived from an Input's label via `slugify` (normalization into a safe
 identifier — mandatory, exports break otherwise) plus a user-controlled
-**template** (`{device}`, `{input}`, `{index}` tokens; default `{device}_{input}`)
-and a **case** style (snake_case / kebab-case / camelCase).
+**template** — a pattern interpolating the Device, the Input, and its index —
+and a **case** style.
 
 ## Decisions
 

@@ -12,4 +12,5 @@ Run typechecking regularly, single test files regularly, and the full test suite
 
 Once done, use /code-review to review the work.
 
-Commit your work to the current branch.
+Stage your work and summarise what changed. Do not commit — leave that to the
+user.
