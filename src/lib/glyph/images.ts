@@ -80,10 +80,20 @@ export function clearImages(): void {
 // slider never re-rasterizes.
 
 /** One custom image's drawable appearance. */
-interface ImageAppearance {
+export interface ImageAppearance {
   id: string;
   /** Cell edge in px; the bitmap is decoded with headroom above it. */
   size: number;
+}
+
+/**
+ * Flatten an appearance to its cache key. Every field that changes what the
+ * bitmap looks like has to appear here, or two appearances share one decode and
+ * the wrong art draws — hence the direct test. The content scale is deliberately
+ * not one of them (see above).
+ */
+export function imageAppearanceKey({ id, size }: ImageAppearance): string {
+  return `${id}|${size}`;
 }
 
 /**
@@ -93,7 +103,7 @@ interface ImageAppearance {
 const OVERSAMPLE = 2;
 
 const bitmaps = createBitmapCache<ImageAppearance>(
-  ({ id, size }) => `${id}|${size}`,
+  imageAppearanceKey,
   ({ id, size }) => {
     const blob = blobs.get(id);
     if (!blob) return Promise.resolve(null);
