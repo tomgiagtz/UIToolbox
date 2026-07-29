@@ -5,7 +5,6 @@ import {
   catalogNameIndex,
   catalogPresetLabels,
   getCatalog,
-  getCatalogByName,
 } from "@/lib/glyph/catalog";
 import {
   AUTHORED_BACKGROUNDS,
@@ -303,10 +302,5 @@ describe("Catalog lookup", () => {
   it("finds a Catalog by id", () => {
     expect(getCatalog("xbox")?.name).toBe("Xbox");
     expect(getCatalog("nope")).toBeUndefined();
-  });
-
-  it("finds a Catalog by Device name (for migration)", () => {
-    expect(getCatalogByName("PlayStation")?.id).toBe("playstation");
-    expect(getCatalogByName("Unknown Device")).toBeUndefined();
   });
 });

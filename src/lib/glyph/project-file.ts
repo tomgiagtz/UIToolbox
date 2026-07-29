@@ -9,9 +9,9 @@
  *   (unmodified bytes, not base64-blobbed), so a project is portable between
  *   machines without re-uploading its assets.
  *
- * The config inside both is the exact versioned envelope ProjectStore persists
- * to `localStorage` (see {@link serializeConfig} / {@link parseConfig}), so
- * files and browser storage are interchangeable.
+ * The config inside both is the exact format ProjectStore persists to
+ * `localStorage` — a bare {@link Project} (see {@link serializeConfig} /
+ * {@link parseConfig}) — so files and browser storage are interchangeable.
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { ExportArtifact } from "@/lib/glyph/exporter";

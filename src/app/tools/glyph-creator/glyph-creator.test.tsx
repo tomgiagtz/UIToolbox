@@ -42,6 +42,32 @@ describe("GlyphCreator editor shell", () => {
   });
 });
 
+describe("GlyphCreator — discarded config (ADR-0010)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("tells the user their saved project was reset", async () => {
+    // A config the current validator can't read — here the old versioned
+    // envelope. It is dropped rather than migrated, so the loss is announced.
+    localStorage.setItem(
+      "uitoolbox.glyph-creator.project",
+      JSON.stringify({ version: 5, project: {} }),
+    );
+    render(<GlyphCreator />);
+    // Set last in the mount effect, so the font steps can't overwrite it.
+    expect(
+      await screen.findByText(/saved project couldn't be read and was reset/i),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing when there was no saved project", async () => {
+    render(<GlyphCreator />);
+    await screen.findByLabelText("Font file");
+    expect(
+      screen.queryByText(/saved project couldn't be read/i),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("GlyphCreator — Style Cascade scope switcher (#19)", () => {
   beforeEach(() => localStorage.clear());
 

@@ -162,13 +162,8 @@ export function GlyphCreator() {
       }
 
       const saved = loadConfig();
-      if (saved && !cancelled)
-        dispatch({ type: "load-project", project: saved });
-      // Migrate pre-#13 configs that predate the bundled font (empty family) so
-      // they render in Inter instead of the browser default.
-      if (saved && saved.font.family === "" && !cancelled) {
-        dispatch({ type: "set-font", family: DEFAULT_FONT_FAMILY });
-      }
+      if (saved.kind === "ok" && !cancelled)
+        dispatch({ type: "load-project", project: saved.project });
 
       // Always register the bundled Inter so preview + generation work with no
       // upload. It stays available even after an upload overrides it for output.
@@ -203,6 +198,20 @@ export function GlyphCreator() {
         // A missing or undecodable persisted font just means no restore; the
         // developer re-uploads. Config + bundled Inter still apply above.
       } finally {
+        // Last, so the font steps above can't overwrite it: a discarded config is
+        // the one thing here the developer actually lost (ADR-0010). A font error
+        // still outranks it, though — that one leaves Generate disabled, so it has
+        // to keep the line.
+        if (saved.kind === "rejected" && !cancelled) {
+          setStatus((prev) =>
+            prev.kind === "error"
+              ? prev
+              : {
+                  kind: "error",
+                  message: "Your saved project couldn't be read and was reset.",
+                },
+          );
+        }
         if (!cancelled) hydrated.current = true;
       }
     })();

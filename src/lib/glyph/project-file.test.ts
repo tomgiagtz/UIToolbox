@@ -5,7 +5,7 @@
 // the round-trip under the Node environment.
 import { describe, expect, it } from "vitest";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
 import type { PersistedFont, PersistedImage } from "@/lib/glyph/project-store";
 import type { Project } from "@/lib/glyph/types";
@@ -20,7 +20,9 @@ function edited(): Project {
       patch: { textColor: "#ff0000", background: { shape: "circle" } },
     } as const,
     { type: "toggle-device", catalogId: "xbox" } as const,
-  ].reduce(projectReducer, createDefaultProject(""));
+    // Not `createDefaultProject("")`: an empty family is repaired on read now
+    // (ADR-0010), so it would not survive a round-trip unchanged.
+  ].reduce(projectReducer, createDefaultProject());
 }
 
 /** Wrap an ExportArtifact's blob back into a File, as an upload would arrive. */
@@ -45,6 +47,30 @@ describe("project-file — config-only (JSON)", () => {
   it("returns null for a file that isn't a valid project", async () => {
     const junk = asFile(new Blob(["not a project"]), "whatever.json");
     expect(await importProjectFile(junk)).toBeNull();
+  });
+
+  it("rejects a file saved in the old versioned envelope", async () => {
+    // Project files used to be `{ version, project }` and were migrated forward.
+    // Neither exists now (ADR-0010), so a pre-change file is refused outright —
+    // and the caller reports it, rather than half-reading it.
+    const stale = asFile(
+      new Blob([JSON.stringify({ version: 5, project: edited() })]),
+      "old-project.json",
+    );
+    expect(await importProjectFile(stale)).toBeNull();
+  });
+
+  it("normalizes an empty font family on the import path too", async () => {
+    // The repair lives in `parseConfig`, which both entry points share — so a
+    // file carrying a pre-#13 empty family lands in Inter, not the browser
+    // default (ADR-0010).
+    const imported = await importProjectFile(
+      asFile(
+        new Blob([JSON.stringify({ ...edited(), font: { family: "" } })]),
+        "pre-inter.json",
+      ),
+    );
+    expect(imported!.project.font.family).toBe(DEFAULT_FONT_FAMILY);
   });
 });
 
