@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type Download, type Page } from "@playwright/test";
 import { unzipSync } from "fflate";
@@ -219,6 +220,56 @@ test.describe("Input Glyph Creator", () => {
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
+  });
+
+  test("a config-only load falls back rather than reusing the last project's image bytes", async ({
+    page,
+  }) => {
+    // Image ids are allocated per project, so two projects routinely both use
+    // `img-1.svg` for different art. Loading a config that arrived without its
+    // bytes must degrade to the label/Symbol — not draw whatever the previous
+    // project happened to register under that id (#23).
+    await page.goto("/tools/glyph-creator");
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+    const pixels = () =>
+      preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
+
+    // Give a Glyph a custom image, then save — images always travel, so a ZIP.
+    await preview.click();
+    await expect(
+      page.getByRole("region", { name: /edit glyph/i }),
+    ).toBeVisible();
+    const plainPixels = await pixels();
+    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+    await expect
+      .poll(pixels, { message: "preview should redraw with the image" })
+      .not.toBe(plainPixels);
+    const imagePixels = await pixels();
+
+    await page.getByRole("button", { name: "Save…" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    const zipBytes = await readDownload(await downloadPromise);
+    const entries = unzipSync(zipBytes);
+    expect(Object.keys(entries)).toContain("images/img-1.svg");
+
+    // The same config as a bare JSON — what sharing a save without its assets
+    // produces. Written next to the ZIP so the Load input can pick it up.
+    const dir = await mkdtemp(path.join(tmpdir(), "uitb-config-only-"));
+    const jsonPath = path.join(dir, "config-only.json");
+    await writeFile(jsonPath, Buffer.from(entries["config.json"]));
+
+    await page.getByLabel("Load project file").setInputFiles(jsonPath);
+    await expect
+      .poll(pixels, {
+        message: "config-only load must not draw the old project's bytes",
+      })
+      .not.toBe(imagePixels);
   });
 
   test("draws an uploaded custom image on the tile in preview + export", async ({

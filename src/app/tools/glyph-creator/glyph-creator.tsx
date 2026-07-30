@@ -29,6 +29,7 @@ import {
   loadConfig,
   loadFont,
   loadImages,
+  replaceImages,
   saveConfig,
   saveFont,
   saveImage,
@@ -400,12 +401,17 @@ export function GlyphCreator() {
         });
         return;
       }
-      // Bundled images are registered and re-persisted before the config that
-      // references them, so the first draw already has their bytes.
-      for (const image of imported.images) {
-        putImage(image.id, image.blob);
-        await saveImage(image);
-      }
+      // The loaded project owns the image set outright: the outgoing project's
+      // bytes are dropped first, because ids are allocated per project and so
+      // collide across them — kept, an old `img-1.png` would answer the new
+      // project's reference to that id and draw the wrong art. A file that
+      // bundles no bytes (config-only JSON) therefore falls back to the Symbol
+      // or label, which is what it should do.
+      clearImages();
+      // Registered and re-persisted before the config that references them, so
+      // the first draw already has their bytes.
+      for (const image of imported.images) putImage(image.id, image.blob);
+      await replaceImages(imported.images);
       dispatch({ type: "load-project", project: imported.project });
       if (imported.font) {
         await registerFont(imported.font.family, imported.font.blob);
