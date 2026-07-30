@@ -35,7 +35,12 @@ import {
   saveImage,
   type PersistedImage,
 } from "@/lib/glyph/project-store";
-import { clearImages, imageAssetFor, putImage } from "@/lib/glyph/images";
+import {
+  clearImages,
+  getImageBlob,
+  imageAssetFor,
+  putImage,
+} from "@/lib/glyph/images";
 import {
   GlyphStylePanel,
   StyleControls,
@@ -330,13 +335,34 @@ export function GlyphCreator() {
     return asset;
   }
 
-  /** The persisted bytes for the project's images, for bundling into a save. */
-  async function projectImages(): Promise<PersistedImage[]> {
+  /**
+   * The bytes for the project's images, for bundling into a save.
+   *
+   * Sourced from the runtime registry first and IndexedDB only as backfill,
+   * because the registry is what the draw path reads: an image the user can see
+   * on a tile is one the save must carry. Reading IndexedDB alone made the save
+   * quietly worse than the screen — `saveImage` swallows a failed write (private
+   * mode, quota), so an image that uploaded and drew fine could be absent from
+   * its own ZIP, leaving a config referencing bytes that never shipped.
+   *
+   * Anything still missing is reported rather than dropped: an incomplete save is
+   * worth saying out loud, since the ZIP is the only copy that travels.
+   */
+  async function projectImages(): Promise<{
+    images: PersistedImage[];
+    missing: string[];
+  }> {
     const stored = await loadImages();
-    const byId = new Map(stored.map((i) => [i.id, i]));
-    return project.images
-      .map((asset) => byId.get(asset.id))
-      .filter((image): image is PersistedImage => image !== undefined);
+    const byId = new Map(stored.map((i) => [i.id, i.blob]));
+
+    const images: PersistedImage[] = [];
+    const missing: string[] = [];
+    for (const asset of project.images) {
+      const blob = getImageBlob(asset.id) ?? byId.get(asset.id);
+      if (blob) images.push({ ...asset, blob });
+      else missing.push(asset.fileName);
+    }
+    return { images, missing };
   }
 
   /**
@@ -378,12 +404,19 @@ export function GlyphCreator() {
       const font = includeFont ? await loadFont() : null;
       // Images always travel: unlike the font there's no bundled fallback, so a
       // save without them couldn't reproduce the project anywhere else.
-      const artifact = await exportProjectFile(
-        project,
-        font,
-        await projectImages(),
-      );
+      const { images, missing } = await projectImages();
+      const artifact = await exportProjectFile(project, font, images);
       downloadArtifact(artifact);
+      // The file is still worth having — every Glyph that has art keeps it, and
+      // the rest fall back — so this reports on a completed save, not a failed
+      // one. Silence would let the user carry an incomplete ZIP to another
+      // machine and discover the hole there.
+      if (missing.length > 0) {
+        setStatus({
+          kind: "error",
+          message: `Saved without ${missing.length === 1 ? "an image whose" : `${missing.length} images whose`} bytes couldn't be read (${missing.join(", ")}). Those Glyphs will fall back to their Symbol or label.`,
+        });
+      }
     } catch {
       setStatus({ kind: "error", message: "Couldn't save the project file." });
     }

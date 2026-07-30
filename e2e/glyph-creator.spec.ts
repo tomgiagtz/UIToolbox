@@ -222,6 +222,60 @@ test.describe("Input Glyph Creator", () => {
     await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
   });
 
+  test("bundles image bytes the browser store lost but the editor still has", async ({
+    page,
+  }) => {
+    // `saveImage` swallows a failed IndexedDB write (private mode, quota), so the
+    // store can be missing an image the user uploaded and can see on the tile.
+    // The save follows the screen, not the store: what draws, ships (#23).
+    await page.goto("/tools/glyph-creator");
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+
+    await preview.click();
+    await expect(
+      page.getByRole("region", { name: /edit glyph/i }),
+    ).toBeVisible();
+    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+    await expect(page.getByRole("radio", { name: "Image" })).toBeChecked();
+
+    // Empty the images store behind the editor's back — the runtime registry
+    // still holds the bytes, exactly as it would had the write never landed.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open("uitoolbox");
+          req.onerror = () => reject(req.error);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction("images", "readwrite");
+            tx.objectStore("images").clear();
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+    );
+
+    await page.getByRole("button", { name: "Save…" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    const download = await downloadPromise;
+
+    // Still a ZIP, still carrying the bytes — not a config referencing art that
+    // never shipped.
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    const entries = unzipSync(await readDownload(download));
+    expect(Object.keys(entries)).toContain("images/img-1.svg");
+    expect(entries["images/img-1.svg"].length).toBeGreaterThan(0);
+  });
+
   test("a config-only load falls back rather than reusing the last project's image bytes", async ({
     page,
   }) => {
