@@ -225,10 +225,9 @@ test.describe("Input Glyph Creator", () => {
   test("a config-only load falls back rather than reusing the last project's image bytes", async ({
     page,
   }) => {
-    // Image ids are allocated per project, so two projects routinely both use
-    // `img-1.svg` for different art. Loading a config that arrived without its
-    // bytes must degrade to the label/Symbol — not draw whatever the previous
-    // project happened to register under that id (#23).
+    // Loading a config that arrived without its bytes must degrade to the
+    // label/Symbol rather than draw whatever the last project left under that
+    // id — see `replaceImages` for why the ids collide at all (#23).
     await page.goto("/tools/glyph-creator");
     const preview = page.getByRole("img", {
       name: /Keyboard Sprite Atlas preview/i,
@@ -247,7 +246,6 @@ test.describe("Input Glyph Creator", () => {
     await expect
       .poll(pixels, { message: "preview should redraw with the image" })
       .not.toBe(plainPixels);
-    const imagePixels = await pixels();
 
     await page.getByRole("button", { name: "Save…" }).click();
     const dialog = page.getByRole("dialog");
@@ -265,11 +263,22 @@ test.describe("Input Glyph Creator", () => {
     await writeFile(jsonPath, Buffer.from(entries["config.json"]));
 
     await page.getByLabel("Load project file").setInputFiles(jsonPath);
+    // Exactly the pre-upload render, not merely "something else": the Glyph is
+    // back on its label/Symbol, which is what the fallback owes.
     await expect
       .poll(pixels, {
         message: "config-only load must not draw the old project's bytes",
       })
-      .not.toBe(imagePixels);
+      .toBe(plainPixels);
+
+    // And the drop has to have reached IndexedDB, not just the in-memory
+    // registry — a reload re-registers whatever is still persisted, so a stale
+    // blob would come back and redraw here.
+    await page.reload();
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(pixels, { message: "a reload must not resurrect the old bytes" })
+      .toBe(plainPixels);
   });
 
   test("draws an uploaded custom image on the tile in preview + export", async ({

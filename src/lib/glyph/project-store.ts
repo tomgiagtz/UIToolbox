@@ -214,11 +214,10 @@ export async function replaceImages(images: PersistedImage[]): Promise<void> {
     const db = await openDb();
     // One transaction, so a failure part-way can't leave a half-swapped store.
     const store = txStore(db, "readwrite", IMAGE_STORE);
-    const done = Promise.all([
+    await Promise.all([
       runRequest(store.clear()),
       ...images.map((image) => runRequest(store.put(image, image.id))),
     ]);
-    await done;
     db.close();
   } catch {
     // No IndexedDB (SSR / disabled) — the images just won't survive a reload.

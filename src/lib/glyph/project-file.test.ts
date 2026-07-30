@@ -28,12 +28,15 @@ function edited(): Project {
 }
 
 /** A Catalog id the Keyboard Preset leaves disabled, and one it enables. */
-function keyboardIds(): { offPreset: string; onPreset: string } {
+function keyboardPresetEdges(): {
+  disabledByPreset: string;
+  enabledByPreset: string;
+} {
   const keyboard = DEVICE_CATALOGS.find((c) => c.id === "keyboard")!;
-  const offPreset = keyboard.inputs.find(
+  const disabledByPreset = keyboard.inputs.find(
     (input) => !keyboard.preset.includes(input.id),
   )!.id;
-  return { offPreset, onPreset: keyboard.preset[0] };
+  return { disabledByPreset, enabledByPreset: keyboard.preset[0] };
 }
 
 /** Wrap an ExportArtifact's blob back into a File, as an upload would arrive. */
@@ -225,10 +228,18 @@ describe("project-file — the whole configured project (issue #23)", () => {
    * shapes the editor actually produces.
    */
   function configured(): Project {
-    const { offPreset, onPreset } = keyboardIds();
+    const { disabledByPreset, enabledByPreset } = keyboardPresetEdges();
     const base = [
-      { type: "toggle-input", deviceIndex: 0, inputId: offPreset } as const,
-      { type: "toggle-input", deviceIndex: 0, inputId: onPreset } as const,
+      {
+        type: "toggle-input",
+        deviceIndex: 0,
+        inputId: disabledByPreset,
+      } as const,
+      {
+        type: "toggle-input",
+        deviceIndex: 0,
+        inputId: enabledByPreset,
+      } as const,
       { type: "add-custom-input", deviceIndex: 0, label: "Grave" } as const,
       {
         type: "patch-style",
@@ -237,12 +248,12 @@ describe("project-file — the whole configured project (issue #23)", () => {
       } as const,
       {
         type: "patch-style",
-        scope: { tier: "glyph", deviceIndex: 0, glyphId: offPreset },
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: disabledByPreset },
         patch: { textColor: "#00ff00", contentScale: 1.5 },
       } as const,
       {
         type: "patch-style",
-        scope: { tier: "glyph", deviceIndex: 0, glyphId: onPreset },
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: enabledByPreset },
         patch: { renderSource: { kind: "image", imageId: image.id } },
       } as const,
     ].reduce(projectReducer, edited());
@@ -256,11 +267,11 @@ describe("project-file — the whole configured project (issue #23)", () => {
   it("round-trips selection, custom Inputs, overrides, Render Source and bytes", async () => {
     const project = configured();
     const keyboard = project.devices[0];
-    const { offPreset, onPreset } = keyboardIds();
+    const { disabledByPreset, enabledByPreset } = keyboardPresetEdges();
     // Guard the fixture: an assertion below is only meaningful if the reducer
     // actually moved these.
-    expect(keyboard.enabled).toContain(offPreset);
-    expect(keyboard.enabled).not.toContain(onPreset);
+    expect(keyboard.enabled).toContain(disabledByPreset);
+    expect(keyboard.enabled).not.toContain(enabledByPreset);
     expect(keyboard.custom.map((c) => c.label)).toEqual(["Grave"]);
 
     const artifact = await exportProjectFile(project, null, [image]);
