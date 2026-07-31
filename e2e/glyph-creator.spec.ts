@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type Download, type Page } from "@playwright/test";
 import { unzipSync } from "fflate";
@@ -219,6 +220,119 @@ test.describe("Input Glyph Creator", () => {
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Xbox" })).toBeChecked();
+  });
+
+  test("bundles image bytes the browser store lost but the editor still has", async ({
+    page,
+  }) => {
+    // `saveImage` swallows a failed IndexedDB write (private mode, quota), so the
+    // store can be missing an image the user uploaded and can see on the tile.
+    // The save follows the screen, not the store: what draws, ships (#23).
+    await page.goto("/tools/glyph-creator");
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+
+    await preview.click();
+    await expect(
+      page.getByRole("region", { name: /edit glyph/i }),
+    ).toBeVisible();
+    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+    await expect(page.getByRole("radio", { name: "Image" })).toBeChecked();
+
+    // Empty the images store behind the editor's back — the runtime registry
+    // still holds the bytes, exactly as it would had the write never landed.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const req = indexedDB.open("uitoolbox");
+          req.onerror = () => reject(req.error);
+          req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction("images", "readwrite");
+            tx.objectStore("images").clear();
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+    );
+
+    await page.getByRole("button", { name: "Save…" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    const download = await downloadPromise;
+
+    // Still a ZIP, still carrying the bytes — not a config referencing art that
+    // never shipped.
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    const entries = unzipSync(await readDownload(download));
+    expect(Object.keys(entries)).toContain("images/img-1.svg");
+    expect(entries["images/img-1.svg"].length).toBeGreaterThan(0);
+  });
+
+  test("a config-only load falls back rather than reusing the last project's image bytes", async ({
+    page,
+  }) => {
+    // Loading a config that arrived without its bytes must degrade to the
+    // label/Symbol rather than draw whatever the last project left under that
+    // id — see `replaceImages` for why the ids collide at all (#23).
+    await page.goto("/tools/glyph-creator");
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+    const pixels = () =>
+      preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
+
+    // Give a Glyph a custom image, then save — images always travel, so a ZIP.
+    await preview.click();
+    await expect(
+      page.getByRole("region", { name: /edit glyph/i }),
+    ).toBeVisible();
+    const plainPixels = await pixels();
+    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+    await expect
+      .poll(pixels, { message: "preview should redraw with the image" })
+      .not.toBe(plainPixels);
+
+    await page.getByRole("button", { name: "Save…" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    const zipBytes = await readDownload(await downloadPromise);
+    const entries = unzipSync(zipBytes);
+    expect(Object.keys(entries)).toContain("images/img-1.svg");
+
+    // The same config as a bare JSON — what sharing a save without its assets
+    // produces. Written next to the ZIP so the Load input can pick it up.
+    const dir = await mkdtemp(path.join(tmpdir(), "uitb-config-only-"));
+    const jsonPath = path.join(dir, "config-only.json");
+    await writeFile(jsonPath, Buffer.from(entries["config.json"]));
+
+    await page.getByLabel("Load project file").setInputFiles(jsonPath);
+    // Exactly the pre-upload render, not merely "something else": the Glyph is
+    // back on its label/Symbol, which is what the fallback owes.
+    await expect
+      .poll(pixels, {
+        message: "config-only load must not draw the old project's bytes",
+      })
+      .toBe(plainPixels);
+
+    // And the drop has to have reached IndexedDB, not just the in-memory
+    // registry — a reload re-registers whatever is still persisted, so a stale
+    // blob would come back and redraw here.
+    await page.reload();
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(pixels, { message: "a reload must not resurrect the old bytes" })
+      .toBe(plainPixels);
   });
 
   test("draws an uploaded custom image on the tile in preview + export", async ({

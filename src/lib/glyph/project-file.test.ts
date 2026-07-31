@@ -4,6 +4,8 @@
 // arrayBuffer(); Node's (like every real browser) implements it, so we exercise
 // the round-trip under the Node environment.
 import { describe, expect, it } from "vitest";
+import { unzipSync, zipSync } from "fflate";
+import { DEVICE_CATALOGS } from "@/lib/glyph/catalog";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
@@ -23,6 +25,18 @@ function edited(): Project {
     // Not `createDefaultProject("")`: an empty family is repaired on read now
     // (ADR-0010), so it would not survive a round-trip unchanged.
   ].reduce(projectReducer, createDefaultProject());
+}
+
+/** A Catalog id the Keyboard Preset leaves disabled, and one it enables. */
+function keyboardPresetEdges(): {
+  disabledByPreset: string;
+  enabledByPreset: string;
+} {
+  const keyboard = DEVICE_CATALOGS.find((c) => c.id === "keyboard")!;
+  const disabledByPreset = keyboard.inputs.find(
+    (input) => !keyboard.preset.includes(input.id),
+  )!.id;
+  return { disabledByPreset, enabledByPreset: keyboard.preset[0] };
 }
 
 /** Wrap an ExportArtifact's blob back into a File, as an upload would arrive. */
@@ -160,6 +174,29 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     expect(imported!.images.map((i) => i.id)).toEqual(["img-1.png"]);
   });
 
+  it("loads a ZIP whose image bytes are missing, keeping the manifest", async () => {
+    // A ZIP can arrive without the bytes it describes — hand-assembled, or
+    // stripped in transit. The config still loads; the Glyph then degrades to its
+    // Symbol or label at draw time rather than the whole file failing (ADR-0004).
+    const { project, image } = withImage();
+    const full = unzipSync(
+      new Uint8Array(
+        await (
+          await exportProjectFile(project, null, [image])
+        ).blob.arrayBuffer(),
+      ),
+    );
+    const stripped = zipSync({ "config.json": full["config.json"] });
+
+    const imported = await importProjectFile(
+      asFile(new Blob([stripped.slice()]), "no-bytes.zip"),
+    );
+    expect(imported).not.toBeNull();
+    // The manifest is config, so it survives; only the bytes are gone.
+    expect(imported!.project.images).toEqual(project.images);
+    expect(imported!.images).toEqual([]);
+  });
+
   it("loads a font-only ZIP saved before images existed", async () => {
     const project = edited();
     const font: PersistedFont = {
@@ -172,5 +209,81 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     const imported = await importProjectFile(asFile(artifact.blob, "old.zip"));
     expect(imported!.font?.fileName).toBe("Heros.ttf");
     expect(imported!.images).toEqual([]);
+  });
+});
+
+describe("project-file — the whole configured project (issue #23)", () => {
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d]);
+  const image: PersistedImage = {
+    id: "img-1.png",
+    fileName: "paddle.png",
+    type: "image/png",
+    blob: new Blob([bytes]),
+  };
+
+  /**
+   * A project touched on every axis a save has to carry: the enabled selection,
+   * a custom Input, overrides at the Device and Glyph tiers, and a Glyph drawing
+   * a custom image. Built through the reducer so the fixture can't drift from the
+   * shapes the editor actually produces.
+   */
+  function configured(): Project {
+    const { disabledByPreset, enabledByPreset } = keyboardPresetEdges();
+    const base = [
+      {
+        type: "toggle-input",
+        deviceIndex: 0,
+        inputId: disabledByPreset,
+      } as const,
+      {
+        type: "toggle-input",
+        deviceIndex: 0,
+        inputId: enabledByPreset,
+      } as const,
+      { type: "add-custom-input", deviceIndex: 0, label: "Grave" } as const,
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 0 },
+        patch: { background: { fill: "#123456" } },
+      } as const,
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: disabledByPreset },
+        patch: { textColor: "#00ff00", contentScale: 1.5 },
+      } as const,
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: enabledByPreset },
+        patch: { renderSource: { kind: "image", imageId: image.id } },
+      } as const,
+    ].reduce(projectReducer, edited());
+    // The manifest entry the Render Source above points at.
+    return {
+      ...base,
+      images: [{ id: image.id, fileName: image.fileName, type: image.type }],
+    };
+  }
+
+  it("round-trips selection, custom Inputs, overrides, Render Source and bytes", async () => {
+    const project = configured();
+    const keyboard = project.devices[0];
+    const { disabledByPreset, enabledByPreset } = keyboardPresetEdges();
+    // Guard the fixture: an assertion below is only meaningful if the reducer
+    // actually moved these.
+    expect(keyboard.enabled).toContain(disabledByPreset);
+    expect(keyboard.enabled).not.toContain(enabledByPreset);
+    expect(keyboard.custom.map((c) => c.label)).toEqual(["Grave"]);
+
+    const artifact = await exportProjectFile(project, null, [image]);
+    const imported = await importProjectFile(
+      asFile(artifact.blob, artifact.filename),
+    );
+
+    // The config is a bare Project, so one deep equality covers every axis —
+    // selection, custom Inputs, both override tiers, and the Render Source.
+    expect(imported!.project).toEqual(project);
+    expect(
+      Array.from(new Uint8Array(await imported!.images[0].blob.arrayBuffer())),
+    ).toEqual(Array.from(bytes));
   });
 });

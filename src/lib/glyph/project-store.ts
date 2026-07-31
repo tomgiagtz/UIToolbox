@@ -200,6 +200,30 @@ export async function loadImages(): Promise<PersistedImage[]> {
   }
 }
 
+/**
+ * Replace every persisted image with `images` — what loading a project file does,
+ * since the incoming project owns the whole set.
+ *
+ * Merging would be wrong rather than merely untidy: image ids are allocated per
+ * project (`img-1.png`, `img-2.png`…), so two projects routinely use the same id
+ * for different art. Left in place, the outgoing project's bytes would answer the
+ * incoming one's id.
+ */
+export async function replaceImages(images: PersistedImage[]): Promise<void> {
+  try {
+    const db = await openDb();
+    // One transaction, so a failure part-way can't leave a half-swapped store.
+    const store = txStore(db, "readwrite", IMAGE_STORE);
+    await Promise.all([
+      runRequest(store.clear()),
+      ...images.map((image) => runRequest(store.put(image, image.id))),
+    ]);
+    db.close();
+  } catch {
+    // No IndexedDB (SSR / disabled) — the images just won't survive a reload.
+  }
+}
+
 /** Clear all persisted state (config + font + images). */
 export async function clear(): Promise<void> {
   try {
