@@ -46,6 +46,8 @@ import { ExportDialog, type ExportSelection } from "./export-dialog";
 import { ProjectMenuBar } from "./project-menu-bar";
 import { PanelSection } from "./panel-section";
 import { FontUpload } from "./font-upload";
+// PROTOTYPE (issue #71) — delete this import and its mount below when answered.
+import { PresetPickerPrototype } from "./preset-picker.prototype";
 
 type Status =
   | { kind: "idle" }
@@ -623,6 +625,12 @@ export function GlyphCreator() {
         onLoadFile={onLoadFile}
         onDelete={onDelete}
         onExport={() => exportDialogRef.current?.showModal()}
+      />
+
+      {/* PROTOTYPE (issue #71) — the preset picker variants. Delete with the file. */}
+      <PresetPickerPrototype
+        project={project}
+        onApply={(next) => dispatch({ type: "load-project", project: next })}
       />
 
       <ExportDialog
