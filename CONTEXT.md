@@ -42,7 +42,7 @@ Device.
 How an Input's Glyph content is drawn: its font-rendered **label** (default for
 arbitrary Inputs), a bundled **Symbol** (default for well-known Inputs), or a
 user-uploaded **custom image**. Whichever source is chosen is composited onto the
-same Background tile, sized by the **content scale**.
+same Background tile, sized and oriented by its **content transform**.
 
 The default comes from the Catalog — a well-known Input draws its Symbol, anything
 else its label — and any Glyph can override it through the **Style Cascade**. An
@@ -59,13 +59,38 @@ is fitted to its own aspect rather than filling the square content box. The
 project config carries only a **manifest** describing the image; the bytes live
 in IndexedDB and travel inside the ZIP project save file (ADR-0008).
 
-### Content scale
+### Font
 
-A **Style Cascade** property multiplying the tile's content box — how large the
-label, Symbol, or custom image is drawn. It scales whichever Render Source a Glyph
-happens to use, so switching sources never discards the sizing. Above `1` the
-content is clipped to its own cell, so a large Glyph can't paint its neighbour in
-the atlas.
+A typeface a Glyph's **label** is drawn in, named by its **family** — the one
+thing the draw path needs. A project can use several: the family is a **Style
+Cascade** property, so a Device or a single Glyph can use a different face from
+the project's.
+
+Fonts come from two places. A **bundled family** ships with the tool and is
+listed in code; an **uploaded font** is the user's own file, whose family is
+generated at upload so it can never collide. Uploads are manifested on the
+project the way custom images are — bytes in IndexedDB, carried in the ZIP —
+while bundled families are never manifested and never travel, since the tool
+already has them. A **Preset** may only name a bundled family, never carry bytes.
+
+_(ADR-0012, decided and not yet built. Today a project has exactly one font.)_
+
+### Transform
+
+A rotation in degrees plus a **signed per-axis scale**, applied to one whole
+drawing layer. A Glyph has two independent ones — a **background transform** on
+the tile and a **content transform** on whichever Render Source is drawn — and
+both resolve through the **Style Cascade** at every tier. A negative scale
+component mirrors that axis, which is how a left-side bumper faces the other way;
+that reads unambiguously only because rotation sits beside it. The content
+transform scales whichever Render Source a Glyph happens to use, so switching
+sources never discards the sizing. Above `1` a layer is clipped to its own cell,
+so a large or rotated Glyph can't paint its neighbour in the atlas.
+
+_Avoid:_ "content scale", "flipX" — both are folded into a Transform (ADR-0012).
+
+_(ADR-0012, decided and not yet built. Today there is a uniform `contentScale`
+property and a `flipX` flag inside the authored Background source.)_
 
 ### Symbol
 
@@ -135,10 +160,17 @@ _Avoid:_ "platform", "controller" (a controller is one kind of Device).
 ### Catalog
 
 The fixed set of **known Inputs** a Device offers — every keyboard key, every pad
-button. Each Catalog entry carries a stable id, a default label, an optional
-default **Symbol**, and a position in the **Device Layout**. Users toggle Catalog
-Inputs on/off; only **enabled** ones generate Glyphs. Inputs the Catalog lacks
-are added as **custom Inputs**.
+button. **A Catalog says what is present** (ADR-0012): each entry carries a stable
+id, a default label, a position in the **Device Layout**, and which shipped art
+_depicts_ that control — its **Symbol**, and for bumpers and triggers an
+**Authored Background** plus a mirror flag for the left-side ones. Those art
+fields are **seeds**, not styling: they name the tile a control _is_, which is
+true under any look. A Catalog is code-maintained; a **Preset** points at one and
+can never replace it. Users toggle Catalog Inputs on/off; only **enabled** ones
+generate Glyphs. Inputs the Catalog lacks are added as **custom Inputs**.
+
+_(The Authored Background and mirror seeds are ADR-0012, decided and not yet
+built; today they sit in a `defaultStyle` cascade tier the ADR removes.)_
 
 ### Device Layout
 
@@ -151,12 +183,38 @@ are the Symbols.
 
 _Avoid:_ "silhouette", "controller art" — the Layout is schematic, not artwork.
 
-### Preset
+### Default Selection
 
 The **default-enabled subset** of a Device's Catalog — which Inputs start enabled
-when the tool loads. The Keyboard Preset enables a small common-in-games subset
-(the rest of the board sits disabled in the Layout); the pad Presets enable
-their whole Catalog. A Preset is a starting selection, freely changed afterward.
+when a Device is created. The Keyboard's Default Selection is a small
+common-in-games subset (the rest of the board sits disabled in the Layout); the
+pads' cover their whole Catalog. It is a starting selection, freely changed
+afterward, and it is what a **Preset** seeds a Device from when your project
+doesn't have that Device yet.
+
+_Avoid:_ "Preset" for this — that word now names the shipped look (ADR-0012).
+
+### Preset
+
+A shipped starting **look**: **a Preset says what it looks like**, where a
+**Catalog** says what is present (ADR-0012). Preset is a **role**, not a format —
+_ships with the tool and appears in the picker_ — so a user's own export is not
+one; you make a Preset by committing it and listing it.
+
+A Preset is **style-only**. A **Device Preset** carries one Device's style,
+per-Glyph styles, and font family; a **Project Preset** does the same and also
+writes the Project tier. Neither carries `enabled`, `custom`, `name`, the export
+settings, or any bytes — never font bytes (it may only name a **bundled family**)
+and never an uploaded image. Applying one restyles the Devices you have and never
+touches your selection unless you take a Device explicitly; a Device you lack can
+be created from its Catalog's **Default Selection**.
+
+Because a Preset restyles _your_ selection, the picker card promises nothing —
+**the preview does**. A card is a fixed swatch, a name, and one pill per Device
+covered; a live pane renders your actual atlas through the real cascade before
+you commit.
+
+_(ADR-0012, decided and not yet built.)_
 
 ### Background
 
@@ -169,14 +227,18 @@ The tile a Glyph's Render Source is drawn on. Its **source** is one of:
 - an **uploaded image** — the user's own tile graphic.
 
 The source is a single value, not a bag of flags — one of the four at a time
-(ADR-0009) — and it resolves through the **Style Cascade** like any other style
-property, settable at any scope. "None" is a _source_ rather than a fourth shape
-because a shape could only ever suppress the drawn primitive, leaving an
-inherited authored tile still showing. Some Catalog Inputs whose identity is
-their tile _shape_ (bumpers, triggers) default to a specific authored Background
-rather than a plain shape. Fill and border paint a shape or recolour an authored
-tile; an uploaded image draws as authored, fitted to the cell and never
-recoloured.
+(ADR-0009) — and it is replaced wholesale, never merged. It is set **per Glyph
+only**: what a Glyph is drawn from is per-Glyph, while how it's painted cascades
+(ADR-0012). "None" is a _source_ rather than a fourth shape because a shape could
+only ever suppress the drawn primitive, leaving an inherited authored tile still
+showing. Catalog Inputs whose identity is their tile _shape_ (bumpers, triggers)
+**seed** a specific authored Background rather than a plain shape. Fill, border,
+corner radius, shape and the **background transform** all cascade normally; fill
+and border paint a shape or recolour an authored tile, while an uploaded image
+draws as authored, fitted to the cell and never recoloured.
+
+_(Per-Glyph-only `source` and the seed are ADR-0012, decided and not yet built;
+today the source is settable at any scope.)_
 
 ### Authored Background
 
@@ -190,18 +252,27 @@ _on_ it. Bumper- and trigger-shaped tiles are Authored Backgrounds; their label
 
 How a Glyph's style + Render Source are resolved, lowest precedence to highest:
 
-**Project** defaults → **Device** overrides → **Catalog per-Input default** →
-**Glyph** overrides.
+**Project** base → **Device** overrides → **Glyph** overrides.
 
-Each level is a sparse subset; anything unset falls up the chain. Every style
-property can be set at any level. The **Render Source** resolves through the
-same tiers but is only _set_ per Glyph: the tiers above it supply a Catalog
-default, and "every Glyph on this Device draws its label" isn't a thing the tool
-offers. The **Catalog per-Input default** tier is what lets a bumper keep its
-authored Background even when its Device sets a plain shape for everything — the
-shipped per-Input default outranks a device-wide override, and only an explicit
-Glyph edit outranks it. The grid **cell size** and the **font** are the
-exception: they stay Project-global (uniform grid, one font).
+The Project tier is a full style; each tier above it is a sparse subset, and
+anything unset falls up the chain. The rule for which properties live where:
+**what a Glyph is drawn from is per-Glyph; how it's painted cascades.** So the
+**Render Source** and the Background's **source** are settable only at the Glyph
+tier, while colour, shape, border, font and the layer **transforms** are settable
+at any tier.
+
+A Catalog's art **seeds** rank between the Glyph and Project tiers: a bumper
+draws its authored tile unless that Glyph explicitly says otherwise, which is
+what keeps it bumper-shaped when its Device sets a plain shape for everything.
+Because the seed is a base rather than pre-filled user data, resetting a Glyph
+lands back on the shipped tile rather than falling to the Device tier.
+
+The grid **cell size** is the one exception: it stays Project-global for a
+uniform grid, and lives in the project's export settings.
+
+_(ADR-0012, decided and not yet built. Today there are four tiers, with a Catalog
+per-Input default tier between Device and Glyph, the font outside the cascade,
+and `source` settable at any scope.)_
 
 ### Sprite Atlas
 
@@ -240,15 +311,27 @@ See `docs/adr/`:
   amended by ADR-0007).
 - **ADR-0005** — Device layout selection model.
 - **ADR-0006** — Glyph style resolves through a Project → Device → Glyph cascade
-  (extended by ADR-0007).
-- **ADR-0007** — Sentinel paint roles and importable Symbol Sets.
+  (extended by ADR-0007; amended by ADR-0012, which cuts it to three tiers and
+  brings the font in).
+- **ADR-0007** — Sentinel paint roles and importable Symbol Sets (§3's tier count
+  and its brand-palette tier amended by ADR-0012).
 - **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
-  content scale joins the Style Cascade.
+  content scale joins the Style Cascade (content scale replaced by a Transform in
+  ADR-0012).
 - **ADR-0009** — A Background's tile art is one `source` union: none / shape /
-  authored / uploaded image (amends ADR-0006).
+  authored / uploaded image (amends ADR-0006; scope narrowed to per-Glyph and
+  `flipX` removed by ADR-0012).
 - **ADR-0010** — The persisted config is validated against the current shape
   only: no version stamp, no migration; a config that fails is discarded and the
   loss is reported (amends ADR-0009).
 - **ADR-0011** — Loading a project replaces the custom-image set outright, and a
   save reads bytes from the runtime registry rather than IndexedDB (amends
   ADR-0008).
+- **ADR-0012** — _Accepted, not yet built._ A **Catalog** says what is present; a
+  **Preset** says what it looks like. Catalogs stay code-maintained registries and
+  absorb the shipped tile art as seeds; the Style Cascade drops to three tiers,
+  gains the font and two layer Transforms, and loses `contentScale`. A Preset is
+  style-only, ships as build-time-validated code rather than a parsed file, and is
+  promised by a live preview rather than by its picker card. Amends ADR-0006,
+  ADR-0007 §3, ADR-0008 and ADR-0009 — the glossary entries above are flagged
+  where they run ahead of the code.

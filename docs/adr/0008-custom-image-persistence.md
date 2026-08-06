@@ -4,6 +4,9 @@
 - **Date:** 2026-07-27
 - **Amends:** ADR-0004 (custom image storage), ADR-0006 (adds a Style Cascade
   property)
+- **Amended by:** ADR-0012 — `contentScale` is deleted, folded into a
+  `content.transform` covering rotation and signed per-axis scale. Everything
+  about image persistence stands.
 
 ## Context
 
