@@ -249,3 +249,6 @@ See `docs/adr/`:
 - **ADR-0010** — The persisted config is validated against the current shape
   only: no version stamp, no migration; a config that fails is discarded and the
   loss is reported (amends ADR-0009).
+- **ADR-0011** — Loading a project replaces the custom-image set outright, and a
+  save reads bytes from the runtime registry rather than IndexedDB (amends
+  ADR-0008).
