@@ -6,7 +6,12 @@
   group (Symbol paint roles) to the cascade. ADR-0008 — adds `contentScale`, and
   resolves a Glyph's Render Source through the same tiers. ADR-0009 — replaces
   the Background's tile fields with one `source` union, cascaded like any other
-  property but replaced wholesale.
+  property but replaced wholesale. **ADR-0012** — deletes the Catalog per-Input
+  tier (its payload becomes bare Catalog seed fields with an explicit rank),
+  brings the **font** into the cascade, narrows `background.source` to the Glyph
+  tier, replaces `contentScale` with two layer transforms, and moves `cellSize`
+  into `Project.exportSettings` without changing its Project-global status. It
+  also retires the tri-state `backgroundId` amendment below.
 
 ## Context
 

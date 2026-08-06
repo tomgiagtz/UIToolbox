@@ -3,6 +3,10 @@
 - **Status:** Accepted
 - **Date:** 2026-07-23
 - **Amends:** ADR-0004 (Symbol colour model), ADR-0006 (adds a Style Cascade group)
+- **Amended by:** ADR-0012 — §3's four tiers become three (the Catalog per-Input
+  tier is deleted, so "the Device tier may set uniform role defaults; per-Input
+  defaults outrank it" loses its middle term), and the brand palette no longer
+  ships at a Catalog tier — it is Preset payload.
 
 ## Context
 

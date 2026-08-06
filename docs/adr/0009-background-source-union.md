@@ -3,6 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-07-27
 - **Amends:** ADR-0006 (the Style Cascade's Background property)
+- **Amended by:** ADR-0012 — `flipX` leaves the union (orientation becomes a
+  layer transform, so the source no longer needs to carry it), and a source is no
+  longer settable at any scope: it is **per-Glyph-only**, with a Catalog seed
+  ranked beneath it. Wholesale replacement, and "none" as a source rather than a
+  fourth shape, both stand.
 
 ## Context
 
