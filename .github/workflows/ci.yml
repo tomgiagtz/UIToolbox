@@ -41,6 +41,12 @@ jobs:
           git diff --exit-code -- src/lib/glyph/layouts/pad-layouts.generated.ts \
             || (echo "::error::pad-layouts.generated.ts is out of date. Run 'npm run layouts' and commit the result." && exit 1)
 
+      - name: Symbols up to date
+        run: |
+          npm run symbols
+          git diff --exit-code -- src/lib/glyph/symbols/symbols.generated.ts \
+            || (echo "::error::symbols.generated.ts is out of date. Run 'npm run symbols' and commit the result." && exit 1)
+
       - name: Unit tests
         run: npm run test
 
