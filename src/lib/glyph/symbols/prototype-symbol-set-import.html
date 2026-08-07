@@ -1,0 +1,1659 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — Symbol Set import (issue #38)</title>
+    <style>
+      :root {
+        --ink: #16181d;
+        --muted: #6b7280;
+        --line: #e3e6ec;
+        --panel: #fff;
+        --bg: #f6f7f9;
+        --accent: #3b5bdb;
+        --warn: #b45309;
+        --warn-bg: #fef6e7;
+        --ok: #15803d;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 24px 120px;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.55 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 26px;
+        margin: 0 0 4px;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: 17px;
+        margin: 0 0 12px;
+        letter-spacing: -0.005em;
+      }
+      h3 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        margin: 22px 0 8px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      .lede {
+        color: var(--muted);
+        max-width: 68ch;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fff;
+        background: var(--warn);
+        padding: 3px 8px;
+        border-radius: 4px;
+        vertical-align: 3px;
+      }
+      section.panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 22px 24px;
+        margin: 20px 0;
+      }
+      .q {
+        border-left: 3px solid var(--accent);
+        padding-left: 16px;
+        margin: 18px 0 26px;
+        max-width: 74ch;
+      }
+      button {
+        font: inherit;
+        font-size: 14px;
+        padding: 7px 13px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        cursor: pointer;
+        color: var(--ink);
+      }
+      button:hover:not(:disabled) {
+        border-color: #b9c0cd;
+        background: #fbfcfe;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.primary:hover:not(:disabled) {
+        background: #32499f;
+        border-color: #32499f;
+      }
+      button.done {
+        opacity: 0.5;
+        text-decoration: line-through;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .group {
+        margin-bottom: 18px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        text-align: left;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        font-weight: 600;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f0f2f5;
+        vertical-align: middle;
+      }
+      td.art {
+        width: 56px;
+      }
+      td.art svg {
+        display: block;
+        width: 44px;
+        height: 44px;
+        background: #fafbfc;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      code,
+      .mono {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 13px;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eef1f6;
+        color: #414855;
+        white-space: nowrap;
+      }
+      .pill.new {
+        background: #e8f0ff;
+        color: #1e40af;
+      }
+      .pill.gone {
+        background: #f1f2f4;
+        color: #6b7280;
+        text-decoration: line-through;
+      }
+      .pill.missing {
+        background: #fde8e8;
+        color: #b91c1c;
+      }
+      .pill.redrawn {
+        background: #ecfdf3;
+        color: var(--ok);
+      }
+      .pill.flag {
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .swatches {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .swatch {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+      }
+      .swatch input {
+        width: 30px;
+        height: 26px;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: none;
+      }
+      .notice {
+        background: var(--warn-bg);
+        border: 1px solid #f3ddb4;
+        color: #7c4a05;
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 18px;
+      }
+      .tabs button {
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        padding: 8px 12px;
+        color: var(--muted);
+      }
+      .tabs button[aria-selected="true"] {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+      }
+      ol.steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        counter-reset: s;
+      }
+      ol.steps li {
+        counter-increment: s;
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        padding: 6px 0;
+      }
+      ol.steps li::before {
+        content: counter(s);
+        font-size: 12px;
+        color: var(--muted);
+        width: 18px;
+        flex: none;
+        text-align: right;
+      }
+      ol.steps .note {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .log {
+        max-height: 190px;
+        overflow: auto;
+        font-size: 13px;
+      }
+      .log div {
+        padding: 3px 0;
+        border-bottom: 1px solid #f2f4f7;
+        color: #3b4252;
+      }
+      .log div:first-child {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      /* Measuring needs a real viewport. Squeeze this to a couple of pixels and
+         `getBBox()` on a <text> comes back wildly wrong — the font is laid out at
+         the crushed scale and the metrics are scaled back up. Park it offscreen
+         at full size instead. Worth carrying into the real implementation. */
+      #measure-host {
+        position: fixed;
+        left: -20000px;
+        top: 0;
+        width: 2048px;
+        height: 2048px;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 20px;
+        align-items: start;
+      }
+      @media (max-width: 860px) {
+        .two {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="measure-host" aria-hidden="true"></div>
+
+    <main>
+      <h1>Importing a Symbol Set <span class="tag">Prototype</span></h1>
+      <p class="lede">
+        A throwaway demo for issue #38. Nothing here ships; it exists to settle
+        one argument before the real code is written.
+      </p>
+
+      <div class="q">
+        <p>
+          <strong>The question.</strong> A Symbol Set is a drawing an author
+          exports from their design tool: one file holding many little pictures
+          on a grid, each named. The tool cuts that file into individual
+          symbols, works out which of them it already knows (an
+          <em>A</em> button, a bumper) and which are new, and asks the importer
+          to check the result before accepting it. Then — later — the author
+          re-exports the file and presses <strong>refresh</strong>.
+        </p>
+        <p style="margin-bottom: 0">
+          <strong>What should refresh do?</strong> The drawing has moved on: art
+          changed, names appeared or vanished, colours were corrected. Meanwhile
+          the importer has renamed things and picked colours, and glyphs in the
+          project are already using these symbols. Which side wins? The answer
+          here is that the set is <em>exactly</em> what the file draws — nothing
+          is retained behind the drawing's back — and the tool's job when a
+          symbol a glyph was using disappears is to <em>say so, by name</em>.
+          Press the buttons and see whether the rules below feel right.
+        </p>
+      </div>
+
+      <!-- ══════════════════════════ CURRENT STATE ══════════════════════════ -->
+      <section class="panel">
+        <h2>What the project holds right now</h2>
+        <div id="notice"></div>
+        <div class="two">
+          <div>
+            <div id="state-main"></div>
+          </div>
+          <div>
+            <h3 style="margin-top: 0">Role colours for this set</h3>
+            <p class="meta">
+              The author paints in stand-in colours that say
+              <em>what a shape is for</em>, not what it looks like. These are
+              the real colours the set uses. They live in project config, never
+              in the file.
+            </p>
+            <div class="swatches" id="swatches"></div>
+
+            <h3>Glyphs using these symbols</h3>
+            <div id="glyphs"></div>
+            <div class="row" style="margin-top: 8px">
+              <select id="glyph-pick"></select>
+              <button id="glyph-add">Use in a glyph</button>
+              <button id="glyph-clear">Remove all</button>
+            </div>
+
+            <h3>What just happened</h3>
+            <div class="log" id="log"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════ FREE PLAY ══════════════════════════════ -->
+      <section class="panel">
+        <h2>Free play</h2>
+        <p class="lede">
+          Do anything in any order. The panel above re-reads after every click.
+        </p>
+
+        <div class="group">
+          <h3>The author, in their design tool</h3>
+          <p class="meta">
+            Pick which version of the file is sitting on disk at the path the
+            importer chose. Changing this is the author re-exporting.
+          </p>
+          <div class="row" id="disk-buttons"></div>
+        </div>
+
+        <div class="group">
+          <h3>The importer</h3>
+          <div class="row" id="import-buttons"></div>
+        </div>
+
+        <div class="group">
+          <h3>Bring your own file</h3>
+          <p class="meta">
+            Throw a real atlas at it — try
+            <code>src/lib/glyph/symbols/xbox-symbols.svg</code>.
+          </p>
+          <div class="row">
+            <input type="file" id="file-input" accept=".svg,image/svg+xml" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════ WALKTHROUGHS ═══════════════════════════ -->
+      <section class="panel">
+        <h2>Guided walkthroughs</h2>
+        <p class="lede">
+          Each one sets up a situation that is hard to argue about in the
+          abstract. Opening a tab wipes the project and starts clean.
+        </p>
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div id="scenario-desc"></div>
+        <ol class="steps" id="scenario-steps"></ol>
+      </section>
+
+      <section class="panel">
+        <h2>The rules this demo is proposing</h2>
+        <ol id="rules"></ol>
+      </section>
+    </main>
+
+    <script type="module">
+      /* ═══════════════════════════════════════════════════════════════════════
+       *
+       *   PORTABLE MODULE — the part worth keeping
+       *
+       *   Pure. No DOM, no document, no event handlers. The page below calls in;
+       *   nothing calls out. Measuring an SVG needs a browser, so measurement is
+       *   a *port*: the shell hands this module an already-measured atlas and
+       *   this module does the grid-snapping, the windowing, the binding, and
+       *   the refresh reconciliation. That is the same split the real code wants
+       *   — `build-symbols.mjs` measures with jsdom + hand-rolled bbox maths,
+       *   the browser measures with `getBBox()`, and everything after that is
+       *   shared.
+       *
+       * ═══════════════════════════════════════════════════════════════════════ */
+
+      // ── Sentinel palette — copied verbatim from `paint-roles.mjs` ──────────
+      // Red means "primary ink", blue means "outline", green means "highlight".
+      // Anything else visible is not a role: it is kept as drawn and flagged.
+
+      const PAINT_ROLE_PALETTE = [
+        { hex: "#ff0000", role: "fill" },
+        { hex: "#0000ff", role: "border" },
+        { hex: "#00ff00", role: "secondary" },
+      ];
+      const PAINT_ROLES = PAINT_ROLE_PALETTE.map((p) => p.role);
+      const ROLE_BY_HEX = Object.fromEntries(
+        PAINT_ROLE_PALETTE.map((p) => [p.hex, p.role]),
+      );
+      const SENTINEL_HEX_BY_ROLE = Object.fromEntries(
+        PAINT_ROLE_PALETTE.map((p) => [p.role, p.hex]),
+      );
+      const IGNORED_PAINTS = new Set(["", "none", "transparent"]);
+
+      function normalizeHex(color) {
+        if (!color) return null;
+        const c = String(color).trim().toLowerCase();
+        const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(c);
+        if (hex) {
+          const h = hex[1];
+          return h.length === 3
+            ? "#" + [...h].map((x) => x + x).join("")
+            : "#" + h;
+        }
+        const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(c);
+        if (rgb) {
+          const to = (n) =>
+            Math.max(0, Math.min(255, Number(n)))
+              .toString(16)
+              .padStart(2, "0");
+          return "#" + to(rgb[1]) + to(rgb[2]) + to(rgb[3]);
+        }
+        return null;
+      }
+
+      function inspectPaint(color) {
+        const c = String(color ?? "")
+          .trim()
+          .toLowerCase();
+        if (IGNORED_PAINTS.has(c)) return { kind: "ignore" };
+        const hex = normalizeHex(c);
+        const role = hex ? ROLE_BY_HEX[hex] : undefined;
+        return role ? { kind: "role", role } : { kind: "unknown", value: c };
+      }
+
+      // ── Windowing ─────────────────────────────────────────────────────────
+      // The author draws each picture wherever they like on a square grid. We
+      // find the grid square its bounding box is centred in and cut a window to
+      // that square, leaving the art at the coordinates it was drawn at.
+
+      const SVG_OPEN = '<svg xmlns="http://www.w3.org/2000/svg"';
+
+      /**
+       * Turn one measured candidate into a windowed cell, or into a reason it
+       * isn't a symbol at all. Nothing is dropped silently: a skipped candidate
+       * comes back with a `skip` reason so the review can list it.
+       *
+       * @param {{id:string, markup:string, bbox:{x,y,width,height},
+       *          paints:{shape:string, prop:string, value:string}[]}} measured
+       * @param {number} cellSize
+       */
+      function windowCell(measured, cellSize) {
+        const { bbox } = measured;
+        if (bbox.width === 0 && bbox.height === 0)
+          return { id: measured.id, skip: "nothing drawn yet" };
+        if (bbox.width > cellSize || bbox.height > cellSize)
+          return {
+            id: measured.id,
+            skip: `too big for one grid square (${Math.round(bbox.width)}×${Math.round(bbox.height)}) — a frame or a guide layer, not a symbol`,
+          };
+
+        const paints = inspectCellPaints(measured.paints);
+        if (!paints.roles.length && !paints.flags.length)
+          return { id: measured.id, skip: "draws nothing visible" };
+
+        const x0 = Math.floor((bbox.x + bbox.width / 2) / cellSize) * cellSize;
+        const y0 = Math.floor((bbox.y + bbox.height / 2) / cellSize) * cellSize;
+        return {
+          id: measured.id,
+          col: x0 / cellSize,
+          row: y0 / cellSize,
+          roles: paints.roles,
+          flags: paints.flags,
+          svg: `${SVG_OPEN} viewBox="${x0} ${y0} ${cellSize} ${cellSize}">${measured.markup}</svg>`,
+        };
+      }
+
+      /** Which roles a cell actually uses, and every paint that isn't a role. */
+      function inspectCellPaints(paints) {
+        const roles = [];
+        const flags = [];
+        for (const p of paints) {
+          const res = inspectPaint(p.value);
+          if (res.kind === "role") {
+            if (!roles.includes(res.role)) roles.push(res.role);
+          } else if (res.kind === "unknown") {
+            flags.push({ shape: p.shape, prop: p.prop, value: res.value });
+          }
+        }
+        return {
+          roles: PAINT_ROLES.filter((r) => roles.includes(r)),
+          flags,
+        };
+      }
+
+      /**
+       * Window a whole measured atlas.
+       * @returns {{cells: object[], skipped: {id,skip}[], duplicates: string[]}}
+       */
+      function windowAtlas(atlas) {
+        const cells = [];
+        const skipped = [];
+        const duplicates = [];
+        const seen = new Set();
+        for (const measured of atlas.candidates) {
+          if (seen.has(measured.id)) {
+            duplicates.push(measured.id);
+            continue;
+          }
+          seen.add(measured.id);
+          const out = windowCell(measured, atlas.cellSize);
+          (out.skip ? skipped : cells).push(out);
+        }
+        cells.sort((a, b) => a.row - b.row || a.col - b.col);
+        return { cells, skipped, duplicates };
+      }
+
+      // ── Binding ───────────────────────────────────────────────────────────
+      // A cell's name is matched against the base Catalog first. A name the
+      // Catalog doesn't know isn't an error — it becomes a new custom Input.
+      // One name can answer for several Inputs (both bumpers share one drawing).
+
+      function titleCase(id) {
+        return id
+          .split(/[-_]/)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+      }
+
+      function bindCell(cellId, catalog) {
+        const inputs = catalog.filter((i) => i.symbolId === cellId);
+        if (!inputs.length)
+          return { kind: "custom", inputs: [], label: titleCase(cellId) };
+        return {
+          kind: "catalog",
+          inputs: inputs.map((i) => i.id),
+          label: inputs.length === 1 ? inputs[0].label : titleCase(cellId),
+        };
+      }
+
+      // ── Reconciliation ────────────────────────────────────────────────────
+      // The heart of it. Build a review draft by comparing a freshly windowed
+      // file against the set already in the project.
+      //
+      // The rules, stated plainly:
+      //   1. Art always comes from the file. The file is the drawing; the
+      //      project never edits it.
+      //   2. A label the importer typed survives a refresh. A label they never
+      //      touched re-derives from the Catalog.
+      //   3. Role colours are project config and a refresh never touches them.
+      //   4. THE SET IS EXACTLY WHAT THE FILE DRAWS. A cell that disappears is
+      //      gone, whether or not a glyph is using it. Nothing bleeds out of the
+      //      atlas: no retained art, no leftovers, no set that has drifted from
+      //      the drawing it came from.
+      //   5. What a refresh may not do is take art away QUIETLY. Any glyph left
+      //      without a symbol is warned about by id, before accepting and after,
+      //      and the glyph falls back to drawing its label.
+      //   6. A name is an identity. Renaming a cell reads as a delete plus an
+      //      add, and anything typed against the old name is lost.
+
+      function buildReview(windowed, catalog, installed, glyphs, source) {
+        const prior = installed ? installed.cells : [];
+        const priorById = new Map(prior.map((c) => [c.id, c]));
+        const usedIds = new Set(glyphs.map((g) => g.symbolId));
+        const entries = [];
+
+        for (const cell of windowed.cells) {
+          const was = priorById.get(cell.id);
+          const binding = bindCell(cell.id, catalog);
+          const status = !was
+            ? "new"
+            : was.svg === cell.svg
+              ? "unchanged"
+              : "redrawn";
+          entries.push({
+            id: cell.id,
+            svg: cell.svg,
+            col: cell.col,
+            row: cell.row,
+            roles: cell.roles,
+            flags: cell.flags,
+            binding,
+            // Rule 2: a typed label survives; an untouched one re-derives.
+            label: was?.labelEdited ? was.label : binding.label,
+            labelEdited: Boolean(was?.labelEdited),
+            status,
+          });
+        }
+
+        // Rule 4: what the file no longer draws. It leaves, whether or not a
+        // glyph is using it — the set never holds art the atlas doesn't.
+        for (const was of prior) {
+          if (windowed.cells.some((c) => c.id === was.id)) continue;
+          entries.push({ ...was, status: "gone" });
+        }
+
+        // Rule 5: leaving quietly is the part that isn't allowed. Name every id
+        // a glyph is using that this file no longer draws, and how many glyphs.
+        const strandedGlyphs = glyphs.filter(
+          (g) => !windowed.cells.some((c) => c.id === g.symbolId),
+        );
+        const stranded = [...new Set(strandedGlyphs.map((g) => g.symbolId))]
+          .filter((id) => priorById.has(id) || usedIds.has(id))
+          .map((id) => ({
+            id,
+            glyphs: strandedGlyphs.filter((g) => g.symbolId === id).length,
+          }));
+
+        const added = entries.filter((e) => e.status === "new");
+        const removed = entries.filter((e) => e.status === "gone");
+        // Rule 6, made visible: a rename looks exactly like this pair, so say so
+        // rather than pretending we can tell the difference.
+        const renameHint =
+          added.length && removed.length
+            ? `${removed.map((e) => e.id).join(", ")} vanished and ${added
+                .map((e) => e.id)
+                .join(
+                  ", ",
+                )} appeared. If that was a rename, anything you typed` +
+              ` against the old name does not carry over.`
+            : null;
+
+        return {
+          source,
+          entries: entries.sort(
+            (a, b) =>
+              (a.row ?? 99) - (b.row ?? 99) || (a.col ?? 99) - (b.col ?? 99),
+          ),
+          skipped: windowed.skipped,
+          duplicates: windowed.duplicates,
+          renameHint,
+          stranded,
+          isRefresh: Boolean(installed),
+        };
+      }
+
+      /**
+       * The warning that stands in for the art we refuse to keep. Names every
+       * missing id — that name is the whole point, it's what the author has to
+       * put back in the drawing (or what the glyph has to be re-pointed at).
+       */
+      function strandedWarning(stranded) {
+        const names = stranded.map((s) => `“${s.id}”`).join(", ");
+        const total = stranded.reduce((n, s) => n + s.glyphs, 0);
+        const one = total === 1;
+        return (
+          `This file no longer draws ${names}, which ${
+            one ? "1 glyph was" : `${total} glyphs were`
+          } using. ` +
+          `${one ? "It now draws its label" : "They now draw their labels"} instead. ` +
+          `Put ${stranded.length === 1 ? "it" : "them"} back in the drawing and ` +
+          `refresh, or re-point the glyph${one ? "" : "s"}.`
+        );
+      }
+
+      // ── The import flow, as a reducer ─────────────────────────────────────
+
+      const DEFAULT_ROLE_COLOURS = {
+        fill: "#2f9e44",
+        border: "#111111",
+        secondary: "#ffffff",
+      };
+
+      function initialState() {
+        return {
+          installed: null, // the accepted Symbol Set, as it lives in project config
+          review: null, // the pending review draft, if one is open
+          glyphs: [], // stand-in for the rest of the project
+          notice: null, // something the importer must be told
+          awaitingRepick: false,
+          log: [],
+        };
+      }
+
+      function say(state, message) {
+        return { ...state, log: [message, ...state.log].slice(0, 40) };
+      }
+
+      function reduce(state, action, catalog) {
+        switch (action.type) {
+          case "reset":
+            return initialState();
+
+          case "import-file": {
+            const windowed = windowAtlas(action.atlas);
+            const review = buildReview(
+              windowed,
+              catalog,
+              null,
+              state.glyphs,
+              action.source,
+            );
+            return say(
+              { ...state, review, notice: null, awaitingRepick: false },
+              `Read ${action.source.name}: ${review.entries.length} symbol(s) found, ` +
+                `${review.skipped.length} thing(s) skipped. Nothing is in the project yet.`,
+            );
+          }
+
+          case "refresh": {
+            if (!state.installed)
+              return say(state, "Nothing imported yet — nothing to refresh.");
+            if (!state.installed.source.refreshable)
+              return say(
+                {
+                  ...state,
+                  awaitingRepick: true,
+                  notice:
+                    "This browser can't re-open a file on its own. Pick the file " +
+                    "again to refresh — it must be the same set.",
+                },
+                "Refresh needs the file picking again in this browser.",
+              );
+            const windowed = windowAtlas(action.atlas);
+            const review = buildReview(
+              windowed,
+              catalog,
+              state.installed,
+              state.glyphs,
+              state.installed.source,
+            );
+            return say(
+              { ...state, review, notice: null },
+              `Re-read ${state.installed.source.name} from the same path.`,
+            );
+          }
+
+          case "repick": {
+            if (!state.installed)
+              return reduce(state, { ...action, type: "import-file" }, catalog);
+            const windowed = windowAtlas(action.atlas);
+            const review = buildReview(
+              windowed,
+              catalog,
+              state.installed,
+              state.glyphs,
+              // A re-pick may land on a different path; the set keeps its name.
+              { ...action.source, name: state.installed.source.name },
+            );
+            return say(
+              { ...state, review, notice: null, awaitingRepick: false },
+              `Picked the file again (${action.source.name}) and re-read it.`,
+            );
+          }
+
+          case "edit-label": {
+            if (!state.review) return state;
+            return say(
+              {
+                ...state,
+                review: {
+                  ...state.review,
+                  entries: state.review.entries.map((e) =>
+                    e.id === action.id
+                      ? { ...e, label: action.label, labelEdited: true }
+                      : e,
+                  ),
+                },
+              },
+              `Renamed "${action.id}" to "${action.label}". That name now sticks through refreshes.`,
+            );
+          }
+
+          // There is deliberately no "drop this cell" action. The set is exactly
+          // what the file draws (rule 4), so the only way to remove a symbol is
+          // to remove it from the drawing and refresh. Cherry-picking cells here
+          // would let the set drift from its atlas, which is the thing rule 4
+          // exists to prevent.
+
+          case "set-role-colour": {
+            const target = state.review ? "review" : "installed";
+            if (!state[target]) return state;
+            const colours = {
+              ...(state[target].roleColours ?? DEFAULT_ROLE_COLOURS),
+              [action.role]: action.value,
+            };
+            return {
+              ...state,
+              [target]: { ...state[target], roleColours: colours },
+            };
+          }
+
+          case "accept": {
+            if (!state.review) return state;
+            const keep = state.review.entries.filter(
+              (e) => e.status !== "gone",
+            );
+            const stranded = state.review.stranded ?? [];
+            return say(
+              {
+                ...state,
+                installed: {
+                  name: state.review.source.name,
+                  source: state.review.source,
+                  roleColours:
+                    state.review.roleColours ??
+                    state.installed?.roleColours ??
+                    DEFAULT_ROLE_COLOURS,
+                  cells: keep.map((e) => ({
+                    id: e.id,
+                    svg: e.svg,
+                    col: e.col,
+                    row: e.row,
+                    label: e.label,
+                    labelEdited: e.labelEdited,
+                    binding: e.binding,
+                    roles: e.roles,
+                    flags: e.flags,
+                  })),
+                },
+                review: null,
+                notice: stranded.length ? strandedWarning(stranded) : null,
+              },
+              `Accepted. The project now holds ${keep.length} symbol(s)` +
+                (stranded.length
+                  ? `. ${stranded.length} glyph symbol(s) went missing: ${stranded
+                      .map((s) => s.id)
+                      .join(", ")}.`
+                  : "."),
+            );
+          }
+
+          case "cancel":
+            return say(
+              { ...state, review: null, notice: null },
+              "Cancelled. The project is unchanged.",
+            );
+
+          case "place-glyph":
+            if (!action.symbolId) return state;
+            return say(
+              {
+                ...state,
+                glyphs: [
+                  ...state.glyphs,
+                  {
+                    id: `glyph-${state.glyphs.length + 1}`,
+                    symbolId: action.symbolId,
+                  },
+                ],
+              },
+              `A glyph now uses "${action.symbolId}".`,
+            );
+
+          case "clear-glyphs":
+            return say({ ...state, glyphs: [] }, "Removed every glyph.");
+
+          default:
+            return state;
+        }
+      }
+
+      /* ═══════════════════════════════════════════════════════════════════════
+       *   END PORTABLE MODULE — everything below is throwaway page plumbing.
+       * ═══════════════════════════════════════════════════════════════════════ */
+
+      // ── The base Catalog (a slice of the real Xbox one) ────────────────────
+      const CATALOG = [
+        { id: "xbox-a", label: "A", symbolId: "a" },
+        { id: "xbox-b", label: "B", symbolId: "b" },
+        { id: "xbox-x", label: "X", symbolId: "x" },
+        { id: "xbox-y", label: "Y", symbolId: "y" },
+        { id: "xbox-lb", label: "LB", symbolId: "bumper" },
+        { id: "xbox-rb", label: "RB", symbolId: "bumper" },
+        { id: "xbox-lt", label: "LT", symbolId: "trigger" },
+        { id: "xbox-rt", label: "RT", symbolId: "trigger" },
+        { id: "xbox-view", label: "View", symbolId: "view" },
+        { id: "xbox-menu", label: "Menu", symbolId: "menu" },
+        { id: "xbox-dpad-right", label: "D-Pad Right", symbolId: "dpad-right" },
+      ];
+
+      // ── Measuring: the browser port the pure module is missing ─────────────
+      // The real thing this replaces is 150 lines of hand-rolled bounding-box
+      // maths in `build-symbols.mjs`, needed only because jsdom has no layout.
+      // In a browser it is one call.
+
+      const SHAPE_SEL = "path,circle,ellipse,rect,line,polygon,polyline,text";
+      const host = document.getElementById("measure-host");
+
+      function readProp(el, name) {
+        const style = el.getAttribute("style") || "";
+        const m = new RegExp("(?:^|;)\\s*" + name + "\\s*:\\s*([^;]+)").exec(
+          style,
+        );
+        return (m ? m[1] : el.getAttribute(name) || "").trim();
+      }
+
+      function paintHidden(el, prop) {
+        return (
+          readProp(el, `${prop}-opacity`) === "0" ||
+          readProp(el, "opacity") === "0"
+        );
+      }
+
+      /** Parse + measure an atlas into the shape the pure module expects. */
+      function measureAtlas(svgText) {
+        const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+        const parsed = doc.querySelector("svg");
+        if (!parsed || doc.querySelector("parsererror"))
+          throw new Error("That doesn't parse as an SVG.");
+
+        host.replaceChildren(document.importNode(parsed, true));
+        const root = host.firstElementChild;
+        // Pin the mounted copy to its own coordinate system, so nothing about
+        // the page's layout can bend a measurement.
+        const vb = (root.getAttribute("viewBox") || "0 0 1024 1024")
+          .split(/[\s,]+/)
+          .map(Number);
+        root.setAttribute("width", String(vb[2]));
+        root.setAttribute("height", String(vb[3]));
+        const cellSize =
+          parseFloat(root.getAttribute("data-cell") || "") || 256;
+
+        const candidates = [];
+        for (const el of root.querySelectorAll(":scope > [id]")) {
+          const box = el.getBBox();
+          const shapes = [el, ...el.querySelectorAll(SHAPE_SEL)].filter((n) =>
+            n.matches(SHAPE_SEL),
+          );
+          const paints = [];
+          for (const shape of shapes)
+            for (const prop of ["fill", "stroke"]) {
+              if (paintHidden(shape, prop)) continue;
+              const value = readProp(shape, prop);
+              if (!value) continue;
+              paints.push({
+                shape: shape.getAttribute("id") || shape.tagName,
+                prop,
+                value,
+              });
+            }
+          candidates.push({
+            id: el.getAttribute("id"),
+            markup: new XMLSerializer().serializeToString(el),
+            bbox: {
+              x: box.x,
+              y: box.y,
+              width: box.width,
+              height: box.height,
+            },
+            paints,
+          });
+        }
+        host.replaceChildren();
+        return { cellSize, candidates };
+      }
+
+      // ── Fixtures: what the author has on disk ─────────────────────────────
+
+      const G = 256;
+      const face = (id, col, row, glyph, fill = "#f00") => {
+        const x = col * G,
+          y = row * G;
+        return (
+          `<g id="${id}">` +
+          `<circle cx="${x + 128}" cy="${y + 128}" r="92" style="fill:${fill};stroke:#00f;stroke-width:12"/>` +
+          `<text x="${x + 128}" y="${y + 160}" text-anchor="middle" font-family="sans-serif" font-size="96" font-weight="700" style="fill:#0f0">${glyph}</text>` +
+          `</g>`
+        );
+      };
+      const tile = (id, col, row) => {
+        const x = col * G,
+          y = row * G;
+        return (
+          `<g id="${id}">` +
+          `<rect x="${x + 40}" y="${y + 78}" width="176" height="100" rx="44" style="fill:#f00;stroke:#00f;stroke-width:12"/>` +
+          `</g>`
+        );
+      };
+      const paddle = (id, col, row, flip = 1) => {
+        const x = col * G,
+          y = row * G;
+        const pts =
+          flip === 1
+            ? `${x + 70},${y + 50} ${x + 186},${y + 108} ${x + 70},${y + 206}`
+            : `${x + 186},${y + 50} ${x + 70},${y + 108} ${x + 186},${y + 206}`;
+        return (
+          `<g id="${id}">` +
+          `<polygon points="${pts}" style="fill:#f00;stroke:#00f;stroke-width:12"/>` +
+          `</g>`
+        );
+      };
+      const atlas = (...cells) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768" data-cell="256">` +
+        `<rect id="frame" x="0" y="0" width="1024" height="768" style="fill:none;stroke:none"/>` +
+        cells.join("") +
+        `</svg>`;
+
+      const FIXTURES = {
+        v1: {
+          label: "mypad v1 — clean",
+          svg: atlas(
+            face("a", 0, 0, "A"),
+            face("b", 1, 0, "B"),
+            tile("bumper", 2, 0),
+            paddle("paddle-left", 0, 1),
+          ),
+        },
+        offPrimary: {
+          label: "mypad v1 — off-primary export",
+          svg: atlas(
+            face("a", 0, 0, "A"),
+            face("b", 1, 0, "B", "#f20d0d"),
+            tile("bumper", 2, 0),
+            paddle("paddle-left", 0, 1),
+          ),
+        },
+        fixed: {
+          label: "mypad v2 — colours corrected",
+          svg: atlas(
+            face("a", 0, 0, "A"),
+            face("b", 1, 0, "B"),
+            tile("bumper", 2, 0),
+            paddle("paddle-left", 0, 1),
+          ),
+        },
+        dropped: {
+          label: "mypad v2 — paddle deleted",
+          svg: atlas(
+            face("a", 0, 0, "A"),
+            face("b", 1, 0, "B"),
+            tile("bumper", 2, 0),
+          ),
+        },
+        renamed: {
+          label: "mypad v2 — paddle renamed to x",
+          svg: atlas(
+            face("a", 0, 0, "A"),
+            face("b", 1, 0, "B"),
+            tile("bumper", 2, 0),
+            paddle("x", 0, 1),
+          ),
+        },
+        grown: {
+          label: "mypad v2 — a second paddle added",
+          svg: atlas(
+            face("a", 0, 0, "A"),
+            face("b", 1, 0, "B"),
+            tile("bumper", 2, 0),
+            paddle("paddle-left", 0, 1),
+            paddle("paddle-right", 1, 1, -1),
+          ),
+        },
+        redrawn: {
+          label: "mypad v2 — the A button redrawn",
+          svg: atlas(
+            face("a", 0, 0, "@"),
+            face("b", 1, 0, "B"),
+            tile("bumper", 2, 0),
+            paddle("paddle-left", 0, 1),
+          ),
+        },
+      };
+
+      // ── Wiring ────────────────────────────────────────────────────────────
+
+      let state = initialState();
+      let onDisk = "v1"; // which fixture the author has exported to the path
+
+      function dispatch(action) {
+        state = reduce(state, action, CATALOG);
+        render();
+      }
+
+      function importFrom(key, { refreshable = true, name } = {}) {
+        dispatch({
+          type: "import-file",
+          source: {
+            name: name ?? "mypad-symbols.svg",
+            refreshable,
+          },
+          atlas: measureAtlas(FIXTURES[key].svg),
+        });
+      }
+
+      function refresh() {
+        dispatch({
+          type: "refresh",
+          atlas: measureAtlas(FIXTURES[onDisk].svg),
+        });
+      }
+
+      function repick(key = onDisk) {
+        dispatch({
+          type: "repick",
+          source: { name: "mypad-symbols.svg", refreshable: false },
+          atlas: measureAtlas(FIXTURES[key].svg),
+        });
+      }
+
+      // ── Rendering ─────────────────────────────────────────────────────────
+
+      const el = (id) => document.getElementById(id);
+
+      /** Preview-only: swap sentinels for the real colours so cells look real. */
+      function paint(svg, colours) {
+        let out = svg;
+        for (const role of PAINT_ROLES) {
+          const hex = SENTINEL_HEX_BY_ROLE[role];
+          const short = "#" + hex[1] + hex[3] + hex[5];
+          out = out
+            .split(hex)
+            .join(colours[role])
+            .split(short)
+            .join(colours[role]);
+        }
+        return out;
+      }
+
+      const STATUS_TEXT = {
+        new: ["new", "new"],
+        unchanged: ["unchanged", ""],
+        redrawn: ["art changed", "redrawn"],
+        gone: ["no longer in the file — leaving", "gone"],
+      };
+
+      function cellRow(entry, colours, { reviewing }) {
+        // In review the status is "what this refresh does to it". An accepted
+        // set is just the file, so there is no status left to show.
+        const [text, cls] = (reviewing &&
+          STATUS_TEXT[entry.status ?? "unchanged"]) || ["", ""];
+        const bound =
+          entry.binding.kind === "catalog"
+            ? `<span class="pill">known: ${entry.binding.inputs.join(", ")}</span>`
+            : `<span class="pill new">new custom Input</span>`;
+        const flags = entry.flags?.length
+          ? `<span class="pill flag">${entry.flags.length} colour${entry.flags.length > 1 ? "s" : ""} the tool can't recolour: ${entry.flags
+              .map((f) => `${f.prop} ${f.value}`)
+              .join(", ")}</span>`
+          : "";
+        const art =
+          entry.status === "gone"
+            ? `<td class="art"></td>`
+            : `<td class="art">${paint(entry.svg, colours)}</td>`;
+        // Rename is the only edit. There is no "drop" — see rule 4.
+        const actions =
+          reviewing && entry.status !== "gone"
+            ? `<button data-rename="${entry.id}">Rename</button>`
+            : "";
+        return `<tr>
+          ${art}
+          <td><strong>${entry.label}</strong><br><code>${entry.id}</code></td>
+          <td>${bound}</td>
+          <td>${entry.roles?.length ? entry.roles.map((r) => `<span class="pill">${r}</span>`).join(" ") : ""} ${flags}</td>
+          <td>${text ? `<span class="pill ${cls}">${text}</span>` : ""}</td>
+          <td style="text-align:right">${actions}</td>
+        </tr>`;
+      }
+
+      function table(entries, colours, opts) {
+        if (!entries.length) return `<p class="empty">No symbols.</p>`;
+        return `<table><thead><tr>
+            <th></th><th>Symbol</th><th>Bound to</th><th>Paint roles used</th>
+            <th>Since last time</th><th></th>
+          </tr></thead><tbody>${entries
+            .map((e) => cellRow(e, colours, opts))
+            .join("")}</tbody></table>`;
+      }
+
+      function renderMain() {
+        const parts = [];
+        const colours =
+          state.review?.roleColours ??
+          state.installed?.roleColours ??
+          DEFAULT_ROLE_COLOURS;
+
+        if (state.review) {
+          const r = state.review;
+          parts.push(
+            `<h3 style="margin-top:0">${r.isRefresh ? "Refreshed" : "Importing"} — waiting for you to accept</h3>`,
+            `<p class="meta">From <code>${r.source.name}</code>${
+              r.source.refreshable
+                ? " (the path is remembered, so refresh works)"
+                : " (this browser can't remember the path)"
+            }</p>`,
+          );
+          // The warning that replaces keeping the art. Shown *before* accepting,
+          // so the importer can go back to the drawing instead of going through
+          // with it.
+          if (r.stranded?.length)
+            parts.push(
+              `<div class="notice"><strong>Accepting this will leave glyphs without a symbol.</strong><br>${strandedWarning(
+                r.stranded,
+              )}</div>`,
+            );
+          if (r.renameHint)
+            parts.push(`<div class="notice">${r.renameHint}</div>`);
+          if (r.duplicates.length)
+            parts.push(
+              `<div class="notice">The same name is used twice: <code>${r.duplicates.join(", ")}</code>. Only the first was read.</div>`,
+            );
+          parts.push(table(r.entries, colours, { reviewing: true }));
+          if (r.skipped.length)
+            parts.push(
+              `<h3>Skipped — not treated as symbols</h3><ul class="meta">` +
+                r.skipped
+                  .map((s) => `<li><code>${s.id}</code> — ${s.skip}</li>`)
+                  .join("") +
+                `</ul>`,
+            );
+          parts.push(
+            `<div class="row" style="margin-top:16px">
+               <button class="primary" id="accept">Accept this set</button>
+               <button id="cancel">Cancel</button>
+             </div>`,
+          );
+        } else if (state.installed) {
+          const s = state.installed;
+          parts.push(
+            `<h3 style="margin-top:0">Symbol Set “${s.name}” is in the project</h3>`,
+            `<p class="meta">${s.cells.length} symbol(s) · read from <code>${s.source.name}</code> · ${
+              s.source.refreshable
+                ? "path remembered — refresh re-reads it"
+                : "path not remembered — refresh means picking the file again"
+            }</p>`,
+            table(s.cells, colours, { reviewing: false }),
+          );
+        } else {
+          parts.push(
+            `<p class="empty">No Symbol Set imported. The project draws only the built-in art.</p>`,
+          );
+        }
+        el("state-main").innerHTML = parts.join("");
+      }
+
+      function renderSwatches() {
+        const colours =
+          state.review?.roleColours ??
+          state.installed?.roleColours ??
+          DEFAULT_ROLE_COLOURS;
+        const disabled = !state.review && !state.installed;
+        el("swatches").innerHTML = PAINT_ROLES.map(
+          (role) =>
+            `<label class="swatch"><input type="color" data-role="${role}" value="${colours[role]}" ${
+              disabled ? "disabled" : ""
+            }>${role}</label>`,
+        ).join("");
+      }
+
+      function renderGlyphs() {
+        el("glyphs").innerHTML = state.glyphs.length
+          ? state.glyphs
+              .map((g) => {
+                const cell = state.installed?.cells.find(
+                  (c) => c.id === g.symbolId,
+                );
+                const note = cell
+                  ? ""
+                  : `<span class="pill missing">symbol missing — draws its label</span>`;
+                return `<div style="padding:3px 0"><code>${g.symbolId}</code> ${note}</div>`;
+              })
+              .join("")
+          : `<p class="empty" style="margin:0">No glyphs use these symbols.</p>`;
+
+        const opts = (state.installed?.cells ?? []).map(
+          (c) => `<option value="${c.id}">${c.label} (${c.id})</option>`,
+        );
+        el("glyph-pick").innerHTML =
+          opts.join("") || `<option value="">— nothing to use —</option>`;
+      }
+
+      function render() {
+        el("notice").innerHTML = state.notice
+          ? `<div class="notice">${state.notice}</div>`
+          : "";
+        renderMain();
+        renderSwatches();
+        renderGlyphs();
+        el("log").innerHTML = state.log.length
+          ? state.log.map((m) => `<div>${m}</div>`).join("")
+          : `<p class="empty" style="margin:0">Nothing yet.</p>`;
+        renderDiskButtons();
+        renderImportButtons();
+        renderSteps();
+      }
+
+      // ── Free-play controls ────────────────────────────────────────────────
+
+      function renderDiskButtons() {
+        el("disk-buttons").innerHTML = Object.entries(FIXTURES)
+          .map(
+            ([key, f]) =>
+              `<button data-disk="${key}" ${key === onDisk ? 'class="primary"' : ""}>${f.label}</button>`,
+          )
+          .join("");
+      }
+
+      function renderImportButtons() {
+        el("import-buttons").innerHTML = [
+          `<button data-act="import">Import the file on disk</button>`,
+          `<button data-act="import-nofs">Import (browser with no path memory)</button>`,
+          `<button data-act="refresh" ${!state.installed ? "disabled" : ""}>Refresh from path</button>`,
+          `<button data-act="repick" ${!state.installed ? "disabled" : ""}>Pick the file again</button>`,
+          `<button data-act="reset">Start over</button>`,
+        ].join("");
+      }
+
+      document.body.addEventListener("click", (ev) => {
+        const t = ev.target.closest("button, [data-disk]");
+        if (!t) return;
+        if (t.dataset.disk) {
+          onDisk = t.dataset.disk;
+          state = say(
+            state,
+            `The author exported “${FIXTURES[onDisk].label}” to the path.`,
+          );
+          render();
+          return;
+        }
+        switch (t.dataset.act) {
+          case "import":
+            return importFrom(onDisk);
+          case "import-nofs":
+            return importFrom(onDisk, { refreshable: false });
+          case "refresh":
+            return refresh();
+          case "repick":
+            return repick();
+          case "reset":
+            return dispatch({ type: "reset" });
+        }
+        if (t.id === "accept") return dispatch({ type: "accept" });
+        if (t.id === "cancel") return dispatch({ type: "cancel" });
+        if (t.id === "glyph-add")
+          return dispatch({
+            type: "place-glyph",
+            symbolId: el("glyph-pick").value,
+          });
+        if (t.id === "glyph-clear") return dispatch({ type: "clear-glyphs" });
+        if (t.dataset.rename) {
+          const entry = state.review.entries.find(
+            (e) => e.id === t.dataset.rename,
+          );
+          const label = prompt(`Label for ${entry.id}:`, entry.label);
+          if (label != null && label !== entry.label)
+            dispatch({ type: "edit-label", id: entry.id, label });
+        }
+      });
+
+      document.body.addEventListener("input", (ev) => {
+        const role = ev.target.dataset?.role;
+        if (role)
+          dispatch({ type: "set-role-colour", role, value: ev.target.value });
+      });
+
+      el("file-input").addEventListener("change", async (ev) => {
+        const file = ev.target.files?.[0];
+        if (!file) return;
+        try {
+          dispatch({
+            type: state.installed ? "repick" : "import-file",
+            source: { name: file.name, refreshable: false },
+            atlas: measureAtlas(await file.text()),
+          });
+        } catch (err) {
+          state = say(state, `Couldn't read ${file.name}: ${err.message}`);
+          render();
+        }
+      });
+
+      // ── Walkthroughs ──────────────────────────────────────────────────────
+
+      const SCENARIOS = [
+        {
+          name: "A clean first import",
+          desc:
+            "The ordinary case, so the odd ones have something to be odd against. " +
+            "The author's file holds four drawings; three of them the tool already " +
+            "knows (A, B, a bumper) and one it has never heard of.",
+          steps: [
+            ["The author exports a clean file", () => (onDisk = "v1")],
+            ["The importer picks that file", () => importFrom("v1")],
+            [
+              "Watch: three matched, one new custom Input, one frame skipped",
+              () => {},
+              "Nothing has entered the project yet — this is only a proposal.",
+            ],
+            [
+              "Set the fill colour to Xbox green",
+              () =>
+                dispatch({
+                  type: "set-role-colour",
+                  role: "fill",
+                  value: "#107c10",
+                }),
+            ],
+            ["Accept the set", () => dispatch({ type: "accept" })],
+          ],
+        },
+        {
+          name: "An off-primary export",
+          desc:
+            "The author's tool exported one shape as #f20d0d instead of the exact " +
+            "red the tool keys on. Nothing is broken and nothing is dropped — but " +
+            "that shape can never follow your colour choices, so it must be said " +
+            "out loud, at import and again after the fix.",
+          steps: [
+            [
+              "The author exports with a slightly-off red",
+              () => (onDisk = "offPrimary"),
+            ],
+            ["Import it", () => importFrom("offPrimary")],
+            [
+              "Watch: B is flagged — kept as drawn, but not recolourable",
+              () => {},
+              "The flag is a warning, not a wall. You can still accept.",
+            ],
+            ["Accept anyway", () => dispatch({ type: "accept" })],
+            [
+              "Turn the fill colour orange — B ignores you",
+              () =>
+                dispatch({
+                  type: "set-role-colour",
+                  role: "fill",
+                  value: "#e8590c",
+                }),
+            ],
+            ["The author fixes the export", () => (onDisk = "fixed")],
+            ["Refresh from path", () => refresh()],
+            [
+              "Watch: the flag is gone and B is marked redrawn",
+              () => {},
+              "Accept, and B finally follows the fill colour.",
+            ],
+            ["Accept", () => dispatch({ type: "accept" })],
+          ],
+        },
+        {
+          name: "A refresh deletes art in use",
+          desc:
+            "The sharpest edge. A glyph in the project is using the custom paddle " +
+            "symbol. The author deletes that drawing and re-exports. The set is " +
+            "exactly what the file draws, so the paddle leaves — nothing is kept " +
+            "behind, and the set never drifts from its atlas. What the tool owes " +
+            "you is the warning: it names the missing id, before you accept and " +
+            "after, and the glyph falls back to drawing its label.",
+          steps: [
+            ["Import the clean file", () => importFrom("v1")],
+            ["Accept it", () => dispatch({ type: "accept" })],
+            [
+              "A glyph starts using the custom paddle",
+              () => dispatch({ type: "place-glyph", symbolId: "paddle-left" }),
+            ],
+            [
+              "A second glyph uses it too",
+              () => dispatch({ type: "place-glyph", symbolId: "paddle-left" }),
+            ],
+            ["The author deletes the paddle", () => (onDisk = "dropped")],
+            ["Refresh from path", () => refresh()],
+            [
+              "Watch: the warning names paddle-left, before you commit to it",
+              () => {},
+              "You can still Cancel and go put the symbol back in the drawing.",
+            ],
+            ["Accept the refresh", () => dispatch({ type: "accept" })],
+            [
+              "Watch: the paddle is gone and both glyphs say so",
+              () => {},
+              "The set holds only what the file draws; the glyphs draw their label.",
+            ],
+            ["The author puts the paddle back", () => (onDisk = "v1")],
+            ["Refresh again", () => refresh()],
+            [
+              "Watch: it returns and the glyphs pick it back up",
+              () => {},
+              "Nothing had to be repaired by hand — the id is the whole contract.",
+            ],
+            ["Accept", () => dispatch({ type: "accept" })],
+          ],
+        },
+        {
+          name: "The author renames a cell",
+          desc:
+            "You imported a drawing called paddle-left, gave it a proper label, " +
+            "and accepted. The author then renames it to x — a name the base " +
+            "Catalog knows. To the file this is a deletion and an addition, and " +
+            "nothing can tell it apart from one. Watch what happens to the label " +
+            "you typed.",
+          steps: [
+            ["Import the clean file", () => importFrom("v1")],
+            [
+              "Rename the paddle to “Left Paddle”",
+              () =>
+                dispatch({
+                  type: "edit-label",
+                  id: "paddle-left",
+                  label: "Left Paddle",
+                }),
+            ],
+            ["Accept", () => dispatch({ type: "accept" })],
+            [
+              "A glyph uses the paddle",
+              () => dispatch({ type: "place-glyph", symbolId: "paddle-left" }),
+            ],
+            ["The author renames it to x", () => (onDisk = "renamed")],
+            ["Refresh from path", () => refresh()],
+            [
+              "Watch: “Left Paddle” leaves; a brand new X appears",
+              () => {},
+              "Two warnings: the glyph lost its symbol, and the tool admits it cannot tell a rename from a swap. Is that good enough?",
+            ],
+          ],
+        },
+        {
+          name: "A browser with no path memory",
+          desc:
+            "Firefox and Safari can't hand a page a re-readable handle to a file " +
+            "on disk. Refresh has to degrade to picking the file again. The point " +
+            "of this walkthrough is whether that degradation feels like the same " +
+            "feature or a different one.",
+          steps: [
+            [
+              "Import in a browser that can't remember the path",
+              () => importFrom("v1", { refreshable: false }),
+            ],
+            ["Accept", () => dispatch({ type: "accept" })],
+            ["The author adds a second paddle", () => (onDisk = "grown")],
+            [
+              "Press Refresh — and read what comes back",
+              () => refresh(),
+              "No file dialog can open by itself; the tool has to ask.",
+            ],
+            ["Pick the file again", () => repick("grown")],
+            [
+              "Watch: it reconciles exactly like a refresh would",
+              () => {},
+              "Nothing about the comparison changed — only how the bytes arrived.",
+            ],
+            ["Accept", () => dispatch({ type: "accept" })],
+          ],
+        },
+      ];
+
+      let scenario = 0;
+      let step = 0;
+
+      function selectScenario(i) {
+        scenario = i;
+        step = 0;
+        state = initialState();
+        onDisk = "v1";
+        render();
+      }
+
+      function renderTabs() {
+        el("tabs").innerHTML = SCENARIOS.map(
+          (s, i) =>
+            `<button role="tab" data-tab="${i}" aria-selected="${i === scenario}">${s.name}</button>`,
+        ).join("");
+      }
+
+      function renderSteps() {
+        const s = SCENARIOS[scenario];
+        el("scenario-desc").innerHTML = `<p class="lede">${s.desc}</p>`;
+        el("scenario-steps").innerHTML = s.steps
+          .map(
+            ([label, , note], i) =>
+              `<li><button data-step="${i}" ${i > step ? "disabled" : ""} class="${
+                i < step ? "done" : i === step ? "primary" : ""
+              }">${label}</button>${note ? `<span class="note">${note}</span>` : ""}</li>`,
+          )
+          .join("");
+      }
+
+      el("tabs").addEventListener("click", (ev) => {
+        const i = ev.target.dataset?.tab;
+        if (i != null) {
+          selectScenario(Number(i));
+          renderTabs();
+        }
+      });
+
+      el("scenario-steps").addEventListener("click", (ev) => {
+        const i = ev.target.dataset?.step;
+        if (i == null) return;
+        SCENARIOS[scenario].steps[Number(i)][1]();
+        step = Math.max(step, Number(i) + 1);
+        render();
+      });
+
+      // ── The rules, restated for the reader ────────────────────────────────
+      el("rules").innerHTML = [
+        "The drawing is the only source of art. The project never edits it.",
+        "A label you typed survives a refresh. A label you left alone re-derives from the Catalog.",
+        "Colour choices are project config. A refresh never touches them, and they travel in the saved project file.",
+        "A name the Catalog knows binds to that Input. A name it doesn't know becomes a new custom Input — the Catalog extends, it isn't a ceiling.",
+        "<strong>The set is exactly what the file draws.</strong> A symbol that vanishes is gone, whether or not a glyph uses it. Nothing is retained, so the set can never drift from its atlas — and there is deliberately no way to drop or cherry-pick a cell by hand.",
+        "What a refresh may not do is take art away <em>quietly</em>. Any glyph left without a symbol is warned about <strong>by id</strong>, before accepting and after; the glyph falls back to drawing its label, and keeps its reference, so putting the symbol back in the drawing restores it.",
+        "A rename is indistinguishable from a delete plus an add, so the tool says so instead of guessing.",
+        "A visible colour that isn't one of the three role colours is flagged, never dropped.",
+        "Anything that isn't a symbol — a frame, a guide layer, an empty group — is listed as skipped, with the reason.",
+      ]
+        .map((r) => `<li>${r}</li>`)
+        .join("");
+
+      renderTabs();
+      render();
+    </script>
+  </body>
+</html>
