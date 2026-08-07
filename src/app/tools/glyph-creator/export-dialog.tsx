@@ -4,6 +4,7 @@ import { useState, type Dispatch } from "react";
 import { Button } from "@/components/ui/button";
 import type { ProjectAction } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
+import { CellSizeField } from "./cell-size-field";
 import { Modal } from "./modal";
 import { NamingControls } from "./naming-controls";
 
@@ -42,12 +43,14 @@ interface ExportDialogProps {
 
 /**
  * The Export confirmation modal (#21): which Devices, which file types, and the
- * naming that decides what those files are called. Nothing downloads until the
- * user confirms here, and everything they pick arrives as a single .zip (or the
- * bare file, when they picked exactly one).
+ * `exportSettings` that decide how big those files are and what they are called.
+ * Nothing downloads until the user confirms here, and everything they pick
+ * arrives as a single .zip (or the bare file, when they picked exactly one).
  *
  * Naming lives here rather than in the editor sidebar because it only matters at
  * export time — its live sample doubles as a preview of this dialog's output.
+ * Cell size is the exception that keeps its sidebar control too, and is mirrored
+ * here (ADR-0012 §6).
  */
 export function ExportDialog({
   ref,
@@ -128,8 +131,9 @@ export function ExportDialog({
             ))}
           </fieldset>
 
-          <div className="space-y-1.5 border-t pt-5">
-            <h3 className="text-sm font-medium">Naming</h3>
+          <div className="space-y-4 border-t pt-5">
+            <h3 className="text-sm font-medium">Output</h3>
+            <CellSizeField project={project} dispatch={dispatch} />
             <NamingControls
               project={project}
               dispatch={dispatch}

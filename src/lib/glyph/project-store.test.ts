@@ -47,9 +47,10 @@ describe("ProjectStore — config (localStorage)", () => {
   });
 
   it("round-trips an image manifest and a scaled Glyph", () => {
+    const base = createDefaultProject();
     const project: Project = {
-      ...createDefaultProject(),
-      contentScale: 0.75,
+      ...base,
+      style: { ...base.style, contentScale: 0.75 },
       images: [{ id: "img-1.png", fileName: "art.png", type: "image/png" }],
     };
     saveConfig(project);
@@ -86,9 +87,21 @@ describe("ProjectStore — config (localStorage)", () => {
 });
 
 describe("ProjectStore — config validation", () => {
-  // A structurally-current config, spread over to make one field wrong.
+  // A structurally-current config, spread over to make one field wrong. A nested
+  // block is replaced wholesale, so `style` and `exportSettings` have their own
+  // spread helpers below rather than every case restating the nesting.
   function config(over: Record<string, unknown> = {}): string {
     return JSON.stringify({ ...createDefaultProject(), ...over });
+  }
+
+  /** The default Project tier with some of its fields swapped. */
+  function style(over: Record<string, unknown>): Record<string, unknown> {
+    return { ...createDefaultProject().style, ...over };
+  }
+
+  /** The default export settings with `naming` replaced wholesale. */
+  function settings(naming: Record<string, unknown>): Record<string, unknown> {
+    return { ...createDefaultProject().exportSettings, naming };
   }
 
   it("accepts the default project", () => {
@@ -101,13 +114,15 @@ describe("ProjectStore — config validation", () => {
     expect(
       parseConfig(
         config({
-          background: {
-            shape: "none",
-            fill: "#111111",
-            cornerRadius: 0,
-            border: { width: 0, color: "#000000" },
-            source: { kind: "shape" },
-          },
+          style: style({
+            background: {
+              shape: "none",
+              fill: "#111111",
+              cornerRadius: 0,
+              border: { width: 0, color: "#000000" },
+              source: { kind: "shape" },
+            },
+          }),
         }),
       ),
     ).toBeNull();
@@ -117,14 +132,64 @@ describe("ProjectStore — config validation", () => {
     expect(
       parseConfig(
         config({
-          background: {
-            shape: "circle",
-            fill: "#111111",
-            cornerRadius: 0,
-            border: { width: 0, color: "#000000" },
-            source: { kind: "authored" },
-          },
+          style: style({
+            background: {
+              shape: "circle",
+              fill: "#111111",
+              cornerRadius: 0,
+              border: { width: 0, color: "#000000" },
+              source: { kind: "authored" },
+            },
+          }),
         }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a config whose Project tier is not a full style", () => {
+    // The Project tier is a *full* GlyphStyle, unlike the sparse Device and Glyph
+    // overrides — a partial one would leave the cascade with no base to fall to.
+    expect(parseConfig(config({ style: { textColor: "#ffffff" } }))).toBeNull();
+  });
+
+  it("rejects a pre-regroup config with flat style and naming fields", () => {
+    // Project regrouped into `style` + `exportSettings` (ADR-0012 §6) with no
+    // version ladder, so an older save is discarded and the loss reported —
+    // once, rather than migrated forward. Built by hand rather than via
+    // `config`, which would leave the new blocks in place and so pass.
+    const {
+      name,
+      font,
+      style: base,
+      images,
+      devices,
+      exportSettings,
+    } = createDefaultProject();
+    expect(
+      parseConfig(
+        JSON.stringify({
+          name,
+          font,
+          images,
+          devices,
+          ...base,
+          cellSize: exportSettings.cellSize,
+          naming: {
+            template: exportSettings.naming.template,
+            case: exportSettings.naming.case,
+          },
+          filenameTemplate: exportSettings.naming.filenameTemplate,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a config whose naming lost its filename template", () => {
+    const { template, case: caseStyle } =
+      createDefaultProject().exportSettings.naming;
+    expect(
+      parseConfig(
+        config({ exportSettings: settings({ template, case: caseStyle }) }),
       ),
     ).toBeNull();
   });

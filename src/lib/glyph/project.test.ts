@@ -40,12 +40,12 @@ describe("projectReducer — style cascade (#4, #19)", () => {
         patch: { background: { border: { width: 8 } } },
       },
     );
-    expect(next.textColor).toBe("#ff0000");
-    expect(next.background.fill).toBe("#123456");
+    expect(next.style.textColor).toBe("#ff0000");
+    expect(next.style.background.fill).toBe("#123456");
     // Border deep-merges: width changes, color survives.
-    expect(next.background.border).toEqual({
+    expect(next.style.background.border).toEqual({
       width: 8,
-      color: base().background.border.color,
+      color: base().style.background.border.color,
     });
   });
 
@@ -56,7 +56,7 @@ describe("projectReducer — style cascade (#4, #19)", () => {
       patch: { background: { shape: "circle" } },
     });
     expect(next.devices[0].style).toEqual({ background: { shape: "circle" } });
-    expect(next.background.shape).toBe(base().background.shape);
+    expect(next.style.background.shape).toBe(base().style.background.shape);
   });
 
   it("stores a Glyph-tier edit keyed by glyph id", () => {
@@ -94,9 +94,11 @@ describe("projectReducer — style cascade (#4, #19)", () => {
     expect(next.devices[0].glyphStyles).toEqual({});
   });
 
-  it("sets the cell size (Project-global, not cascaded)", () => {
+  it("sets the cell size (an export setting, never cascaded)", () => {
     const next = run(base(), { type: "set-cell-size", size: 256 });
-    expect(next.cellSize).toBe(256);
+    expect(next.exportSettings.cellSize).toBe(256);
+    // Naming shares the block and must survive a cell-size edit.
+    expect(next.exportSettings.naming).toEqual(base().exportSettings.naming);
   });
 
   it("does not mutate the previous project (immutability)", () => {
@@ -226,12 +228,12 @@ describe("projectReducer — naming (#6)", () => {
       type: "set-naming-template",
       template: "btn_{input}",
     });
-    expect(next.naming.template).toBe("btn_{input}");
+    expect(next.exportSettings.naming.template).toBe("btn_{input}");
   });
 
   it("sets the case style", () => {
     const next = run(base(), { type: "set-naming-case", case: "kebab" });
-    expect(next.naming.case).toBe("kebab");
+    expect(next.exportSettings.naming.case).toBe("kebab");
   });
 
   it("sets the output-filename template", () => {
@@ -239,7 +241,14 @@ describe("projectReducer — naming (#6)", () => {
       type: "set-filename-template",
       template: "atlas_{device}",
     });
-    expect(next.filenameTemplate).toBe("atlas_{device}");
+    expect(next.exportSettings.naming.filenameTemplate).toBe("atlas_{device}");
+    // The filename template shares NamingConfig with the Sprite-Name one, which
+    // it must not overwrite.
+    expect(next.exportSettings.naming.template).toBe(
+      base().exportSettings.naming.template,
+    );
+    // …and the cell size shares the block above it.
+    expect(next.exportSettings.cellSize).toBe(base().exportSettings.cellSize);
   });
 });
 
@@ -255,7 +264,7 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
 
   it("starts with no images and an unscaled content default", () => {
     expect(base().images).toEqual([]);
-    expect(base().contentScale).toBe(1);
+    expect(base().style.contentScale).toBe(1);
   });
 
   it("adds an uploaded image to the shared manifest", () => {
@@ -308,7 +317,7 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
       scope: { tier: "project" },
       patch: { contentScale: 0.6 },
     });
-    expect(next.contentScale).toBe(0.6);
+    expect(next.style.contentScale).toBe(0.6);
   });
 
   it("stores a Device-tier content scale as an override", () => {
@@ -318,6 +327,6 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
       patch: { contentScale: 1.4 },
     });
     expect(next.devices[0].style).toEqual({ contentScale: 1.4 });
-    expect(next.contentScale).toBe(1);
+    expect(next.style.contentScale).toBe(1);
   });
 });

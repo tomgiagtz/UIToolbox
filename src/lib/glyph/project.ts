@@ -15,7 +15,9 @@ import {
 import type {
   CaseStyle,
   DeviceConfig,
+  ExportSettings,
   ImageAsset,
+  NamingConfig,
   Project,
 } from "@/lib/glyph/types";
 
@@ -34,8 +36,6 @@ export type ProjectAction =
   // into its full base style, Device/Glyph tiers merge into their StyleOverride.
   | { type: "patch-style"; scope: StyleScope; patch: StyleOverride }
   | { type: "clear-style"; scope: StyleScope; field: StyleField }
-  // cellSize stays Project-global — not part of the cascade (ADR-0006).
-  | { type: "set-cell-size"; size: number }
   // --- Devices, Catalog selection & custom Inputs (#5, #15) ---
   | { type: "toggle-device"; catalogId: string }
   | { type: "toggle-input"; deviceIndex: number; inputId: string }
@@ -52,7 +52,10 @@ export type ProjectAction =
   // then point its `renderSource` at it via `patch-style`. The bytes are handled
   // outside the config (see `images.ts`).
   | { type: "add-image"; image: ImageAsset }
-  // --- Naming (#6) ---
+  // --- Export settings: cell size + naming (#6, #21) ---
+  // All Project-global. `cellSize` is an atlas output value rather than a cascade
+  // tier (ADR-0006), which is why it sits beside naming (ADR-0012 §6).
+  | { type: "set-cell-size"; size: number }
   | { type: "set-naming-template"; template: string }
   | { type: "set-naming-case"; case: CaseStyle }
   | { type: "set-filename-template"; template: string };
@@ -80,9 +83,6 @@ export function projectReducer(
 
     case "clear-style":
       return clearStyle(project, action.scope, action.field);
-
-    case "set-cell-size":
-      return { ...project, cellSize: action.size };
 
     case "toggle-device":
       return {
@@ -135,18 +135,36 @@ export function projectReducer(
     case "add-image":
       return { ...project, images: [...project.images, action.image] };
 
+    case "set-cell-size":
+      return patchExportSettings(project, { cellSize: action.size });
+
     case "set-naming-template":
-      return {
-        ...project,
-        naming: { ...project.naming, template: action.template },
-      };
+      return patchNaming(project, { template: action.template });
 
     case "set-naming-case":
-      return { ...project, naming: { ...project.naming, case: action.case } };
+      return patchNaming(project, { case: action.case });
 
     case "set-filename-template":
-      return { ...project, filenameTemplate: action.template };
+      return patchNaming(project, { filenameTemplate: action.template });
   }
+}
+
+/** Patch the export settings block, leaving the rest of the project alone. */
+function patchExportSettings(
+  project: Project,
+  patch: Partial<ExportSettings>,
+): Project {
+  return {
+    ...project,
+    exportSettings: { ...project.exportSettings, ...patch },
+  };
+}
+
+/** Patch the naming config inside the export settings block. */
+function patchNaming(project: Project, patch: Partial<NamingConfig>): Project {
+  return patchExportSettings(project, {
+    naming: { ...project.exportSettings.naming, ...patch },
+  });
 }
 
 /**
@@ -160,22 +178,7 @@ function patchStyle(
   patch: StyleOverride,
 ): Project {
   if (scope.tier === "project") {
-    const resolved = resolveStyle(
-      {
-        textColor: project.textColor,
-        background: project.background,
-        symbolPaints: project.symbolPaints,
-        contentScale: project.contentScale,
-      },
-      patch,
-    );
-    return {
-      ...project,
-      textColor: resolved.textColor,
-      background: resolved.background,
-      symbolPaints: resolved.symbolPaints,
-      contentScale: resolved.contentScale,
-    };
+    return { ...project, style: resolveStyle(project.style, patch) };
   }
   return patchDeviceStyle(project, scope, (override) =>
     mergeOverride(override, patch),

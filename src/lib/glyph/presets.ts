@@ -1,8 +1,9 @@
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
-import type { SymbolPaints } from "@/lib/glyph/style";
+import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,
   DeviceConfig,
+  ExportSettings,
   NamingConfig,
   Project,
 } from "@/lib/glyph/types";
@@ -50,20 +51,38 @@ export const DEFAULT_BACKGROUND: Background = {
   border: { width: 4, color: "#475569" },
 };
 
+/** Default output filename template. */
+export const DEFAULT_FILENAME_TEMPLATE = "{device}_atlas";
+
 /** Default Sprite Name config: `{device}_{input}`, snake_case. */
 export const DEFAULT_NAMING: NamingConfig = {
   template: "{device}_{input}",
+  filenameTemplate: DEFAULT_FILENAME_TEMPLATE,
   case: "snake",
 };
-
-/** Default output filename template. */
-export const DEFAULT_FILENAME_TEMPLATE = "{device}_atlas";
 
 /**
  * Default content scale: the Render Source fills the tile's content box exactly
  * as it did before the scale control existed (issue #20).
  */
 export const DEFAULT_CONTENT_SCALE = 1;
+
+/**
+ * The base of the Style Cascade a fresh project starts from — the Project tier's
+ * full {@link GlyphStyle} (ADR-0012 §6).
+ */
+export const DEFAULT_STYLE: GlyphStyle = {
+  textColor: DEFAULT_TEXT_COLOR,
+  background: DEFAULT_BACKGROUND,
+  symbolPaints: DEFAULT_SYMBOL_PAINTS,
+  contentScale: DEFAULT_CONTENT_SCALE,
+};
+
+/** Default atlas output settings: 128px cells, `{device}_{input}` in snake_case. */
+export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+  cellSize: DEFAULT_CELL_SIZE,
+  naming: DEFAULT_NAMING,
+};
 
 /** Default config name, used as the default filename when saving a project. */
 export const DEFAULT_PROJECT_NAME = "my-glyphs";
@@ -87,14 +106,9 @@ export function createDefaultProject(
   return {
     name: DEFAULT_PROJECT_NAME,
     font: { family: fontFamily },
-    textColor: DEFAULT_TEXT_COLOR,
-    background: DEFAULT_BACKGROUND,
-    symbolPaints: DEFAULT_SYMBOL_PAINTS,
-    contentScale: DEFAULT_CONTENT_SCALE,
+    style: DEFAULT_STYLE,
     images: [],
-    cellSize: DEFAULT_CELL_SIZE,
     devices: [createDeviceFromCatalog(DEVICE_CATALOGS[0])],
-    naming: DEFAULT_NAMING,
-    filenameTemplate: DEFAULT_FILENAME_TEMPLATE,
+    exportSettings: DEFAULT_EXPORT_SETTINGS,
   };
 }

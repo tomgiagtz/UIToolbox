@@ -12,8 +12,10 @@
  * left unset falls up the chain. {@link resolveStyle} folds a base plus any
  * number of overrides into one effective {@link GlyphStyle}.
  *
- * `cellSize` and the font are deliberately **not** part of this cascade — they
- * stay Project-global (see ADR-0006).
+ * The font is deliberately **not** part of this cascade, and neither is
+ * `cellSize`: both stay Project-global (see ADR-0006). `cellSize` is an atlas
+ * output value, so it lives in `project.exportSettings` (ADR-0012 §6) rather
+ * than anywhere near a style.
  */
 import type { Background, BackgroundSource } from "@/lib/glyph/types";
 
