@@ -2,7 +2,8 @@
 
 - **Status:** Accepted — decided, not yet built. Implementation is filed as issues
   off this ADR.
-- **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06
+- **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
+  land-as-one-change requirement withdrawn 2026-08-07
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
   loses `contentScale`, and `cellSize` moves without changing status), ADR-0007 §3
   (its four-tier framing of `symbolPaints`, and where the brand palette ships),
@@ -516,10 +517,25 @@ stored config that fails `isProject` is discarded, its key removed, and the loss
 reported. Files share that format with localStorage, so old `.json` saves stop
 loading too.
 
-**No version ladder, and the reset happens once.** The three shape changes land
-as **one change**, so a user loses their stored project a single time rather than
-three. This is a pre-1.0 front-end tool whose one user authors the Presets. The
-IndexedDB font store needs nothing at all (§7).
+**No version ladder, and no need to land the three together.** This is a pre-1.0
+front-end tool with no users, whose one author writes the Presets — so losing a
+stored project three times costs exactly what losing it once costs, which is
+nothing. The IndexedDB font store needs nothing at all (§7).
+
+_Amended 2026-08-07._ This section originally required the three shape changes to
+land as **one change**, so that the reset happened once. **That requirement is
+withdrawn.** It was buying a guarantee nobody was paying for, and the price was
+one large change where three independently reviewable ones do the same work: the
+`style` / `exportSettings` slice alone already touched fifteen files, and
+coupling it to §2's cascade-wide `fontFamily` would have doubled that before
+anything could be reviewed. The shape changes may now land in any order, one at a
+time, and the issues off this ADR are free of each other.
+
+What does **not** change is the discard-and-report behaviour itself. Rejecting a
+config that no longer matches the current shape is a correctness rule, not a
+data-preservation one — it is what stops a stale payload from half-loading and
+corrupting the editor — so ADR-0010's path stays exactly as it is, and each shape
+change should keep a test asserting the previous shape is rejected.
 
 ## Consequences
 
