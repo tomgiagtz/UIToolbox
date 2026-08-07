@@ -5,11 +5,7 @@
  * Background, Sprite Atlas, Sprite Name. Keep these terms; avoid the synonyms
  * noted in the glossary.
  */
-import type {
-  GlyphStyle,
-  StyleOverride,
-  SymbolPaints,
-} from "@/lib/glyph/style";
+import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
 
 /** The primitive a Background draws when its source is `{ kind: "shape" }`. */
 export type BackgroundShape = "rounded-rect" | "square" | "circle";
@@ -87,14 +83,34 @@ export interface CustomInput {
 }
 
 /**
- * How Sprite Names are derived. Labels are always slug-normalized (mandatory);
- * the template and case are user-controlled.
+ * How Sprite Names and output filenames are derived. Labels are always
+ * slug-normalized (mandatory); the templates and case are user-controlled.
  *
  * Template tokens: `{device}`, `{input}`, `{index}`. Default `{device}_{input}`.
+ *
+ * `filenameTemplate` lives here rather than beside it because the same `case` is
+ * applied to both (see `generate.ts`) — one config, one case style.
  */
 export interface NamingConfig {
   template: string;
+  /** Output filename template; supports the `{device}` token. */
+  filenameTemplate: string;
   case: CaseStyle;
+}
+
+/**
+ * Everything the Export window configures: how big each cell is rendered and
+ * what the resulting sprites and files are called (ADR-0012 §6).
+ *
+ * Grouped because it is named for what configures it, not for what it excludes.
+ * `cellSize` is here despite its sidebar control staying put — it is an atlas
+ * output value, Project-global and deliberately outside the Style Cascade
+ * (ADR-0006), and the Export dialog mirrors the sidebar's control.
+ */
+export interface ExportSettings {
+  /** Square cell edge length in px (default 128). */
+  cellSize: number;
+  naming: NamingConfig;
 }
 
 /**
@@ -164,36 +180,28 @@ export interface ResolvedInput {
  * The full project configuration — the sole input to {@link generateTilesets}.
  * `font.family` is the registered FontFace family name; the font blob itself is
  * handled by the UI/ProjectStore layer, not this pure model.
+ *
+ * Grouped by what each part is *for* (ADR-0012 §6): a look, the assets that look
+ * draws from, the Devices it applies to, and the atlas output settings.
  */
 export interface Project {
   /** User-facing config name; the default filename when saving a project file. */
   name: string;
   font: { family: string };
-  /** CSS color for the label text. */
-  textColor: string;
-  background: Background;
   /**
-   * Project-tier Symbol Paint Role colours (fill / border / secondary) — the base
-   * of the `symbolPaints` cascade group (ADR-0007 §3). Independent of `textColor`.
+   * The Project tier of the Style Cascade — a **full** {@link GlyphStyle}, which
+   * is exactly the block a Preset carries (ADR-0012 §6). Every Device and Glyph
+   * override falls up to here.
    */
-  symbolPaints: SymbolPaints;
-  /**
-   * Project-tier scale of the tile content box — the base of the cascade's
-   * `contentScale` (issue #20). `1` is the default fit.
-   */
-  contentScale: number;
+  style: GlyphStyle;
   /**
    * Manifest of the user's uploaded custom images (bytes live elsewhere — see
    * {@link ImageAsset}). Shared by every Device, so one upload can serve several
    * Inputs.
    */
   images: ImageAsset[];
-  /** Square cell edge length in px (default 128). */
-  cellSize: number;
   devices: DeviceConfig[];
-  naming: NamingConfig;
-  /** Output filename template; supports the `{device}` token. */
-  filenameTemplate: string;
+  exportSettings: ExportSettings;
 }
 
 /** An axis-aligned rectangle within a Sprite Atlas, in px. */

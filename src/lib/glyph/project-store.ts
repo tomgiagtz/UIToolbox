@@ -14,13 +14,14 @@
  * to "start fresh" rather than throwing.
  */
 import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/presets";
-import type { SymbolPaints } from "@/lib/glyph/style";
+import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,
   BackgroundShape,
   BackgroundSource,
   CustomInput,
   DeviceConfig,
+  ExportSettings,
   ImageAsset,
   NamingConfig,
   Project,
@@ -321,11 +322,36 @@ function isSymbolPaints(value: unknown): value is SymbolPaints {
   );
 }
 
+/**
+ * The Project tier of the cascade — a **full** {@link GlyphStyle}, unlike the
+ * sparse Device/Glyph overrides, so every field is required. One guard serves
+ * both the persisted config and (once presets land) a Preset's payload, so the
+ * two shapes cannot drift apart (ADR-0012 §6).
+ */
+function isGlyphStyle(value: unknown): value is GlyphStyle {
+  return (
+    isRecord(value) &&
+    typeof value.textColor === "string" &&
+    isBackground(value.background) &&
+    isSymbolPaints(value.symbolPaints) &&
+    typeof value.contentScale === "number"
+  );
+}
+
 function isNaming(value: unknown): value is NamingConfig {
   return (
     isRecord(value) &&
     typeof value.template === "string" &&
+    typeof value.filenameTemplate === "string" &&
     ["snake", "kebab", "camel"].includes(value.case as string)
+  );
+}
+
+function isExportSettings(value: unknown): value is ExportSettings {
+  return (
+    isRecord(value) &&
+    typeof value.cellSize === "number" &&
+    isNaming(value.naming)
   );
 }
 
@@ -372,16 +398,11 @@ function isProject(value: unknown): value is Project {
     typeof value.name === "string" &&
     isRecord(value.font) &&
     typeof value.font.family === "string" &&
-    typeof value.textColor === "string" &&
-    isBackground(value.background) &&
-    isSymbolPaints(value.symbolPaints) &&
-    typeof value.contentScale === "number" &&
+    isGlyphStyle(value.style) &&
     Array.isArray(value.images) &&
     value.images.every(isImageAsset) &&
-    typeof value.cellSize === "number" &&
     Array.isArray(value.devices) &&
     value.devices.every(isDevice) &&
-    isNaming(value.naming) &&
-    typeof value.filenameTemplate === "string"
+    isExportSettings(value.exportSettings)
   );
 }

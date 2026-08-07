@@ -47,9 +47,10 @@ describe("ProjectStore — config (localStorage)", () => {
   });
 
   it("round-trips an image manifest and a scaled Glyph", () => {
+    const base = createDefaultProject();
     const project: Project = {
-      ...createDefaultProject(),
-      contentScale: 0.75,
+      ...base,
+      style: { ...base.style, contentScale: 0.75 },
       images: [{ id: "img-1.png", fileName: "art.png", type: "image/png" }],
     };
     saveConfig(project);
@@ -95,19 +96,23 @@ describe("ProjectStore — config validation", () => {
     expect(parseConfig(config())).not.toBeNull();
   });
 
+  /** A current config whose Project-tier Background is replaced wholesale. */
+  function withBackground(background: unknown): string {
+    const base = createDefaultProject();
+    return JSON.stringify({ ...base, style: { ...base.style, background } });
+  }
+
   it('rejects a config still spelling "none" as a shape', () => {
     // "none" is a Background *source*, not a fourth shape (ADR-0009). Two fields
     // would otherwise disagree about what the tile is.
     expect(
       parseConfig(
-        config({
-          background: {
-            shape: "none",
-            fill: "#111111",
-            cornerRadius: 0,
-            border: { width: 0, color: "#000000" },
-            source: { kind: "shape" },
-          },
+        withBackground({
+          shape: "none",
+          fill: "#111111",
+          cornerRadius: 0,
+          border: { width: 0, color: "#000000" },
+          source: { kind: "shape" },
         }),
       ),
     ).toBeNull();
@@ -116,13 +121,61 @@ describe("ProjectStore — config validation", () => {
   it("rejects a config whose Background source is malformed", () => {
     expect(
       parseConfig(
-        config({
-          background: {
-            shape: "circle",
-            fill: "#111111",
-            cornerRadius: 0,
-            border: { width: 0, color: "#000000" },
-            source: { kind: "authored" },
+        withBackground({
+          shape: "circle",
+          fill: "#111111",
+          cornerRadius: 0,
+          border: { width: 0, color: "#000000" },
+          source: { kind: "authored" },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a config whose Project tier is not a full style", () => {
+    // The Project tier is a *full* GlyphStyle, unlike the sparse Device and Glyph
+    // overrides — a partial one would leave the cascade with no base to fall to.
+    const base = createDefaultProject();
+    expect(
+      parseConfig(JSON.stringify({ ...base, style: { textColor: "#ffffff" } })),
+    ).toBeNull();
+  });
+
+  it("rejects a pre-regroup config with flat style and naming fields", () => {
+    // Project regrouped into `style` + `exportSettings` (ADR-0012 §6) with no
+    // version ladder, so an older save is discarded and the loss reported —
+    // once, rather than migrated forward.
+    const { name, font, style, images, devices, exportSettings } =
+      createDefaultProject();
+    expect(
+      parseConfig(
+        JSON.stringify({
+          name,
+          font,
+          images,
+          devices,
+          ...style,
+          cellSize: exportSettings.cellSize,
+          naming: {
+            template: exportSettings.naming.template,
+            case: exportSettings.naming.case,
+          },
+          filenameTemplate: exportSettings.naming.filenameTemplate,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a config whose naming lost its filename template", () => {
+    const base = createDefaultProject();
+    const { template, case: caseStyle } = base.exportSettings.naming;
+    expect(
+      parseConfig(
+        JSON.stringify({
+          ...base,
+          exportSettings: {
+            ...base.exportSettings,
+            naming: { template, case: caseStyle },
           },
         }),
       ),

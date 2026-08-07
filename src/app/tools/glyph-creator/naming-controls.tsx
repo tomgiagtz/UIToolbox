@@ -27,6 +27,8 @@ export function NamingControls({
   dispatch: Dispatch<ProjectAction>;
   activeIndex: number;
 }) {
+  const { naming } = project.exportSettings;
+
   const sample = useMemo(() => {
     const active = project.devices[activeIndex];
     if (!active || resolveDeviceInputs(active, project).length === 0)
@@ -49,7 +51,7 @@ export function NamingControls({
           {(id) => (
             <input
               id={id}
-              value={project.naming.template}
+              value={naming.template}
               onChange={(e) =>
                 dispatch({
                   type: "set-naming-template",
@@ -66,7 +68,7 @@ export function NamingControls({
           {(id) => (
             <input
               id={id}
-              value={project.filenameTemplate}
+              value={naming.filenameTemplate}
               onChange={(e) =>
                 dispatch({
                   type: "set-filename-template",
@@ -89,7 +91,7 @@ export function NamingControls({
                 type="radio"
                 name="naming-case"
                 value={c.value}
-                checked={project.naming.case === c.value}
+                checked={naming.case === c.value}
                 onChange={() =>
                   dispatch({ type: "set-naming-case", case: c.value })
                 }

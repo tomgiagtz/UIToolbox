@@ -13,7 +13,8 @@
  * number of overrides into one effective {@link GlyphStyle}.
  *
  * `cellSize` and the font are deliberately **not** part of this cascade — they
- * stay Project-global (see ADR-0006).
+ * stay Project-global (see ADR-0006). `cellSize` is an atlas output value, so it
+ * lives in `project.exportSettings` rather than beside this style (ADR-0012 §6).
  */
 import type { Background, BackgroundSource } from "@/lib/glyph/types";
 

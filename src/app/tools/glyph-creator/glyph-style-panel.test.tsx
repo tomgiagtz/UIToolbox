@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { GlyphStylePanel, type SelectedGlyph } from "./style-controls";
 import { createDefaultProject } from "@/lib/glyph/presets";
-import { projectBaseStyle } from "@/lib/glyph/generate";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
@@ -55,7 +54,7 @@ function renderPanel({
   glyph?: SelectedGlyph;
   override?: StyleOverride;
 } = {}) {
-  const base = projectBaseStyle(project);
+  const base = project.style;
   const style = source
     ? { ...base, background: { ...base.background, source } }
     : base;

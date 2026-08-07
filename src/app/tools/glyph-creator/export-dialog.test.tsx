@@ -129,7 +129,24 @@ describe("ExportDialog — selection", () => {
   });
 });
 
-describe("ExportDialog — naming", () => {
+describe("ExportDialog — output settings", () => {
+  it("mirrors the sidebar's cell size, showing and dispatching the same value", () => {
+    const project = projectReducer(twoDeviceProject(), {
+      type: "set-cell-size",
+      size: 64,
+    });
+    const { dispatch } = renderDialog({ project });
+
+    const cellSize = screen.getByLabelText("Cell size (px)");
+    expect(cellSize).toHaveValue("64");
+
+    fireEvent.change(cellSize, { target: { value: "256" } });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "set-cell-size",
+      size: 256,
+    });
+  });
+
   it("hosts the naming controls, so names are settled at export time", () => {
     const { dispatch } = renderDialog();
 

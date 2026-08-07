@@ -19,6 +19,7 @@ import type {
   ImageAsset,
   Project,
 } from "@/lib/glyph/types";
+import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 import { ImageUploadField } from "./image-upload-field";
 import { RenderSourceControls } from "./render-source-controls";
@@ -28,9 +29,6 @@ const SHAPES: { value: BackgroundShape; label: string }[] = [
   { value: "square", label: "Square" },
   { value: "circle", label: "Circle" },
 ];
-
-/** Common power-of-two-friendly cell sizes; also drives output resolution. */
-const CELL_SIZES = [32, 48, 64, 96, 128, 192, 256];
 
 /**
  * Range of the content scale slider. It runs past 1 so art can be pushed to the
@@ -340,32 +338,7 @@ export function StyleControls({
         </fieldset>
       )}
 
-      {showCellSize && (
-        <Field
-          label="Cell size (px)"
-          hint="Output resolution per Glyph — applies to the whole project."
-        >
-          {(id) => (
-            <select
-              id={id}
-              className={inputClass}
-              value={project.cellSize}
-              onChange={(e) =>
-                dispatch({
-                  type: "set-cell-size",
-                  size: Number(e.target.value),
-                })
-              }
-            >
-              {CELL_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {n}×{n}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-      )}
+      {showCellSize && <CellSizeField project={project} dispatch={dispatch} />}
 
       {/* Sizes whichever Render Source the Glyph draws, so it lives with the
           rest of the cascade rather than beside the image picker (issue #20). */}

@@ -8,7 +8,14 @@ import {
 import { isPowerOfTwo } from "@/lib/glyph/packer";
 import { projectReducer } from "@/lib/glyph/project";
 import { createDefaultProject } from "@/lib/glyph/presets";
-import type { DeviceConfig, ImageAsset, Project } from "@/lib/glyph/types";
+import type { GlyphStyle } from "@/lib/glyph/style";
+import type {
+  DeviceConfig,
+  ExportSettings,
+  ImageAsset,
+  NamingConfig,
+  Project,
+} from "@/lib/glyph/types";
 
 /**
  * A Device whose Inputs are supplied as custom (off-catalog) labels, so a test
@@ -30,27 +37,41 @@ function device(
   };
 }
 
+/** The Project tier every test project starts from. */
+const BASE_STYLE: GlyphStyle = {
+  textColor: "#ffffff",
+  background: {
+    source: { kind: "shape" },
+    shape: "rounded-rect",
+    fill: "#000000",
+    cornerRadius: 12,
+    border: { width: 2, color: "#333333" },
+  },
+  symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+  contentScale: 1,
+};
+
+const BASE_NAMING: NamingConfig = {
+  template: "{device}_{input}",
+  filenameTemplate: "{device}_atlas",
+  case: "snake",
+};
+
 function project(over: Partial<Project> = {}): Project {
   return {
     name: "test-glyphs",
     font: { family: "TestFont" },
-    textColor: "#ffffff",
-    background: {
-      source: { kind: "shape" },
-      shape: "rounded-rect",
-      fill: "#000000",
-      cornerRadius: 12,
-      border: { width: 2, color: "#333333" },
-    },
-    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-    contentScale: 1,
+    style: BASE_STYLE,
     images: [],
-    cellSize: 128,
     devices: [device(["A", "Right Stick", "→"])],
-    naming: { template: "{device}_{input}", case: "snake" },
-    filenameTemplate: "{device}_atlas",
+    exportSettings: { cellSize: 128, naming: BASE_NAMING },
     ...over,
   };
+}
+
+/** The default export settings with `naming` patched — the nesting, spelled once. */
+function withNaming(patch: Partial<NamingConfig>): ExportSettings {
+  return { cellSize: 128, naming: { ...BASE_NAMING, ...patch } };
 }
 
 /**
@@ -211,7 +232,10 @@ describe("Render Source per Input (issue #20)", () => {
   it("resolves the content scale onto every placement's style", () => {
     const device = xbox({ "xbox-a": { contentScale: 1.5 } });
     const [out] = generateTilesets(
-      project({ devices: [device], contentScale: 0.8 }),
+      project({
+        devices: [device],
+        style: { ...BASE_STYLE, contentScale: 0.8 },
+      }),
     );
     expect(out.placements.map((p) => p.style.contentScale)).toEqual([
       1.5, // Glyph tier
@@ -264,7 +288,7 @@ describe("generateTilesets", () => {
 
   it("applies the case style across token boundaries", () => {
     const [kb] = generateTilesets(
-      project({ naming: { template: "{device}_{input}", case: "camel" } }),
+      project({ exportSettings: withNaming({ case: "camel" }) }),
     );
     expect(kb.placements.map((p) => p.spriteName)).toEqual([
       "keyboardA",
@@ -277,7 +301,7 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [device(["A", "B"])],
-        naming: { template: "{input}_{index}", case: "snake" },
+        exportSettings: withNaming({ template: "{input}_{index}" }),
       }),
     );
     expect(kb.placements.map((p) => p.spriteName)).toEqual(["a_0", "b_1"]);
@@ -355,7 +379,7 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [device(["Right Stick", "RIGHT  STICK"])],
-        naming: { template: "{input}", case: "snake" },
+        exportSettings: withNaming({ template: "{input}" }),
       }),
     );
     const names = kb.placements.map((p) => p.spriteName);
@@ -367,7 +391,7 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [device(["A", "a"])],
-        naming: { template: "{input}", case: "camel" },
+        exportSettings: withNaming({ template: "{input}", case: "camel" }),
       }),
     );
     const names = kb.placements.map((p) => p.spriteName);
@@ -414,12 +438,7 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
 
   it("resolves every Glyph to the untouched Project style", () => {
     const proj = createDefaultProject("TestFont");
-    const base = {
-      textColor: proj.textColor,
-      background: proj.background,
-      symbolPaints: proj.symbolPaints,
-      contentScale: proj.contentScale,
-    };
+    const base = proj.style;
     const [kb] = generateTilesets(proj);
     for (const placement of kb.placements) {
       // Empty Device / Catalog / Glyph tiers ⇒ effective style === Project style,
@@ -432,12 +451,7 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
 describe("resolveScopeStyle", () => {
   it("returns the Project base at Project scope", () => {
     const proj = createDefaultProject("TestFont");
-    expect(resolveScopeStyle(proj, { tier: "project" })).toEqual({
-      textColor: proj.textColor,
-      background: proj.background,
-      symbolPaints: proj.symbolPaints,
-      contentScale: proj.contentScale,
-    });
+    expect(resolveScopeStyle(proj, { tier: "project" })).toEqual(proj.style);
   });
 
   it("folds the Device override in at Device scope", () => {
@@ -449,7 +463,7 @@ describe("resolveScopeStyle", () => {
     const style = resolveScopeStyle(proj, { tier: "device", deviceIndex: 0 });
     expect(style.background.shape).toBe("circle");
     // Unset fields fall up to the Project base.
-    expect(style.background.fill).toBe(proj.background.fill);
+    expect(style.background.fill).toBe(proj.style.background.fill);
   });
 
   it("folds Device then Glyph overrides in at Glyph scope", () => {
@@ -503,12 +517,7 @@ describe("resolveScopeStyle", () => {
   it("falls back to the Project base for a missing Device", () => {
     const proj = createDefaultProject("TestFont");
     expect(resolveScopeStyle(proj, { tier: "device", deviceIndex: 9 })).toEqual(
-      {
-        textColor: proj.textColor,
-        background: proj.background,
-        symbolPaints: proj.symbolPaints,
-        contentScale: proj.contentScale,
-      },
+      proj.style,
     );
   });
 });

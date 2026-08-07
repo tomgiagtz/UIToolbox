@@ -23,16 +23,6 @@ import type {
   TexturePackerDoc,
 } from "@/lib/glyph/types";
 
-/** The Project tier of the Style Cascade: the project's base style. */
-export function projectBaseStyle(project: Project): GlyphStyle {
-  return {
-    textColor: project.textColor,
-    background: project.background,
-    symbolPaints: project.symbolPaints,
-    contentScale: project.contentScale,
-  };
-}
-
 /**
  * The Render Source one Glyph actually draws: its font-rendered label, a bundled
  * Symbol, or a user-uploaded custom image (ADR-0004).
@@ -140,7 +130,7 @@ export function resolveScopeStyle(
   project: Project,
   scope: StyleScope,
 ): GlyphStyle {
-  const base = projectBaseStyle(project);
+  const base = project.style;
   if (scope.tier === "project") return base;
 
   const device = project.devices[scope.deviceIndex];
@@ -171,7 +161,7 @@ export function resolveDeviceInputs(
   device: DeviceConfig,
   project: Project,
 ): ResolvedInput[] {
-  const base = projectBaseStyle(project);
+  const base = project.style;
   const catalog = getCatalog(device.catalogId);
   const byId = catalog ? catalogIndex(catalog) : null;
   const resolved: ResolvedInput[] = [];
@@ -226,7 +216,7 @@ function buildDeviceOutput(
   device: DeviceConfig,
   project: Project,
 ): DeviceOutput {
-  const { cellSize } = project;
+  const { cellSize, naming } = project.exportSettings;
   const inputs = resolveDeviceInputs(device, project);
   const { atlasSize, placements } = gridPack(inputs.length, cellSize);
 
@@ -238,25 +228,25 @@ function buildDeviceOutput(
       const { label, style, symbolId, imageId } = inputs[index];
       const spriteName = uniqueName(
         applyTemplate(
-          project.naming.template,
+          naming.template,
           {
             device: deviceSlug,
             input: slugify(label),
             index: String(index),
           },
-          project.naming.case,
+          naming.case,
         ),
         used,
-        project.naming.case,
+        naming.case,
       );
       return { label, spriteName, rect, style, symbolId, imageId };
     },
   );
 
   const filename = applyTemplate(
-    project.filenameTemplate,
+    naming.filenameTemplate,
     { device: deviceSlug, input: "", index: "" },
-    project.naming.case,
+    naming.case,
   );
 
   const metadata = buildTexturePackerDoc(

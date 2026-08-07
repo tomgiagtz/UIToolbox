@@ -617,7 +617,7 @@ export function GlyphCreator() {
               <AtlasPreview
                 deviceName={activeDevice.name}
                 glyphs={activeInputs}
-                cellSize={project.cellSize}
+                cellSize={project.exportSettings.cellSize}
                 fontFamily={project.font.family}
                 catalogId={activeDevice.catalogId}
                 className="h-full w-full object-contain"
