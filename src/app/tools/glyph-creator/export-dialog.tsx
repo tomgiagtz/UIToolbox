@@ -133,9 +133,6 @@ export function ExportDialog({
 
           <div className="space-y-4 border-t pt-5">
             <h3 className="text-sm font-medium">Output</h3>
-            {/* The same control as the sidebar's, on the same action — the two
-                cannot disagree, and the value is here beside the rest of
-                `exportSettings` where the export is being confirmed. */}
             <CellSizeField project={project} dispatch={dispatch} />
             <NamingControls
               project={project}

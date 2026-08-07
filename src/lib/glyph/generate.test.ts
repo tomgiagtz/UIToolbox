@@ -57,6 +57,11 @@ const BASE_NAMING: NamingConfig = {
   case: "snake",
 };
 
+const BASE_EXPORT_SETTINGS: ExportSettings = {
+  cellSize: 128,
+  naming: BASE_NAMING,
+};
+
 function project(over: Partial<Project> = {}): Project {
   return {
     name: "test-glyphs",
@@ -64,14 +69,16 @@ function project(over: Partial<Project> = {}): Project {
     style: BASE_STYLE,
     images: [],
     devices: [device(["A", "Right Stick", "→"])],
-    exportSettings: { cellSize: 128, naming: BASE_NAMING },
+    exportSettings: BASE_EXPORT_SETTINGS,
     ...over,
   };
 }
 
-/** The default export settings with `naming` patched — the nesting, spelled once. */
-function withNaming(patch: Partial<NamingConfig>): ExportSettings {
-  return { cellSize: 128, naming: { ...BASE_NAMING, ...patch } };
+/** The base export settings with `naming` patched — the nesting, spelled once. */
+function exportSettingsWithNaming(
+  patch: Partial<NamingConfig>,
+): ExportSettings {
+  return { ...BASE_EXPORT_SETTINGS, naming: { ...BASE_NAMING, ...patch } };
 }
 
 /**
@@ -288,7 +295,7 @@ describe("generateTilesets", () => {
 
   it("applies the case style across token boundaries", () => {
     const [kb] = generateTilesets(
-      project({ exportSettings: withNaming({ case: "camel" }) }),
+      project({ exportSettings: exportSettingsWithNaming({ case: "camel" }) }),
     );
     expect(kb.placements.map((p) => p.spriteName)).toEqual([
       "keyboardA",
@@ -301,7 +308,9 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [device(["A", "B"])],
-        exportSettings: withNaming({ template: "{input}_{index}" }),
+        exportSettings: exportSettingsWithNaming({
+          template: "{input}_{index}",
+        }),
       }),
     );
     expect(kb.placements.map((p) => p.spriteName)).toEqual(["a_0", "b_1"]);
@@ -379,7 +388,7 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [device(["Right Stick", "RIGHT  STICK"])],
-        exportSettings: withNaming({ template: "{input}" }),
+        exportSettings: exportSettingsWithNaming({ template: "{input}" }),
       }),
     );
     const names = kb.placements.map((p) => p.spriteName);
@@ -391,7 +400,10 @@ describe("generateTilesets", () => {
     const [kb] = generateTilesets(
       project({
         devices: [device(["A", "a"])],
-        exportSettings: withNaming({ template: "{input}", case: "camel" }),
+        exportSettings: exportSettingsWithNaming({
+          template: "{input}",
+          case: "camel",
+        }),
       }),
     );
     const names = kb.placements.map((p) => p.spriteName);
