@@ -1,7 +1,7 @@
 # ADR-0007: Sentinel paint roles and importable Symbol Sets
 
 - **Status:** Accepted
-- **Date:** 2026-07-23
+- **Date:** 2026-07-23, §4 extended with refresh reconciliation 2026-08-07
 - **Amends:** ADR-0004 (Symbol colour model), ADR-0006 (adds a Style Cascade group)
 - **Amended by:** ADR-0012 — §3's four tiers become three (the Catalog per-Input
   tier is deleted, so "the Device tier may set uniform role defaults; per-Input
@@ -93,8 +93,13 @@ is just the pre-shipped instance; a user can **author and import** their own.
 - **Import review** — importing runs an in-browser windowing pass (the geometry
   that today lives in `build-symbols.mjs`) and shows a review screen: the
   windowed cells, which ids matched vs. are new, any non-sentinel **flags**, and
-  controls to set the set's default role colours (which populate its
-  Device/Catalog-per-Input tiers) and correct labels before accepting.
+  controls to set the set's default role colours and correct labels before
+  accepting.
+- **Not every id'd node is a cell.** The shipped atlases are cross-checked
+  against `manifest.mjs`; an import has no manifest, so it must decide for
+  itself. A candidate whose bounding box overflows one grid square (a frame or a
+  guide layer) or that draws nothing visible is **skipped, with its reason
+  stated** — the same "never fail silently" rule the paint classifier follows.
 - **Set defaults live in project config**, so they travel inside the ZIP project
   save file (as custom images do, ADR-0004) — not in the bare `.svg`, which by
   the structure-only invariant cannot carry appearance.
@@ -102,6 +107,47 @@ is just the pre-shipped instance; a user can **author and import** their own.
   (File System Access API `FileSystemFileHandle`) so an author can re-export from
   their design tool and **refresh** the same path, or pick a new one. Where the
   API is unavailable (Firefox/Safari), refresh degrades to re-picking the file.
+  Only how the bytes arrive differs; the reconciliation below is identical.
+
+#### 4a. Refresh reconciliation — the Set is exactly what the atlas draws
+
+A refresh re-runs windowing and binding, then reconciles against the Set already
+in the project. Two things are in tension: the **file** has moved on (art
+redrawn, ids added or gone, off-primary colours corrected), while the
+**project** holds importer edits and Glyphs already bound to these Symbols.
+
+**The Set holds only the cells the file draws.** A Symbol the atlas stops
+drawing is removed — including when a Glyph uses it. Nothing is retained behind
+the drawing's back, and there is deliberately **no control to drop or
+cherry-pick a single cell**: both would let a Set drift from the atlas it claims
+to be, which is the failure this rule exists to prevent. A Set is a view of one
+file, not a collection accumulated across versions of it.
+
+What a refresh may **not** do is take art away _quietly_. Every Glyph left
+without a Symbol is warned about **by id**, once before the importer accepts —
+so they can cancel and fix the drawing instead — and again after. This is the
+same shape as sentinel flagging: non-blocking, specific, and never silent.
+
+A Glyph **keeps its Symbol id** when its Symbol goes away, falling back to its
+label (the Render Source fallback ADR-0004 already specifies for an unsatisfiable
+override). So restoring the cell in the drawing and refreshing restores the
+Glyph, with no manual repair — which is what makes unconditional removal cheap
+rather than destructive. Were the reference scrubbed instead, the warning would
+be the only recovery path and the rule could not stand.
+
+The rest of the reconciliation follows from the structure-only invariant — the
+file owns structure, configuration owns everything else:
+
+- **Art** always comes from the file; the project never edits it.
+- **Labels** the importer typed survive a refresh; labels never touched re-derive
+  from the Catalog, so a Catalog rename reaches Sets that never overrode it.
+- **Role colours** are configuration (they travel in the project save file) and a
+  refresh never touches them.
+- **Flags** are recomputed each read: correcting an off-primary export at source
+  and refreshing is the supported way to clear one.
+- A **rename is indistinguishable from a delete plus an add** — an id is the only
+  identity a cell has. The tool says so rather than guessing at a pairing, and
+  edits made against the old id do not carry over.
 
 ### 5. Surface
 
@@ -117,7 +163,15 @@ UI isn't forked.
 - ADR-0006's cascade gains the `symbolPaints` group and its flattened
   `StyleField`s (`symbolFill`, `symbolBorder`, `symbolSecondary`).
 - The windowing codegen must gain a browser-runtime home for import; the Node
-  codegen (`npm run symbols`) stays for the shipped atlases.
+  codegen (`npm run symbols`) stays for the shipped atlases. The browser home is
+  **small**: `build-symbols.mjs` hand-rolls bounding boxes only because jsdom has
+  no layout, and `getBBox()` reproduces its output exactly (verified against
+  every `xbox-symbols.svg` cell). Only measurement differs between the two — the
+  grid-snap, binding, and reconciliation are shared, and should live in one
+  DOM-free module for the same reason `paint-roles.mjs` does.
+- A Set's cells can be removed by a refresh, so anything keyed to a Symbol id
+  must tolerate that id vanishing and returning. Glyphs already do (they fall
+  back to their label); nothing else may assume a Symbol id is permanent.
 - Exact-match + flagging makes the sentinel values a **published contract**: the
   authoring docs and a starter swatch must state `#f00` / `#00f` / `#0f0` so
   authors don't guess an off-primary and get flagged.
@@ -130,3 +184,7 @@ The asset pipeline, the sentinel palette, and the three-outcome classifier +
 flagging landed with the issue #14 slice. The `symbolPaints` cascade extension,
 the browser windowing + import review + refresh-from-path, and the Symbols
 sub-tool UI are tracked as follow-up work.
+
+§4a was settled ahead of implementation by a prototype (issue #38, branch
+`proto/38-symbol-set-import`) that drove the reconciliation through the awkward
+cases by hand. The review screen's **layout** is deliberately not settled here.
