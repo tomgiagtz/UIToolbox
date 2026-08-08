@@ -11,7 +11,10 @@
   brings the **font** into the cascade, narrows `background.source` to the Glyph
   tier, replaces `contentScale` with two layer transforms, and moves `cellSize`
   into `Project.exportSettings` without changing its Project-global status. It
-  also retires the tri-state `backgroundId` amendment below.
+  retires the `backgroundId` field the amendment below is written in terms of
+  (already replaced by ADR-0009's `source` union) but **not** that amendment's
+  three-state rule, which survives against the Catalog seed — see ADR-0012 §2's
+  erratum.
 
 ## Context
 

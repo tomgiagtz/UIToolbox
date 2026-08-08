@@ -1,7 +1,8 @@
 # ADR-0012: A Catalog says what is present; a Preset says what it looks like
 
-- **Status:** Accepted — decided, not yet built. Implementation is filed as issues
-  off this ADR.
+- **Status:** Accepted — partly built. §1 and §2's three-tier cascade, Catalog
+  seeds and per-Glyph `source` landed with #78; the font, the transforms, §3–§7
+  and the Presets themselves are still filed as issues off this ADR.
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
   land-as-one-change requirement withdrawn 2026-08-07
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
@@ -159,6 +160,18 @@ An Input with no seed (`key-space`) falls through to Project on every row.
 The rank is explicit rather than a "only when nothing sets it" fallback because
 such a fallback would **never fire**: the Project base is a full `Background` and
 `DEFAULT_BACKGROUND` always carries `source: { kind: "shape" }`.
+
+_Erratum, 2026-08-08 (found while building this section)._ The amendment table
+below says this supersedes ADR-0006's **tri-state `backgroundId`**. That is right
+about the field ADR-0006 named — which ADR-0009 had already deleted when it
+replaced the Background's tile fields with the `source` union — but it reads as
+retiring the _distinction_, and the distinction survives. On `source`, _omitting_
+the field and setting it explicitly to `{ kind: "shape" }` still differ: an
+omitted source now falls to the **seed**, so only an explicit value can turn a
+bumper's tile off. Row 5 of the table above depends on exactly that. What changed
+is the justification — the seed outranks the Project base, where before the
+Catalog tier outranked Device — not the behaviour, and every comment that cited
+the old premise was rewritten rather than deleted.
 
 **Separability is preserved, not forgone** — the cost the withdrawn draft
 accepted is one we don't pay. Reset is `clearOverrideField` on the user's own

@@ -18,7 +18,8 @@ bumper-shaped — as an optional `backgroundId` beside the shape, with a `flipX`
 flag to mirror the left-side ones. Inside a sparse override the id could also be
 `null`, meaning "no tile, draw the plain shape", because the Catalog per-Input
 tier outranks the Device tier and omitting the field would just let a bumper's
-tile fall through again.
+tile fall through again. _(ADR-0012 §2 deleted that tier; the premise is now that
+a Catalog **seed** outranks the Project base, and the conclusion is unchanged.)_
 
 Issue #22 adds a third kind of tile: an **uploaded image**, the user's own tile
 graphic. Bolting a second optional id onto the Background would leave three
@@ -51,8 +52,8 @@ type BackgroundSource =
   `shape: "none"`, and that was the wrong axis: the renderer drew tile art
   whenever it had a bitmap and never consulted the shape, so "none" on a bumper
   still drew the bumper tile. A shape can only ever suppress the primitive, and
-  the Catalog per-Input tier outranks the Device tier — so only a source can turn
-  off inherited art. `{ kind: "none" }` draws no primitive **and** no tile,
+  a bumper's tile outranks the tier a shape would be set at — so only a source can
+  turn off inherited art. `{ kind: "none" }` draws no primitive **and** no tile,
   leaving a transparent, content-only Glyph at whatever scope sets it.
 - An **uploaded tile** references an `ImageAsset` id — the same manifest,
   registry, IndexedDB store and ZIP bundling that custom image Render Sources use

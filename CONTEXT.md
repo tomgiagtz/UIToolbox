@@ -169,9 +169,6 @@ true under any look. A Catalog is code-maintained; a **Preset** points at one an
 can never replace it. Users toggle Catalog Inputs on/off; only **enabled** ones
 generate Glyphs. Inputs the Catalog lacks are added as **custom Inputs**.
 
-_(The Authored Background and mirror seeds are ADR-0012, decided and not yet
-built; today they sit in a `defaultStyle` cascade tier the ADR removes.)_
-
 ### Device Layout
 
 The **code-drawn schematic** used to render a Device's Catalog for selection:
@@ -237,9 +234,6 @@ corner radius, shape and the **background transform** all cascade normally; fill
 and border paint a shape or recolour an authored tile, while an uploaded image
 draws as authored, fitted to the cell and never recoloured.
 
-_(Per-Glyph-only `source` and the seed are ADR-0012, decided and not yet built;
-today the source is settable at any scope.)_
-
 ### Authored Background
 
 A shipped SVG tile graphic the project owner authors (a growing gallery),
@@ -257,22 +251,23 @@ How a Glyph's style + Render Source are resolved, lowest precedence to highest:
 The Project tier is a full style; each tier above it is a sparse subset, and
 anything unset falls up the chain. The rule for which properties live where:
 **what a Glyph is drawn from is per-Glyph; how it's painted cascades.** So the
-**Render Source** and the Background's **source** are settable only at the Glyph
-tier, while colour, shape, border, font and the layer **transforms** are settable
-at any tier.
+**Render Source** and the Background's **source** are set per Glyph — the Device
+tier cannot name a source at all — while colour, shape, border, font and the layer
+**transforms** are settable at any tier. The Project base still carries a source,
+being a full style rather than a sparse override.
 
 A Catalog's art **seeds** rank between the Glyph and Project tiers: a bumper
-draws its authored tile unless that Glyph explicitly says otherwise, which is
-what keeps it bumper-shaped when its Device sets a plain shape for everything.
-Because the seed is a base rather than pre-filled user data, resetting a Glyph
-lands back on the shipped tile rather than falling to the Device tier.
+draws its authored tile unless that Glyph explicitly says otherwise. That is what
+keeps it bumper-shaped when the project-wide source is something else, and the
+Device tier cannot flatten it because it cannot speak to the source. Because the
+seed is a base rather than pre-filled user data, resetting a Glyph lands back on
+the shipped tile rather than falling to the Device tier.
 
 The grid **cell size** is the one exception: it stays Project-global for a
 uniform grid, and lives in the project's export settings.
 
-_(ADR-0012, decided and not yet built. Today there are four tiers, with a Catalog
-per-Input default tier between Device and Glyph, the font outside the cascade,
-and `source` settable at any scope.)_
+_(The font and the layer **transforms** are ADR-0012, decided and not yet built:
+today the font stays Project-global and neither transform exists.)_
 
 ### Sprite Atlas
 
