@@ -3,7 +3,7 @@ import {
   DEVICE_CATALOGS,
   catalogIndex,
   catalogNameIndex,
-  catalogPresetLabels,
+  defaultEnabledLabels,
   getCatalog,
 } from "@/lib/glyph/catalog";
 import {
@@ -97,40 +97,44 @@ describe("DEVICE_CATALOGS", () => {
     }
   });
 
-  it("lists every preset id as a real Catalog entry", () => {
+  it("lists every Default Selection id as a real Catalog entry", () => {
     for (const catalog of DEVICE_CATALOGS) {
       const ids = new Set(catalog.inputs.map((i) => i.id));
-      for (const presetId of catalog.preset) {
-        expect(ids.has(presetId)).toBe(true);
+      for (const enabledId of catalog.defaultEnabled) {
+        expect(ids.has(enabledId)).toBe(true);
       }
-      // Preset ids themselves are unique.
-      expect(new Set(catalog.preset).size).toBe(catalog.preset.length);
+      // Default Selection ids themselves are unique.
+      expect(new Set(catalog.defaultEnabled).size).toBe(
+        catalog.defaultEnabled.length,
+      );
     }
   });
 });
 
-describe("Presets seed the legacy default-enabled subset", () => {
-  it("keyboard preset resolves to the ~24 legacy keys, in order", () => {
-    expect(catalogPresetLabels(getCatalog("keyboard")!)).toEqual(
+describe("The Default Selection is the legacy default-enabled subset", () => {
+  it("keyboard resolves to the ~24 legacy keys, in order", () => {
+    expect(defaultEnabledLabels(getCatalog("keyboard")!)).toEqual(
       LEGACY_KEYBOARD,
     );
   });
 
-  it("keyboard Catalog is larger than its enabled preset", () => {
+  it("keyboard Catalog is larger than its Default Selection", () => {
     const keyboard = getCatalog("keyboard")!;
-    expect(keyboard.inputs.length).toBeGreaterThan(keyboard.preset.length);
+    expect(keyboard.inputs.length).toBeGreaterThan(
+      keyboard.defaultEnabled.length,
+    );
   });
 
-  it("xbox preset enables the whole Catalog, in legacy order", () => {
+  it("xbox enables the whole Catalog, in legacy order", () => {
     const xbox = getCatalog("xbox")!;
-    expect(xbox.preset.length).toBe(xbox.inputs.length);
-    expect(catalogPresetLabels(xbox)).toEqual(LEGACY_XBOX);
+    expect(xbox.defaultEnabled.length).toBe(xbox.inputs.length);
+    expect(defaultEnabledLabels(xbox)).toEqual(LEGACY_XBOX);
   });
 
-  it("playstation preset enables the whole Catalog, in legacy order", () => {
+  it("playstation enables the whole Catalog, in legacy order", () => {
     const ps = getCatalog("playstation")!;
-    expect(ps.preset.length).toBe(ps.inputs.length);
-    expect(catalogPresetLabels(ps)).toEqual(LEGACY_PLAYSTATION);
+    expect(ps.defaultEnabled.length).toBe(ps.inputs.length);
+    expect(defaultEnabledLabels(ps)).toEqual(LEGACY_PLAYSTATION);
   });
 });
 

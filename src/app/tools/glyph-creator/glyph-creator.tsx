@@ -19,7 +19,7 @@ import {
   resolveDeviceInputs,
   resolveScopeStyle,
 } from "@/lib/glyph/generate";
-import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
 import type { ImageAsset, Project } from "@/lib/glyph/types";

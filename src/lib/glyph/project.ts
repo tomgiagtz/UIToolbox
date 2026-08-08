@@ -3,7 +3,7 @@ import {
   getCatalog,
   type DeviceCatalog,
 } from "@/lib/glyph/catalog";
-import { createDeviceFromCatalog } from "@/lib/glyph/presets";
+import { createDeviceFromCatalog } from "@/lib/glyph/defaults";
 import {
   clearOverrideField,
   mergeOverride,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { projectReducer, type ProjectAction } from "@/lib/glyph/project";
-import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/defaults";
 import type { Project } from "@/lib/glyph/types";
 
 function base(): Project {

@@ -7,7 +7,10 @@ import { describe, expect, it } from "vitest";
 import { unzipSync, zipSync } from "fflate";
 import { DEVICE_CATALOGS } from "@/lib/glyph/catalog";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
-import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
+import {
+  DEFAULT_FONT_FAMILY,
+  createDefaultProject,
+} from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { PersistedFont, PersistedImage } from "@/lib/glyph/project-store";
 import type { Project } from "@/lib/glyph/types";
@@ -27,16 +30,16 @@ function edited(): Project {
   ].reduce(projectReducer, createDefaultProject());
 }
 
-/** A Catalog id the Keyboard Preset leaves disabled, and one it enables. */
-function keyboardPresetEdges(): {
-  disabledByPreset: string;
-  enabledByPreset: string;
+/** A Catalog id the Keyboard's Default Selection leaves disabled, and one it enables. */
+function keyboardSelectionEdges(): {
+  disabledByDefault: string;
+  enabledByDefault: string;
 } {
   const keyboard = DEVICE_CATALOGS.find((c) => c.id === "keyboard")!;
-  const disabledByPreset = keyboard.inputs.find(
-    (input) => !keyboard.preset.includes(input.id),
+  const disabledByDefault = keyboard.inputs.find(
+    (input) => !keyboard.defaultEnabled.includes(input.id),
   )!.id;
-  return { disabledByPreset, enabledByPreset: keyboard.preset[0] };
+  return { disabledByDefault, enabledByDefault: keyboard.defaultEnabled[0] };
 }
 
 /** Wrap an ExportArtifact's blob back into a File, as an upload would arrive. */
@@ -228,17 +231,17 @@ describe("project-file — the whole configured project (issue #23)", () => {
    * shapes the editor actually produces.
    */
   function configured(): Project {
-    const { disabledByPreset, enabledByPreset } = keyboardPresetEdges();
+    const { disabledByDefault, enabledByDefault } = keyboardSelectionEdges();
     const base = [
       {
         type: "toggle-input",
         deviceIndex: 0,
-        inputId: disabledByPreset,
+        inputId: disabledByDefault,
       } as const,
       {
         type: "toggle-input",
         deviceIndex: 0,
-        inputId: enabledByPreset,
+        inputId: enabledByDefault,
       } as const,
       { type: "add-custom-input", deviceIndex: 0, label: "Grave" } as const,
       {
@@ -248,12 +251,12 @@ describe("project-file — the whole configured project (issue #23)", () => {
       } as const,
       {
         type: "patch-style",
-        scope: { tier: "glyph", deviceIndex: 0, glyphId: disabledByPreset },
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: disabledByDefault },
         patch: { textColor: "#00ff00", contentScale: 1.5 },
       } as const,
       {
         type: "patch-style",
-        scope: { tier: "glyph", deviceIndex: 0, glyphId: enabledByPreset },
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: enabledByDefault },
         patch: { renderSource: { kind: "image", imageId: image.id } },
       } as const,
     ].reduce(projectReducer, edited());
@@ -267,11 +270,11 @@ describe("project-file — the whole configured project (issue #23)", () => {
   it("round-trips selection, custom Inputs, overrides, Render Source and bytes", async () => {
     const project = configured();
     const keyboard = project.devices[0];
-    const { disabledByPreset, enabledByPreset } = keyboardPresetEdges();
+    const { disabledByDefault, enabledByDefault } = keyboardSelectionEdges();
     // Guard the fixture: an assertion below is only meaningful if the reducer
     // actually moved these.
-    expect(keyboard.enabled).toContain(disabledByPreset);
-    expect(keyboard.enabled).not.toContain(enabledByPreset);
+    expect(keyboard.enabled).toContain(disabledByDefault);
+    expect(keyboard.enabled).not.toContain(enabledByDefault);
     expect(keyboard.custom.map((c) => c.label)).toEqual(["Grave"]);
 
     const artifact = await exportProjectFile(project, null, [image]);

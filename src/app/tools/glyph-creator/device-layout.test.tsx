@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { createDeviceFromCatalog } from "@/lib/glyph/presets";
+import { createDeviceFromCatalog } from "@/lib/glyph/defaults";
 import { getCatalog } from "@/lib/glyph/catalog";
 import { DeviceLayout } from "./device-layout";
 

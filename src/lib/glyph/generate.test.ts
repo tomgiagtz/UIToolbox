@@ -7,7 +7,7 @@ import {
 } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
 import { projectReducer } from "@/lib/glyph/project";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import { createDefaultProject } from "@/lib/glyph/defaults";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import type {
   DeviceConfig,

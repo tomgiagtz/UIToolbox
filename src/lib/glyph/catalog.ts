@@ -38,7 +38,7 @@ export interface CatalogInput {
   defaultStyle?: StyleOverride;
 }
 
-/** A Device's fixed Catalog plus its default-enabled Preset (ordered ids). */
+/** A Device's fixed Catalog plus its **Default Selection** (ordered ids). */
 export interface DeviceCatalog {
   /** Stable Catalog / Device kind id, e.g. "keyboard". */
   id: string;
@@ -46,8 +46,12 @@ export interface DeviceCatalog {
   name: string;
   /** Every known Input, in Device-Layout reading order. */
   inputs: CatalogInput[];
-  /** The Preset: default-enabled ids, in the order they generate. */
-  preset: string[];
+  /**
+   * The **Default Selection**: which ids start enabled on a fresh Device, in the
+   * order they generate. Named for what it is rather than "preset", which
+   * ADR-0012 gives to a shipped *look*.
+   */
+  defaultEnabled: string[];
 }
 
 // --- Keyboard catalog ------------------------------------------------------
@@ -113,11 +117,11 @@ const KEYBOARD_INPUTS: CatalogInput[] = [
 ];
 
 /**
- * The Keyboard Preset: the ~24 common gaming keys enabled by default, in the
- * exact order the tool generated them before the Catalog model. The rest of the
- * board ships in the Catalog but disabled.
+ * The Keyboard's Default Selection: the ~24 common gaming keys enabled by
+ * default, in the exact order the tool generated them before the Catalog model.
+ * The rest of the board ships in the Catalog but disabled.
  */
-const KEYBOARD_PRESET: string[] = [
+const KEYBOARD_DEFAULT_ENABLED: string[] = [
   "key-w",
   "key-a",
   "key-s",
@@ -147,7 +151,7 @@ const KEYBOARD_PRESET: string[] = [
 // --- Pad catalogs ----------------------------------------------------------
 //
 // The pads enable their whole Catalog by default, so each entry list doubles as
-// the Preset. Order matches the labels the tool generated pre-Catalog.
+// the Default Selection. Order matches the labels the tool generated pre-Catalog.
 
 /** The optional half of a pad Catalog entry (see {@link pad}). */
 interface PadEntry {
@@ -261,19 +265,19 @@ export const DEVICE_CATALOGS: DeviceCatalog[] = [
     id: "keyboard",
     name: "Keyboard",
     inputs: KEYBOARD_INPUTS,
-    preset: KEYBOARD_PRESET,
+    defaultEnabled: KEYBOARD_DEFAULT_ENABLED,
   },
   {
     id: "xbox",
     name: "Xbox",
     inputs: XBOX_INPUTS,
-    preset: XBOX_INPUTS.map((i) => i.id),
+    defaultEnabled: XBOX_INPUTS.map((i) => i.id),
   },
   {
     id: "playstation",
     name: "PlayStation",
     inputs: PLAYSTATION_INPUTS,
-    preset: PLAYSTATION_INPUTS.map((i) => i.id),
+    defaultEnabled: PLAYSTATION_INPUTS.map((i) => i.id),
   },
 ];
 
@@ -303,8 +307,8 @@ export function catalogNameIndex(catalog: DeviceCatalog): Map<string, string> {
   return byName;
 }
 
-/** The labels a Catalog's Preset resolves to, in generation order. */
-export function catalogPresetLabels(catalog: DeviceCatalog): string[] {
+/** The labels a Catalog's Default Selection resolves to, in generation order. */
+export function defaultEnabledLabels(catalog: DeviceCatalog): string[] {
   const byId = catalogIndex(catalog);
-  return catalog.preset.map((id) => byId.get(id)?.label ?? "");
+  return catalog.defaultEnabled.map((id) => byId.get(id)?.label ?? "");
 }

@@ -1,3 +1,12 @@
+/**
+ * The values a fresh project starts from — the Project tier of the Style Cascade,
+ * the default export settings, and the factories that build a default project and
+ * a default Device.
+ *
+ * Deliberately **not** called `presets.ts`: under ADR-0012 a **Preset** is a
+ * shipped starting *look* that appears in the picker, which is not what any of
+ * this is. Shipped Presets land in `presets/` (ADR-0012 §5).
+ */
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
 import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
 import type {
@@ -9,15 +18,19 @@ import type {
 } from "@/lib/glyph/types";
 
 /**
- * Build a fresh Device from a Catalog: its Preset becomes the enabled selection,
- * with no custom Inputs and empty (pass-through) Style Cascade overrides. The
- * enabled array is copied so edits never mutate the shared Catalog Preset.
+ * Build a fresh Device from a Catalog: its **Default Selection** becomes the
+ * enabled selection, with no custom Inputs and empty (pass-through) Style Cascade
+ * overrides. The enabled array is copied so edits never mutate the shared Catalog.
+ *
+ * Nothing seeds `glyphStyles` here: a Catalog's art seeds are read from the
+ * Catalog at resolve time (ADR-0012 §2), never pre-filled as user data, which is
+ * what keeps a shipped default distinguishable from something the user set.
  */
 export function createDeviceFromCatalog(catalog: DeviceCatalog): DeviceConfig {
   return {
     name: catalog.name,
     catalogId: catalog.id,
-    enabled: [...catalog.preset],
+    enabled: [...catalog.defaultEnabled],
     custom: [],
     style: {},
     glyphStyles: {},
@@ -96,7 +109,7 @@ export const DEFAULT_PROJECT_NAME = "my-glyphs";
 export const DEFAULT_FONT_FAMILY = "Inter";
 
 /**
- * Build the default project: the Keyboard Device seeded from its Preset, plus
+ * Build the default project: the Keyboard Device built from its Default Selection, plus
  * default style and naming. The UI holds this as editable state — style, Inputs,
  * Devices, and naming are all changed from here by the user.
  */
