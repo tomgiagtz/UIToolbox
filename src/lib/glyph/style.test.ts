@@ -3,9 +3,16 @@ import {
   clearOverrideField,
   isOverrideFieldSet,
   mergeOverride,
+  resolveGlyphStyle,
   resolveStyle,
+  withoutBackgroundSource,
 } from "@/lib/glyph/style";
-import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
+import type {
+  DeviceStyleOverride,
+  GlyphStyle,
+  StyleOverride,
+} from "@/lib/glyph/style";
+import type { BackgroundSource } from "@/lib/glyph/types";
 
 function base(): GlyphStyle {
   return {
@@ -57,120 +64,20 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     const device: StyleOverride = {
       background: { shape: "circle", fill: "#111" },
     };
-    const catalog: StyleOverride = { background: { fill: "#222" } };
-    const glyph: StyleOverride = { textColor: "#0f0" };
-    const out = resolveStyle(base(), device, catalog, glyph);
+    const glyph: StyleOverride = {
+      background: { fill: "#222" },
+      textColor: "#0f0",
+    };
+    const out = resolveStyle(base(), device, glyph);
     expect(out.background.shape).toBe("circle"); // from device
-    expect(out.background.fill).toBe("#222"); // catalog outranks device
+    expect(out.background.fill).toBe("#222"); // glyph outranks device
     expect(out.textColor).toBe("#0f0"); // from glyph
   });
 
-  it("lets an explicit Glyph override outrank a Catalog per-Input default", () => {
-    const catalog: StyleOverride = { background: { shape: "square" } };
+  it("lets an explicit Glyph override outrank the Device tier", () => {
+    const device: StyleOverride = { background: { shape: "square" } };
     const glyph: StyleOverride = { background: { shape: "circle" } };
-    const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.shape).toBe("circle");
-  });
-
-  it("resolves an Authored Background source from the Catalog per-Input tier (issue #18)", () => {
-    const catalog: StyleOverride = {
-      background: { source: { kind: "authored", backgroundId: "bumper" } },
-    };
-    const out = resolveStyle(base(), undefined, catalog);
-    expect(out.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-    });
-    // Falls up for everything else it doesn't set.
-    expect(out.background.fill).toBe(base().background.fill);
-  });
-
-  it("carries the Background mirror flag through the cascade (issue #18)", () => {
-    const catalog: StyleOverride = {
-      background: {
-        source: { kind: "authored", backgroundId: "bumper", flipX: true },
-      },
-    };
-    const out = resolveStyle(base(), undefined, catalog);
-    expect(out.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-      flipX: true,
-    });
-  });
-
-  it("lets a Glyph override switch the Catalog's Background source", () => {
-    const catalog: StyleOverride = {
-      background: { source: { kind: "authored", backgroundId: "bumper" } },
-    };
-    const glyph: StyleOverride = {
-      background: { source: { kind: "authored", backgroundId: "trigger" } },
-    };
-    const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "trigger",
-    });
-  });
-
-  it("lets a Glyph override point the Background at an uploaded image (issue #22)", () => {
-    const catalog: StyleOverride = {
-      background: { source: { kind: "authored", backgroundId: "bumper" } },
-    };
-    const glyph: StyleOverride = {
-      background: { source: { kind: "image", imageId: "img-1.png" } },
-    };
-    const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.source).toEqual({
-      kind: "image",
-      imageId: "img-1.png",
-    });
-  });
-
-  it("lets a Glyph override drop the Catalog's tile by choosing the shape (issue #18)", () => {
-    // Clearing the Glyph tier's own field only makes it fall back to the tile
-    // again, so "no tile" needs an explicit value the cascade can carry.
-    const catalog: StyleOverride = {
-      background: {
-        source: { kind: "authored", backgroundId: "bumper", flipX: true },
-      },
-    };
-    const glyph: StyleOverride = {
-      background: { source: { kind: "shape" }, shape: "circle" },
-    };
-    const out = resolveStyle(base(), undefined, catalog, glyph);
-    // The mirror flag rode on the source, so it goes with it.
-    expect(out.background.source).toEqual({ kind: "shape" });
-    expect(out.background.shape).toBe("circle");
-  });
-
-  it('lets a Glyph override turn off an inherited tile entirely with "none"', () => {
-    // The reason "none" is a source and not a shape: a shape could only ever
-    // suppress the primitive, so it left the Catalog's tile drawing underneath.
-    const catalog: StyleOverride = {
-      background: {
-        source: { kind: "authored", backgroundId: "bumper", flipX: true },
-      },
-    };
-    const glyph: StyleOverride = { background: { source: { kind: "none" } } };
-    const out = resolveStyle(base(), undefined, catalog, glyph);
-    expect(out.background.source).toEqual({ kind: "none" });
-  });
-
-  it("treats an explicit shape source at the Device tier as no tile, not as unset", () => {
-    const device: StyleOverride = { background: { source: { kind: "shape" } } };
-    const catalog: StyleOverride = {
-      background: { source: { kind: "authored", backgroundId: "bumper" } },
-    };
-    // Catalog outranks Device, so the tile still wins here...
-    expect(resolveStyle(base(), device, catalog).background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-    });
-    // ...but with no Catalog tile, the Device's choice resolves to no tile.
-    expect(resolveStyle(base(), device, undefined).background.source).toEqual({
-      kind: "shape",
-    });
+    expect(resolveStyle(base(), device, glyph).background.shape).toBe("circle");
   });
 
   it("resolves each Symbol Paint Role independently through the cascade (#37)", () => {
@@ -195,9 +102,7 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     const device: StyleOverride = { contentScale: 0.8 };
     const glyph: StyleOverride = { contentScale: 1.5 };
     expect(resolveStyle(base(), device).contentScale).toBe(0.8);
-    expect(resolveStyle(base(), device, undefined, glyph).contentScale).toBe(
-      1.5,
-    );
+    expect(resolveStyle(base(), device, glyph).contentScale).toBe(1.5);
     // Unset at every tier falls back to the Project base.
     expect(resolveStyle(base(), {}).contentScale).toBe(1);
   });
@@ -206,6 +111,111 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     const b = base();
     const snapshot = JSON.parse(JSON.stringify(b));
     resolveStyle(b, { background: { border: { width: 99 } } });
+    expect(b).toEqual(snapshot);
+  });
+});
+
+describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
+  const BUMPER: BackgroundSource = {
+    kind: "authored",
+    backgroundId: "bumper",
+    flipX: true,
+  };
+
+  it("draws the seeded tile when the user has set nothing", () => {
+    const out = resolveGlyphStyle(base(), BUMPER, undefined, undefined);
+    expect(out.background.source).toEqual(BUMPER);
+    // The seed says only what the tile *is*; everything else falls up.
+    expect(out.background.fill).toBe(base().background.fill);
+  });
+
+  it("falls through to the Project base for an Input with no seed", () => {
+    const out = resolveGlyphStyle(base(), undefined, undefined, undefined);
+    expect(out.background.source).toEqual({ kind: "shape" });
+  });
+
+  it("outranks a project-wide source, so a seeded Input keeps its tile", () => {
+    // The row that proves the seed is a *rank* and not a fallback: a fallback
+    // would never fire, since the Project base always carries a source.
+    const project: GlyphStyle = {
+      ...base(),
+      background: {
+        ...base().background,
+        source: { kind: "image", imageId: "img-1.png" },
+      },
+    };
+    expect(
+      resolveGlyphStyle(project, BUMPER, undefined, undefined).background
+        .source,
+    ).toEqual(BUMPER);
+    // An unseeded Input on the same project does take the uploaded tile.
+    expect(
+      resolveGlyphStyle(project, undefined, undefined, undefined).background
+        .source,
+    ).toEqual({ kind: "image", imageId: "img-1.png" });
+  });
+
+  it("lets the Device tier recolour a seeded tile without replacing it", () => {
+    const device: DeviceStyleOverride = { background: { fill: "#f00" } };
+    const out = resolveGlyphStyle(base(), BUMPER, device, undefined);
+    expect(out.background.source).toEqual(BUMPER);
+    expect(out.background.fill).toBe("#f00");
+  });
+
+  it("ignores a Background source left on a Device override by an older build", () => {
+    // The Device tier cannot express one now, but persisted overrides are
+    // validated by shape and not content, so a pre-ADR-0012 save can still carry
+    // one. Obeying it would flatten all four shoulders under one setting — the
+    // exact collision this rank exists to remove.
+    const legacy = {
+      background: { source: { kind: "shape" } },
+    } as unknown as DeviceStyleOverride;
+    expect(
+      resolveGlyphStyle(base(), BUMPER, legacy, undefined).background.source,
+    ).toEqual(BUMPER);
+  });
+
+  it("lets a Glyph override outrank the seed", () => {
+    const glyph: StyleOverride = {
+      background: { source: { kind: "authored", backgroundId: "trigger" } },
+    };
+    expect(
+      resolveGlyphStyle(base(), BUMPER, undefined, glyph).background.source,
+    ).toEqual({ kind: "authored", backgroundId: "trigger" });
+  });
+
+  it("distinguishes an explicit Glyph shape from an omitted source", () => {
+    // The tri-state survives the tier's deletion: omitting the field falls to the
+    // seed, so only an explicit value can turn the tile off. Its justification
+    // changed (the seed outranks the base, rather than the Catalog tier
+    // outranking Device); the behaviour did not.
+    const explicit: StyleOverride = {
+      background: { source: { kind: "shape" }, shape: "circle" },
+    };
+    const out = resolveGlyphStyle(base(), BUMPER, undefined, explicit);
+    // The mirror rides on the source, so it goes with it.
+    expect(out.background.source).toEqual({ kind: "shape" });
+    expect(out.background.shape).toBe("circle");
+
+    const omitted: StyleOverride = { background: { shape: "circle" } };
+    expect(
+      resolveGlyphStyle(base(), BUMPER, undefined, omitted).background.source,
+    ).toEqual(BUMPER);
+  });
+
+  it('lets a Glyph turn the seeded tile off entirely with "none"', () => {
+    // Why "none" is a source and not a fourth shape: a shape can only suppress
+    // the drawn primitive, leaving the seeded tile showing underneath.
+    const glyph: StyleOverride = { background: { source: { kind: "none" } } };
+    expect(
+      resolveGlyphStyle(base(), BUMPER, undefined, glyph).background.source,
+    ).toEqual({ kind: "none" });
+  });
+
+  it("does not mutate the base style", () => {
+    const b = base();
+    const snapshot = JSON.parse(JSON.stringify(b));
+    resolveGlyphStyle(b, BUMPER, { background: { fill: "#f00" } }, undefined);
     expect(b).toEqual(snapshot);
   });
 });
@@ -443,5 +453,34 @@ describe("clearOverrideField", () => {
     expect(clearOverrideField({ textColor: "#f00" }, "fill")).toEqual({
       textColor: "#f00",
     });
+  });
+});
+
+describe("withoutBackgroundSource", () => {
+  it("passes through an override that names no source", () => {
+    const override: StyleOverride = {
+      textColor: "#f00",
+      background: { fill: "#111" },
+    };
+    expect(withoutBackgroundSource(override)).toEqual(override);
+  });
+
+  it("drops the source, keeping the paint fields beside it", () => {
+    expect(
+      withoutBackgroundSource({
+        background: { source: { kind: "none" }, fill: "#111" },
+      }),
+    ).toEqual({ background: { fill: "#111" } });
+  });
+
+  it("collapses a background that held nothing but a source", () => {
+    // Left behind, an empty `background: {}` would read as an override that sets
+    // something, which is what surfaces a reset control in the Style panel.
+    expect(
+      withoutBackgroundSource({
+        textColor: "#f00",
+        background: { source: { kind: "shape" } },
+      }),
+    ).toEqual({ textColor: "#f00" });
   });
 });

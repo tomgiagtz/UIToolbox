@@ -2,18 +2,19 @@
  * Device Catalogs (ADR-0005).
  *
  * A Device owns a **fixed Catalog** of known Inputs — every keyboard key, every
- * pad button. Each entry has a stable `id`, a default `label`, and (later, once
- * authored) an optional default Symbol and a Catalog per-Input style default.
- * A **Preset** is the default-enabled subset of a Catalog's ids, in generation
- * order: the Keyboard enables ~24 common gaming keys out of a full board; the
- * pads enable their whole Catalog.
+ * pad button. **A Catalog says what is present** (ADR-0012 §1): each entry has a
+ * stable `id`, a default `label`, and which shipped art *depicts* that control.
+ * Its **Default Selection** is the subset enabled on a fresh Device, in
+ * generation order: the Keyboard enables ~24 common gaming keys out of a full
+ * board; the pads enable their whole Catalog.
  *
  * The Catalog is code-maintained data, not authored art — adding a device means
- * adding entries here, not drawing anything (ADR-0005). The Symbol / authored
- * Background wiring is intentionally left as a skeleton: `symbolId` and
- * `defaultStyle` exist on the type but ship empty until those assets land.
+ * adding entries here, not drawing anything (ADR-0005).
+ *
+ * Nothing here is style. The art fields are **seeds**: they name the asset a
+ * control *is*, which is true under any look, so this file has no dependency on
+ * the Style Cascade at all.
  */
-import type { StyleOverride } from "@/lib/glyph/style";
 
 /** One known Input a Device offers. Stable `id`; `label` is its default text. */
 export interface CatalogInput {
@@ -21,7 +22,7 @@ export interface CatalogInput {
   id: string;
   /** Default label shown / rendered for this Input (e.g. "Space", "A"). */
   label: string;
-  /** Default Symbol id, once Symbols are authored (skeleton: unset for now). */
+  /** The Symbol that depicts this Input, drawn unless a Glyph overrides it. */
   symbolId?: string;
   /**
    * Other names this Input answers to — the other pad's word for the same
@@ -31,11 +32,26 @@ export interface CatalogInput {
    */
   aliases?: string[];
   /**
-   * Catalog per-Input style default — the third cascade tier. Lets a bumper keep
-   * its authored Background even under a device-wide override (ADR-0006).
-   * Skeleton: unset until authored Backgrounds land.
+   * The Authored Background that depicts this Input — a bumper is bumper-shaped
+   * under a neon look and a monochrome one alike, so this is a **presence** fact
+   * beside {@link symbolId}, not a style tier (ADR-0012 §2).
+   *
+   * It **seeds** the Background source: the resolver ranks it above the Project
+   * base and below the Glyph override, and the Device tier cannot name a source
+   * at all. Being a base rather than pre-filled user data is what lets a Glyph
+   * reset land back on this tile.
    */
-  defaultStyle?: StyleOverride;
+  backgroundId?: string;
+  /**
+   * Face this control the other way, for the left-side shoulders that share one
+   * right-facing tile with their right-side twins. Meaningless without
+   * {@link backgroundId}.
+   *
+   * A bare boolean, never a transform fragment: a transform-shaped field in this
+   * file would make `rotation: 15` legal in the one place that may only say what
+   * is present. A boolean can only mean *this control faces the other way*.
+   */
+  mirrored?: boolean;
 }
 
 /** A Device's fixed Catalog plus its **Default Selection** (ordered ids). */
@@ -153,24 +169,16 @@ const KEYBOARD_DEFAULT_ENABLED: string[] = [
 // The pads enable their whole Catalog by default, so each entry list doubles as
 // the Default Selection. Order matches the labels the tool generated pre-Catalog.
 
-/** The optional half of a pad Catalog entry (see {@link pad}). */
-interface PadEntry {
-  /** Default Symbol as Render Source (issue #17). */
-  symbolId?: string;
-  /** Default Authored Background tile, via the per-Input style tier (issue #18). */
-  backgroundId?: string;
-  /**
-   * Mirror that tile horizontally, so a left-side bumper/trigger faces opposite
-   * the right-side one it shares right-facing art with.
-   */
-  flipX?: boolean;
-  /** Other names this Input answers to (see {@link CatalogInput.aliases}). */
-  aliases?: string[];
-}
+/**
+ * The optional half of a pad Catalog entry (see {@link pad}) — exactly the
+ * seed/lookup fields of a {@link CatalogInput}, minus the id and label the
+ * entry tuple supplies.
+ */
+type PadEntry = Omit<CatalogInput, "id" | "label">;
 
 /**
  * Build a pad Catalog. Each entry is `[slug, label, PadEntry?]`, where the third
- * element carries whatever defaults that Input has. Face buttons the shipped
+ * element carries whatever seeds that Input has. Face buttons the shipped
  * atlases don't yet author simply stay label-rendered.
  */
 function pad(
@@ -178,24 +186,13 @@ function pad(
   entries: [string, string, PadEntry?][],
 ): CatalogInput[] {
   return entries.map(
-    ([slug, label, { symbolId, backgroundId, flipX, aliases } = {}]) => ({
+    ([slug, label, { symbolId, backgroundId, mirrored, aliases } = {}]) => ({
       id: `${prefix}-${slug}`,
       label,
       ...(symbolId ? { symbolId } : {}),
       ...(aliases ? { aliases } : {}),
-      ...(backgroundId
-        ? {
-            defaultStyle: {
-              background: {
-                source: {
-                  kind: "authored" as const,
-                  backgroundId,
-                  ...(flipX ? { flipX: true } : {}),
-                },
-              },
-            },
-          }
-        : {}),
+      ...(backgroundId ? { backgroundId } : {}),
+      ...(mirrored ? { mirrored: true } : {}),
     }),
   );
 }
@@ -214,7 +211,7 @@ function shoulder(
 ): PadEntry {
   return {
     backgroundId: tile,
-    ...(side === "left" ? { flipX: true } : {}),
+    ...(side === "left" ? { mirrored: true } : {}),
     aliases,
   };
 }

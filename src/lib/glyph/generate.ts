@@ -7,12 +7,14 @@ import { applyTemplate, caseSeparator } from "@/lib/glyph/naming";
 import { gridPack } from "@/lib/glyph/packer";
 import { slugify } from "@/lib/glyph/slugify";
 import {
+  resolveGlyphStyle,
   resolveStyle,
   type GlyphStyle,
   type StyleOverride,
   type StyleScope,
 } from "@/lib/glyph/style";
 import type {
+  BackgroundSource,
   CaseStyle,
   DeviceConfig,
   DeviceOutput,
@@ -71,6 +73,27 @@ export function resolveRenderSource(
   }
 }
 
+/**
+ * The Background source a Catalog **seeds** this Input with, if any (ADR-0012 §2)
+ * — the exact parallel of {@link resolveRenderSource}'s `symbolId` fallback, and
+ * the only place the Catalog's presence facts become a style value.
+ *
+ * `mirrored` projects into the source's `flipX`. That asymmetry is deliberate and
+ * temporary: the Catalog stores a bare boolean so a transform fragment can never
+ * appear in the file that may only say what is present, and `flipX` is where the
+ * renderer reads orientation until it moves to `background.transform`.
+ */
+export function seedBackgroundSource(
+  entry: CatalogInput | undefined,
+): BackgroundSource | undefined {
+  if (!entry?.backgroundId) return undefined;
+  return {
+    kind: "authored",
+    backgroundId: entry.backgroundId,
+    ...(entry.mirrored ? { flipX: true } : {}),
+  };
+}
+
 /** What the editor's Render Source control needs to know about one Glyph. */
 export interface ScopeRenderSource {
   /** The source that Glyph draws today. */
@@ -103,7 +126,6 @@ export function resolveScopeRenderSource(
       entry,
       project.images,
       device.style,
-      entry?.defaultStyle,
       device.glyphStyles[scope.glyphId],
     ),
     hasSymbol: Boolean(entry?.symbolId),
@@ -122,9 +144,9 @@ function renderSourceFields(
 /**
  * The effective {@link GlyphStyle} the Style-tab controls should display at a
  * given {@link StyleScope} — Project shows the base, Device folds in the Device
- * override, Glyph folds the whole chain (Device → Catalog per-Input default →
- * Glyph) exactly as {@link resolveDeviceInputs} does for that Input. A scope that
- * points at a missing Device falls back to the Project base.
+ * override, Glyph resolves the whole chain including that Input's Catalog seed,
+ * exactly as {@link resolveDeviceInputs} does. A scope that points at a missing
+ * Device falls back to the Project base.
  */
 export function resolveScopeStyle(
   project: Project,
@@ -138,13 +160,11 @@ export function resolveScopeStyle(
   if (scope.tier === "device") return resolveStyle(base, device.style);
 
   const catalog = getCatalog(device.catalogId);
-  const defaultStyle = catalog
-    ? catalogIndex(catalog).get(scope.glyphId)?.defaultStyle
-    : undefined;
-  return resolveStyle(
+  const entry = catalog ? catalogIndex(catalog).get(scope.glyphId) : undefined;
+  return resolveGlyphStyle(
     base,
+    seedBackgroundSource(entry),
     device.style,
-    defaultStyle,
     device.glyphStyles[scope.glyphId],
   );
 }
@@ -152,8 +172,9 @@ export function resolveScopeStyle(
 /**
  * Resolve a Device's generated Inputs (ADR-0005): the enabled Catalog entries,
  * in order, then the custom Inputs. Each Input's effective style is resolved
- * through the four-tier Style Cascade — Project → Device → Catalog per-Input
- * default → Glyph (ADR-0006) — so callers get ready-to-draw {@link GlyphStyle}s.
+ * through the three-tier Style Cascade — Project → Device → Glyph — plus that
+ * Input's Catalog seed (ADR-0012 §2), so callers get ready-to-draw
+ * {@link GlyphStyle}s.
  *
  * Shared by generation and the live preview so both go through the same cascade.
  */
@@ -166,32 +187,38 @@ export function resolveDeviceInputs(
   const byId = catalog ? catalogIndex(catalog) : null;
   const resolved: ResolvedInput[] = [];
 
+  /** One Input's resolved pair, from its Catalog entry (absent for custom ids). */
+  function resolveOne(
+    id: string,
+    label: string,
+    entry: CatalogInput | undefined,
+  ): ResolvedInput {
+    const glyph = device.glyphStyles[id];
+    return {
+      id,
+      label,
+      ...renderSourceFields(
+        resolveRenderSource(entry, project.images, device.style, glyph),
+      ),
+      style: resolveGlyphStyle(
+        base,
+        seedBackgroundSource(entry),
+        device.style,
+        glyph,
+      ),
+    };
+  }
+
   for (const id of device.enabled) {
     const entry = byId?.get(id);
     // An enabled id with no Catalog entry (stale save) is skipped, not drawn.
     if (!entry) continue;
-    const tiers = [device.style, entry.defaultStyle, device.glyphStyles[id]];
-    resolved.push({
-      id,
-      label: entry.label,
-      ...renderSourceFields(
-        resolveRenderSource(entry, project.images, ...tiers),
-      ),
-      style: resolveStyle(base, ...tiers),
-    });
+    resolved.push(resolveOne(id, entry.label, entry));
   }
 
+  // A custom Input has no Catalog entry, so it has neither a Symbol nor a seed.
   for (const { id, label } of device.custom) {
-    // Custom Inputs have neither a Catalog Symbol nor a per-Input default tier.
-    const tiers = [device.style, undefined, device.glyphStyles[id]];
-    resolved.push({
-      id,
-      label,
-      ...renderSourceFields(
-        resolveRenderSource(undefined, project.images, ...tiers),
-      ),
-      style: resolveStyle(base, ...tiers),
-    });
+    resolved.push(resolveOne(id, label, undefined));
   }
 
   return resolved;

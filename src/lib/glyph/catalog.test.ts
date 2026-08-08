@@ -234,19 +234,17 @@ describe("Shoulder Inputs carry cross-pad aliases", () => {
   });
 });
 
-describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", () => {
+describe("Bumper/trigger Inputs seed an Authored Background (issue #18, ADR-0012 §2)", () => {
   function backgroundOf(catalogId: string, inputId: string) {
-    const source = catalogIndex(getCatalog(catalogId)!).get(inputId)
-      ?.defaultStyle?.background?.source;
-    return source?.kind === "authored" ? source.backgroundId : undefined;
+    return catalogIndex(getCatalog(catalogId)!).get(inputId)?.backgroundId;
   }
 
-  it("defaults both Xbox bumpers to the bumper tile", () => {
+  it("seeds both Xbox bumpers with the bumper tile", () => {
     expect(backgroundOf("xbox", "xbox-lb")).toBe("bumper");
     expect(backgroundOf("xbox", "xbox-rb")).toBe("bumper");
   });
 
-  it("defaults both Xbox triggers to the trigger tile", () => {
+  it("seeds both Xbox triggers with the trigger tile", () => {
     expect(backgroundOf("xbox", "xbox-lt")).toBe("trigger");
     expect(backgroundOf("xbox", "xbox-rt")).toBe("trigger");
   });
@@ -269,9 +267,7 @@ describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", 
 
   it("mirrors the left-side bumper/trigger so it faces opposite the right-side one", () => {
     function flipOf(catalogId: string, inputId: string) {
-      const source = catalogIndex(getCatalog(catalogId)!).get(inputId)
-        ?.defaultStyle?.background?.source;
-      return source?.kind === "authored" ? source.flipX : undefined;
+      return catalogIndex(getCatalog(catalogId)!).get(inputId)?.mirrored;
     }
     // Both sides share one right-facing tile; only the left ones are flipped.
     expect(flipOf("xbox", "xbox-lb")).toBe(true);
@@ -285,18 +281,27 @@ describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", 
     expect(flipOf("playstation", "ps-r2")).toBeUndefined();
   });
 
-  it("leaves face buttons Background-less", () => {
+  it("leaves face buttons unseeded", () => {
     expect(backgroundOf("xbox", "xbox-a")).toBeUndefined();
     expect(backgroundOf("playstation", "ps-cross")).toBeUndefined();
+  });
+
+  it("never mirrors an Input that seeds no tile", () => {
+    // `mirrored` orients a seeded tile and means nothing without one, so the two
+    // fields must not drift apart into a flag that points at nothing.
+    for (const catalog of DEVICE_CATALOGS) {
+      for (const input of catalog.inputs) {
+        if (input.mirrored) expect(input.backgroundId, input.id).toBeDefined();
+      }
+    }
   });
 
   it("only references Authored Background ids the manifest actually ships", () => {
     const shipped = new Set(AUTHORED_BACKGROUNDS.map((b) => b.id));
     for (const catalog of DEVICE_CATALOGS) {
       for (const input of catalog.inputs) {
-        const source = input.defaultStyle?.background?.source;
-        if (source?.kind === "authored")
-          expect(shipped.has(source.backgroundId)).toBe(true);
+        if (input.backgroundId)
+          expect(shipped.has(input.backgroundId), input.id).toBe(true);
       }
     }
   });
