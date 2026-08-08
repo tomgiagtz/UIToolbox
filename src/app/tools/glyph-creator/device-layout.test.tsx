@@ -13,7 +13,7 @@ describe("DeviceLayout", () => {
   it("renders a clickable control for every Catalog Input", () => {
     const device = keyboardDevice();
     render(<DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />);
-    // Space is enabled by the Preset; a letter like Z is in the Catalog but off.
+    // Space is in the Default Selection; a letter like Z is in the Catalog but off.
     expect(screen.getByRole("button", { name: "Space" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Z" })).toBeInTheDocument();
   });
@@ -21,7 +21,7 @@ describe("DeviceLayout", () => {
   it("marks enabled Inputs pressed and disabled ones not", () => {
     const device = keyboardDevice();
     render(<DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />);
-    // "W" ships enabled in the Keyboard Preset; "Z" does not.
+    // "W" ships in the Keyboard's Default Selection; "Z" does not.
     expect(screen.getByRole("button", { name: "W" })).toHaveAttribute(
       "aria-pressed",
       "true",

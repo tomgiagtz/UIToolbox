@@ -114,7 +114,7 @@ describe("projectReducer — style cascade (#4, #19)", () => {
 });
 
 describe("projectReducer — devices (#5)", () => {
-  it("adds a Device seeded from a Catalog Preset", () => {
+  it("adds a Device built from a Catalog's Default Selection", () => {
     const next = run(base(), { type: "toggle-device", catalogId: "xbox" });
     expect(next.devices.map((d) => d.name)).toEqual(["Keyboard", "Xbox"]);
     expect(next.devices[1].catalogId).toBe("xbox");

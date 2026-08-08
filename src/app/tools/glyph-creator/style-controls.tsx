@@ -276,14 +276,19 @@ export function StyleControls({
    * tile or "none", with no way left to set one back.
    */
   const deviceScope = scope.tier === "device";
-  /** The Background draws its `shape` primitive — nothing else supplies one. */
-  const drawsShape = deviceScope || bg.source.kind === "shape";
   /**
-   * Fill and border are live: they paint an Authored tile's sentinel roles, or a
-   * drawn shape. An uploaded tile draws as authored and "none" draws nothing, so
-   * neither reaches them.
+   * Show the shape and corner-radius controls: at Device scope always, since what
+   * they set will reach whichever Glyphs do resolve to a shape; elsewhere only
+   * when this scope's own Background actually draws the primitive, because
+   * nothing else supplies one.
    */
-  const paintsApply = drawsShape || bg.source.kind === "authored";
+  const showsShapeFields = deviceScope || bg.source.kind === "shape";
+  /**
+   * Show the fill and border controls: they paint an Authored tile's sentinel
+   * roles or a drawn shape. An uploaded tile draws as authored and "none" draws
+   * nothing, so at a scope resolving to either they would be inert.
+   */
+  const showsPaintFields = showsShapeFields || bg.source.kind === "authored";
 
   /** A reset handler for `field`, or undefined when it isn't overridden here. */
   function resetFor(field: StyleField): (() => void) | undefined {
@@ -318,7 +323,7 @@ export function StyleControls({
           primitive at all, so the shape and radius controls would be inert under
           either. Fill and border survive a tile — they tint it through its
           sentinel paint roles. */}
-      {drawsShape && (
+      {showsShapeFields && (
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
             <span>Background shape</span>
@@ -373,7 +378,7 @@ export function StyleControls({
         )}
       </Field>
 
-      {paintsApply && (
+      {showsPaintFields && (
         <ColorField
           label="Background fill"
           value={bg.fill}
@@ -382,7 +387,7 @@ export function StyleControls({
         />
       )}
 
-      {drawsShape && bg.shape === "rounded-rect" && (
+      {showsShapeFields && bg.shape === "rounded-rect" && (
         <Field
           label={`Corner radius (${bg.cornerRadius}px)`}
           onReset={resetFor("cornerRadius")}
@@ -403,7 +408,7 @@ export function StyleControls({
         </Field>
       )}
 
-      {paintsApply && (
+      {showsPaintFields && (
         <>
           <Field
             label={`Border width (${bg.border.width}px)`}
