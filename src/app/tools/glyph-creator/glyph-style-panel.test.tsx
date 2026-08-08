@@ -416,7 +416,9 @@ describe("StyleControls — the Device tier is source-agnostic (ADR-0012 §2)", 
     // What a Glyph is drawn from is per-Glyph, so the tier cannot name a source
     // at all — offering the control would ship one that silently does nothing.
     renderAt({ tier: "device", deviceIndex: 0 });
-    expect(screen.queryByLabelText("Background source")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Background source"),
+    ).not.toBeInTheDocument();
   });
 
   it("still offers it at Project and Glyph scope", () => {
@@ -429,7 +431,10 @@ describe("StyleControls — the Device tier is source-agnostic (ADR-0012 §2)", 
     // Device scope is just the Project base's. An uploaded project-wide tile
     // would otherwise strip the Device panel bare — and with the source control
     // gone from this tier, leave no way back.
-    renderAt({ tier: "device", deviceIndex: 0 }, { kind: "image", imageId: "x" });
+    renderAt(
+      { tier: "device", deviceIndex: 0 },
+      { kind: "image", imageId: "x" },
+    );
     expect(screen.getByText("Background shape")).toBeInTheDocument();
     expect(screen.getByLabelText("Background fill")).toBeInTheDocument();
     expect(screen.getByLabelText("Border color")).toBeInTheDocument();

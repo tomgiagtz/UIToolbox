@@ -552,7 +552,9 @@ describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
     const proj = projectReducer(xboxProject(), {
       type: "patch-style",
       scope: { tier: "project" },
-      patch: { background: { source: { kind: "image", imageId: "img-1.png" } } },
+      patch: {
+        background: { source: { kind: "image", imageId: "img-1.png" } },
+      },
     });
     const { lb, a } = resolved({
       ...proj,
