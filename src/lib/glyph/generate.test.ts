@@ -83,7 +83,7 @@ function exportSettingsWithNaming(
 
 /**
  * A one-Device Xbox project holding a face button and a bumper — the pair that
- * separates the Catalog per-Input Background tier from the Device tier (#18).
+ * separates a seeded Input from an unseeded one (#18, ADR-0012 §2).
  */
 function xboxProject(): Project {
   return project({
@@ -494,8 +494,9 @@ describe("resolveScopeStyle", () => {
   });
 
   it("keeps bumpers on their Authored Background under a device-wide shape override (issue #18)", () => {
-    // The Catalog per-Input tier outranks the Device tier, so a project-wide
-    // "make everything a circle" must not strip the bumper/trigger backers.
+    // A device-wide "make everything a circle" must not strip the bumper/trigger
+    // backers. `shape` still cascades at the Device tier — it is `source` the tier
+    // cannot name — so the seed stands and only the primitive changes.
     const proj = projectReducer(xboxProject(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
@@ -531,5 +532,83 @@ describe("resolveScopeStyle", () => {
     expect(resolveScopeStyle(proj, { tier: "device", deviceIndex: 9 })).toEqual(
       proj.style,
     );
+  });
+});
+
+describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
+  const BUMPER = { kind: "authored", backgroundId: "bumper", flipX: true };
+
+  function resolved(proj: Project) {
+    const inputs = resolveDeviceInputs(proj.devices[0], proj);
+    return {
+      lb: inputs.find((i) => i.id === "xbox-lb")!,
+      a: inputs.find((i) => i.id === "xbox-a")!,
+    };
+  }
+
+  it("outranks a project-wide tile, which unseeded Inputs still take", () => {
+    // The row that proves the seed is a rank and not a fallback. A fallback could
+    // never fire: the Project base is a full Background and always has a source.
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "project" },
+      patch: { background: { source: { kind: "image", imageId: "img-1.png" } } },
+    });
+    const { lb, a } = resolved({
+      ...proj,
+      images: [{ id: "img-1.png", fileName: "t.png", type: "image/png" }],
+    });
+    expect(lb.style.background.source).toEqual(BUMPER);
+    expect(a.style.background.source).toEqual({
+      kind: "image",
+      imageId: "img-1.png",
+    });
+  });
+
+  it("recolours a seeded tile from the Device tier without replacing it", () => {
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { fill: "#ff0000" } },
+    });
+    const { lb } = resolved(proj);
+    expect(lb.style.background.source).toEqual(BUMPER);
+    expect(lb.style.background.fill).toBe("#ff0000");
+  });
+
+  it("returns a reset Glyph to its seeded tile, not to the Device tier", () => {
+    // Separability: because a seed is a base rather than pre-filled user data,
+    // clearing the user's own override lands back on the shipped tile. This is
+    // what the withdrawn layered-config draft would have paid to get.
+    const off = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      patch: { background: { source: { kind: "shape" } } },
+    });
+    expect(resolved(off).lb.style.background.source).toEqual({ kind: "shape" });
+
+    const reset = projectReducer(off, {
+      type: "clear-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      field: "backgroundSource",
+    });
+    expect(resolved(reset).lb.style.background.source).toEqual(BUMPER);
+    // And the override is gone entirely, leaving no trace of the edit.
+    expect(reset.devices[0].glyphStyles["xbox-lb"]).toBeUndefined();
+  });
+
+  it("drops a Background source aimed at the Device tier rather than storing it", () => {
+    // The tier cannot express one, so a patch carrying one (from a stale caller,
+    // or a config predating the rule) is laundered on the way in — otherwise it
+    // would sit in the config looking effective while the resolver ignored it.
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: {
+        background: { source: { kind: "none" }, fill: "#123456" },
+      },
+    });
+    expect(proj.devices[0].style.background).toEqual({ fill: "#123456" });
+    expect(resolved(proj).lb.style.background.source).toEqual(BUMPER);
   });
 });

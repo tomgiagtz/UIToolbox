@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { GlyphStylePanel, type SelectedGlyph } from "./style-controls";
+import {
+  GlyphStylePanel,
+  StyleControls,
+  type SelectedGlyph,
+} from "./style-controls";
 import { createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
-import type { StyleOverride } from "@/lib/glyph/style";
+import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
 import type { BackgroundSource, ImageAsset, Project } from "@/lib/glyph/types";
 
@@ -34,8 +38,7 @@ const uploaded: ImageAsset = {
 
 /**
  * Render the panel at Glyph scope. `source` puts tile art on the resolved style,
- * standing in for one inherited from the Catalog per-Input tier (as an Xbox
- * bumper has).
+ * standing in for one an Input's Catalog seed supplies (as an Xbox bumper has).
  */
 function renderPanel({
   onClose = vi.fn(),
@@ -109,8 +112,8 @@ describe("GlyphStylePanel", () => {
   });
 
   it("writes an explicit shape source when the tile is turned off", () => {
-    // A Glyph that inherits a tile from the Catalog per-Input tier, the way an
-    // Xbox bumper does — the case where omitting the field would be a no-op.
+    // A Glyph whose Catalog seed gives it a tile, the way an Xbox bumper has —
+    // the case where omitting the field would be a no-op.
     const { dispatch } = renderPanel({
       source: { kind: "authored", backgroundId: "bumper" },
     });
@@ -384,5 +387,62 @@ describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
       patch: { renderSource: { kind: "image", imageId: "img-2.png" } },
     });
+  });
+});
+
+describe("StyleControls — the Device tier is source-agnostic (ADR-0012 §2)", () => {
+  /** Render the shared Style controls at one scope, over a given base source. */
+  function renderAt(scope: StyleScope, source?: BackgroundSource) {
+    const project = xboxProject();
+    const style = source
+      ? {
+          ...project.style,
+          background: { ...project.style.background, source },
+        }
+      : project.style;
+    render(
+      <StyleControls
+        project={project}
+        dispatch={vi.fn()}
+        scope={scope}
+        style={style}
+        override={{}}
+        onUploadImage={vi.fn(async () => uploaded)}
+      />,
+    );
+  }
+
+  it("offers no Background source control at Device scope", () => {
+    // What a Glyph is drawn from is per-Glyph, so the tier cannot name a source
+    // at all — offering the control would ship one that silently does nothing.
+    renderAt({ tier: "device", deviceIndex: 0 });
+    expect(screen.queryByLabelText("Background source")).not.toBeInTheDocument();
+  });
+
+  it("still offers it at Project and Glyph scope", () => {
+    renderAt({ tier: "project" });
+    expect(screen.getByLabelText("Background source")).toBeInTheDocument();
+  });
+
+  it("keeps every paint control at Device scope under a project-wide tile", () => {
+    // The regression this guards: these gate on the *resolved* source, which at
+    // Device scope is just the Project base's. An uploaded project-wide tile
+    // would otherwise strip the Device panel bare — and with the source control
+    // gone from this tier, leave no way back.
+    renderAt({ tier: "device", deviceIndex: 0 }, { kind: "image", imageId: "x" });
+    expect(screen.getByText("Background shape")).toBeInTheDocument();
+    expect(screen.getByLabelText("Background fill")).toBeInTheDocument();
+    expect(screen.getByLabelText("Border color")).toBeInTheDocument();
+    expect(screen.getByText(/corner radius/i)).toBeInTheDocument();
+  });
+
+  it("still hides the shape controls under a tile at Glyph scope", () => {
+    // The gate is relaxed for the Device tier only; a Glyph really does resolve
+    // the source shown, so a tile there still supplies the shape.
+    renderAt(
+      { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      { kind: "authored", backgroundId: "bumper" },
+    );
+    expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
   });
 });

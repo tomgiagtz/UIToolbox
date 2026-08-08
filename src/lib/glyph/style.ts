@@ -155,7 +155,10 @@ export function withoutBackgroundSource(
 ): DeviceStyleOverride {
   const { background, ...rest } = override;
   if (!background) return rest;
-  const { source: _source, ...paint } = background;
+  const paint: BackgroundPaintOverride = { ...background };
+  // The copy still carries a `source` key at runtime even though its type no
+  // longer admits one, so drop it from the copy rather than from the input.
+  delete (paint as BackgroundOverride).source;
   return Object.keys(paint).length > 0 ? { ...rest, background: paint } : rest;
 }
 
