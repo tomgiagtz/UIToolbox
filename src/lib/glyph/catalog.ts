@@ -36,12 +36,11 @@ export interface CatalogInput {
    * under a neon look and a monochrome one alike, so this is a **presence** fact
    * beside {@link symbolId}, not a style tier (ADR-0012 §2).
    *
-   * It **seeds** the Background source: the resolver ranks it above the Project
-   * base and below the Glyph override, and the Device tier cannot name a source
-   * at all. Being a base rather than pre-filled user data is what lets a Glyph
-   * reset land back on this tile.
+   * It **seeds** the Background source, ranked above the Device tier and below a
+   * Glyph override. Tri-state: omitted is unseeded, `null` is seeded with *no*
+   * background (the stick Symbol draws its own ring), a string is that tile.
    */
-  backgroundId?: string;
+  backgroundId?: string | null;
   /**
    * Face this control the other way, for the left-side shoulders that share one
    * right-facing tile with their right-side twins. Meaningless without
@@ -191,7 +190,8 @@ function pad(
       label,
       ...(symbolId ? { symbolId } : {}),
       ...(aliases ? { aliases } : {}),
-      ...(backgroundId ? { backgroundId } : {}),
+      // `!== undefined`, not truthiness: `null` is a seed, not an absent one.
+      ...(backgroundId !== undefined ? { backgroundId } : {}),
       ...(mirrored ? { mirrored: true } : {}),
     }),
   );
@@ -216,6 +216,14 @@ function shoulder(
   };
 }
 
+/**
+ * A stick Input: its Symbol draws its own ring, so it seeds *no* Background
+ * rather than leaving one to fall through from the Project base.
+ */
+function stick(): PadEntry {
+  return { symbolId: "stick", backgroundId: null };
+}
+
 // Asset ids are bare: the Device supplies the scope at resolve time, so both pads
 // name the same `bumper` / `dpad-up` and each gets its own drawing.
 const XBOX_INPUTS = pad("xbox", [
@@ -229,8 +237,8 @@ const XBOX_INPUTS = pad("xbox", [
   ["rt", "RT", shoulder("trigger", "right", "R2", "Right Trigger")],
   ["view", "View", { symbolId: "view" }],
   ["menu", "Menu", { symbolId: "menu" }],
-  ["left-stick", "Left Stick", { symbolId: "stick" }],
-  ["right-stick", "Right Stick", { symbolId: "stick" }],
+  ["left-stick", "Left Stick", stick()],
+  ["right-stick", "Right Stick", stick()],
   ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
   ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
   ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
@@ -248,8 +256,8 @@ const PLAYSTATION_INPUTS = pad("ps", [
   ["r2", "R2", shoulder("trigger", "right", "RT", "Right Trigger")],
   ["share", "Share", { symbolId: "share" }],
   ["options", "Options", { symbolId: "options" }],
-  ["left-stick", "Left Stick", { symbolId: "stick" }],
-  ["right-stick", "Right Stick", { symbolId: "stick" }],
+  ["left-stick", "Left Stick", stick()],
+  ["right-stick", "Right Stick", stick()],
   ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
   ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
   ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],

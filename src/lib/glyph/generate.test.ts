@@ -599,6 +599,26 @@ describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
     expect(reset.devices[0].glyphStyles["xbox-lb"]).toBeUndefined();
   });
 
+  it("resolves a stick to no Background, and holds it against a device-wide source", () => {
+    // The stick Symbol draws its own ring, so its seed is an explicit absence —
+    // which outranks the Device tier exactly as an authored tile does.
+    function stickSource(proj: Project) {
+      return resolveDeviceInputs(proj.devices[0], proj).find(
+        (i) => i.id === "xbox-left-stick",
+      )?.style.background.source;
+    }
+    const withStick = xboxProject();
+    withStick.devices[0].enabled = ["xbox-left-stick"];
+    expect(stickSource(withStick)).toEqual({ kind: "none" });
+
+    const proj = projectReducer(withStick, {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { source: { kind: "shape" } } },
+    });
+    expect(stickSource(proj)).toEqual({ kind: "none" });
+  });
+
   it("honours a device-wide source on unseeded Inputs, while the seed still wins", () => {
     // A device-wide source is a real capability. Its accepted cost: the eight
     // seeded shoulders no-op on it, escapable only per-Glyph.

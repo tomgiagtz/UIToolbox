@@ -286,12 +286,22 @@ describe("Bumper/trigger Inputs seed an Authored Background (issue #18, ADR-0012
     expect(backgroundOf("playstation", "ps-cross")).toBeUndefined();
   });
 
+  it("seeds every stick with no Background at all", () => {
+    // `null` is not `undefined`: the stick Symbol draws its own ring, so these
+    // are seeded *bare* rather than left to fall through to the Project base.
+    for (const id of ["xbox-left-stick", "xbox-right-stick"])
+      expect(backgroundOf("xbox", id), id).toBeNull();
+    for (const id of ["ps-left-stick", "ps-right-stick"])
+      expect(backgroundOf("playstation", id), id).toBeNull();
+  });
+
   it("never mirrors an Input that seeds no tile", () => {
     // `mirrored` orients a seeded tile and means nothing without one, so the two
     // fields must not drift apart into a flag that points at nothing.
     for (const catalog of DEVICE_CATALOGS) {
       for (const input of catalog.inputs) {
-        if (input.mirrored) expect(input.backgroundId, input.id).toBeDefined();
+        if (input.mirrored)
+          expect(typeof input.backgroundId, input.id).toBe("string");
       }
     }
   });
@@ -300,7 +310,8 @@ describe("Bumper/trigger Inputs seed an Authored Background (issue #18, ADR-0012
     const shipped = new Set(AUTHORED_BACKGROUNDS.map((b) => b.id));
     for (const catalog of DEVICE_CATALOGS) {
       for (const input of catalog.inputs) {
-        if (input.backgroundId)
+        // `null` names no tile to look up — it is the seeded absence of one.
+        if (typeof input.backgroundId === "string")
           expect(shipped.has(input.backgroundId), input.id).toBe(true);
       }
     }

@@ -86,7 +86,10 @@ export function resolveRenderSource(
 export function seedBackgroundSource(
   entry: CatalogInput | undefined,
 ): BackgroundSource | undefined {
-  if (!entry?.backgroundId) return undefined;
+  if (entry?.backgroundId === undefined) return undefined;
+  // A `null` seed is an explicit absence, and outranks the Device tier as any
+  // other seed does; `undefined` above is no seed at all.
+  if (entry.backgroundId === null) return { kind: "none" };
   return {
     kind: "authored",
     backgroundId: entry.backgroundId,
