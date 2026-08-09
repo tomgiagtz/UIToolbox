@@ -164,8 +164,8 @@ button. **A Catalog says what is present** (ADR-0012): each entry carries a stab
 id, a default label, a position in the **Device Layout**, and which shipped art
 _depicts_ that control — its **Symbol**, and for bumpers and triggers an
 **Authored Background** plus a mirror flag for the left-side ones. Those art
-fields are **seeds**, not styling: they name the tile a control _is_, which is
-true under any look. A Catalog is code-maintained; a **Preset** points at one and
+fields are **Seeds**, not styling: they name the tile a control _is_, which is
+true under any look. An entry may also seed _no_ background, as the sticks do. A Catalog is code-maintained; a **Preset** points at one and
 can never replace it. Users toggle Catalog Inputs on/off; only **enabled** ones
 generate Glyphs. Inputs the Catalog lacks are added as **custom Inputs**.
 
@@ -224,9 +224,9 @@ The tile a Glyph's Render Source is drawn on. Its **source** is one of:
 - an **uploaded image** — the user's own tile graphic.
 
 The source is a single value, not a bag of flags — one of the four at a time
-(ADR-0009) — and it is replaced wholesale, never merged. It is set **per Glyph
-only**: what a Glyph is drawn from is per-Glyph, while how it's painted cascades
-(ADR-0012). "None" is a _source_ rather than a fourth shape because a shape could
+(ADR-0009) — and it is replaced wholesale, never merged. It is settable at every
+tier of the **Style Cascade**, though a Catalog **Seed** outranks all but a Glyph
+override. "None" is a _source_ rather than a fourth shape because a shape could
 only ever suppress the drawn primitive, leaving an inherited authored tile still
 showing. Catalog Inputs whose identity is their tile _shape_ (bumpers, triggers)
 **seed** a specific authored Background rather than a plain shape. Fill, border,
@@ -249,25 +249,40 @@ How a Glyph's style + Render Source are resolved, lowest precedence to highest:
 **Project** base → **Device** overrides → **Glyph** overrides.
 
 The Project tier is a full style; each tier above it is a sparse subset, and
-anything unset falls up the chain. The rule for which properties live where:
-**what a Glyph is drawn from is per-Glyph; how it's painted cascades.** So the
-**Render Source** and the Background's **source** are set per Glyph — the Device
-tier cannot name a source at all — while colour, shape, border, font and the layer
-**transforms** are settable at any tier. The Project base still carries a source,
-being a full style rather than a sparse override.
+anything unset falls up the chain. Every property — colour, shape, border, the
+Background's **source**, font and the layer **transforms** — is settable at any
+tier. The Project base always carries a source, being a full style rather than a
+sparse override.
 
-A Catalog's art **seeds** rank between the Glyph and Project tiers: a bumper
-draws its authored tile unless that Glyph explicitly says otherwise. That is what
-keeps it bumper-shaped when the project-wide source is something else, and the
-Device tier cannot flatten it because it cannot speak to the source. Because the
-seed is a base rather than pre-filled user data, resetting a Glyph lands back on
-the shipped tile rather than falling to the Device tier.
+Three tiers **plus seeded values**: a Catalog **Seed** ranks between the Glyph
+and Device tiers for `background.source` alone, so a bumper keeps its authored
+tile against a project- or device-wide source, and only a per-Glyph override
+replaces it. Deleting ADR-0006's Catalog per-Input tier removed a style tier, not
+a precedence position — what survives is an ordering fact about one field.
 
 The grid **cell size** is the one exception: it stays Project-global for a
 uniform grid, and lives in the project's export settings.
 
 _(The font and the layer **transforms** are ADR-0012, decided and not yet built:
 today the font stays Project-global and neither transform exists.)_
+
+### Seed
+
+A Catalog-supplied starting value for one Background property, ranked above the
+**Device** tier and below a **Glyph** override (ADR-0012 §2). A seed is **not** a
+cascade tier and not a selectable scope: it is not a style override, it is not
+user-editable, and it covers one field. It says what a control _is_ — a bumper is
+bumper-shaped under any look — which is the same kind of statement `symbolId`
+makes.
+
+A seed is tri-state: an Input may name a tile, may seed _no_ background at all
+(the sticks, whose Symbol draws its own ring), or may be unseeded and fall
+through like any other Input. Because a seed is a base rather than pre-filled
+user data, resetting a Glyph lands back on the shipped tile rather than on the
+Device tier.
+
+Accepted consequence of the rank: a **device-wide** source change no-ops on the
+eight seeded shoulder Inputs, and the only escape is a per-Glyph override.
 
 ### Sprite Atlas
 
@@ -314,8 +329,7 @@ See `docs/adr/`:
   content scale joins the Style Cascade (content scale replaced by a Transform in
   ADR-0012).
 - **ADR-0009** — A Background's tile art is one `source` union: none / shape /
-  authored / uploaded image (amends ADR-0006; scope narrowed to per-Glyph and
-  `flipX` removed by ADR-0012).
+  authored / uploaded image (amends ADR-0006; `flipX` removed by ADR-0012).
 - **ADR-0010** — The persisted config is validated against the current shape
   only: no version stamp, no migration; a config that fails is discarded and the
   loss is reported (amends ADR-0009).

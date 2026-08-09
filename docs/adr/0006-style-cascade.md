@@ -7,9 +7,9 @@
   resolves a Glyph's Render Source through the same tiers. ADR-0009 — replaces
   the Background's tile fields with one `source` union, cascaded like any other
   property but replaced wholesale. **ADR-0012** — deletes the Catalog per-Input
-  tier (its payload becomes bare Catalog seed fields with an explicit rank),
-  brings the **font** into the cascade, narrows `background.source` to the Glyph
-  tier, replaces `contentScale` with two layer transforms, and moves `cellSize`
+  tier (its payload becomes bare Catalog seed fields ranked above the Device
+  tier for `background.source`), brings the **font** into the cascade,
+  replaces `contentScale` with two layer transforms, and moves `cellSize`
   into `Project.exportSettings` without changing its Project-global status. It
   retires the `backgroundId` field the amendment below is written in terms of
   (already replaced by ADR-0009's `source` union) but **not** that amendment's
