@@ -390,7 +390,7 @@ describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
   });
 });
 
-describe("StyleControls — the Device tier is source-agnostic (ADR-0012 §2)", () => {
+describe("StyleControls — the Background source at each scope (ADR-0012 §2)", () => {
   /** Render the shared Style controls at one scope, over a given base source. */
   function renderAt(scope: StyleScope, source?: BackgroundSource) {
     const project = xboxProject();
@@ -412,38 +412,20 @@ describe("StyleControls — the Device tier is source-agnostic (ADR-0012 §2)", 
     );
   }
 
-  it("offers no Background source control at Device scope", () => {
-    // What a Glyph is drawn from is per-Glyph, so the tier cannot name a source
-    // at all — offering the control would ship one that silently does nothing.
+  it("offers the Background source control at Device scope", () => {
+    // A device-wide source is a real capability — one uploaded keycap tile for
+    // every key, or a device with no backers at all.
     renderAt({ tier: "device", deviceIndex: 0 });
-    expect(
-      screen.queryByLabelText("Background source"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Background source")).toBeInTheDocument();
   });
 
-  it("still offers it at Project and Glyph scope", () => {
+  it("offers it at Project scope too", () => {
     renderAt({ tier: "project" });
     expect(screen.getByLabelText("Background source")).toBeInTheDocument();
   });
 
-  it("keeps every paint control at Device scope under a project-wide tile", () => {
-    // The regression this guards: these gate on the *resolved* source, which at
-    // Device scope is just the Project base's. An uploaded project-wide tile
-    // would otherwise strip the Device panel bare — and with the source control
-    // gone from this tier, leave no way back.
-    renderAt(
-      { tier: "device", deviceIndex: 0 },
-      { kind: "image", imageId: "x" },
-    );
-    expect(screen.getByText("Background shape")).toBeInTheDocument();
-    expect(screen.getByLabelText("Background fill")).toBeInTheDocument();
-    expect(screen.getByLabelText("Border color")).toBeInTheDocument();
-    expect(screen.getByText(/corner radius/i)).toBeInTheDocument();
-  });
-
-  it("still hides the shape controls under a tile at Glyph scope", () => {
-    // The gate is relaxed for the Device tier only; a Glyph really does resolve
-    // the source shown, so a tile there still supplies the shape.
+  it("hides the shape controls under a tile at Glyph scope", () => {
+    // The source shown really is the one drawn, so a tile supplies the shape.
     renderAt(
       { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
       { kind: "authored", backgroundId: "bumper" },

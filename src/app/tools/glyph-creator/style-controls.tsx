@@ -76,12 +76,11 @@ function sourceFromValue(
  * shape, a shipped **Authored Background**, or one of the user's uploaded tile
  * images (issue #22).
  *
- * Shown at **Project and Glyph scope only** — what a Glyph is drawn from is
- * per-Glyph, so the Device tier cannot name a source at all (ADR-0012 §2).
+ * An ordinary cascade property, settable at Project, Device or Glyph scope.
  *
  * Picking "Shape" writes an explicit `{ kind: "shape" }` rather than clearing the
- * field: a Catalog **seed** outranks the Project base, so bumpers and triggers
- * would otherwise just fall back to their authored tile.
+ * field: a Catalog **seed** outranks it, so bumpers and triggers would otherwise
+ * just fall back to their authored tile.
  */
 function BackgroundSourceField({
   source,
@@ -267,22 +266,8 @@ export function StyleControls({
   onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const bg = style.background;
-  /**
-   * The Device tier is **source-agnostic**: it cannot name a source (ADR-0012 §2)
-   * and each of its Glyphs resolves its own, so the source shown here is just the
-   * Project base's and says nothing about what this tier paints. It therefore
-   * offers every paint control unconditionally — gating them on the base would
-   * strip the Device panel bare whenever the project-wide source is an uploaded
-   * tile or "none", with no way left to set one back.
-   */
-  const deviceScope = scope.tier === "device";
-  /**
-   * Show the shape and corner-radius controls: at Device scope always, since what
-   * they set will reach whichever Glyphs do resolve to a shape; elsewhere only
-   * when this scope's own Background actually draws the primitive, because
-   * nothing else supplies one.
-   */
-  const showsShapeFields = deviceScope || bg.source.kind === "shape";
+  /** Show the shape and radius controls — nothing else draws the primitive. */
+  const showsShapeFields = bg.source.kind === "shape";
   /**
    * Show the fill and border controls: they paint an Authored tile's sentinel
    * roles or a drawn shape. An uploaded tile draws as authored and "none" draws
@@ -309,15 +294,13 @@ export function StyleControls({
         onReset={resetFor("textColor")}
       />
 
-      {!deviceScope && (
-        <BackgroundSourceField
-          source={bg.source}
-          images={project.images}
-          onChange={(source) => patch({ background: { source } })}
-          onReset={resetFor("backgroundSource")}
-          onUploadImage={onUploadImage}
-        />
-      )}
+      <BackgroundSourceField
+        source={bg.source}
+        images={project.images}
+        onChange={(source) => patch({ background: { source } })}
+        onReset={resetFor("backgroundSource")}
+        onUploadImage={onUploadImage}
+      />
 
       {/* A tile carries its own shape and corner treatment, and "none" draws no
           primitive at all, so the shape and radius controls would be inert under
