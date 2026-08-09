@@ -11,9 +11,8 @@
  * The Catalog is code-maintained data, not authored art — adding a device means
  * adding entries here, not drawing anything (ADR-0005).
  *
- * Nothing here is style. The art fields are **seeds**: they name the asset a
- * control *is*, which is true under any look, so this file has no dependency on
- * the Style Cascade at all.
+ * Nothing here is style. The art fields are **seeds** — they name the asset a
+ * control *is* — so this file has no dependency on the Style Cascade.
  */
 
 /** One known Input a Device offers. Stable `id`; `label` is its default text. */
@@ -32,23 +31,17 @@ export interface CatalogInput {
    */
   aliases?: string[];
   /**
-   * The Authored Background that depicts this Input — a bumper is bumper-shaped
-   * under a neon look and a monochrome one alike, so this is a **presence** fact
-   * beside {@link symbolId}, not a style tier (ADR-0012 §2).
-   *
-   * It **seeds** the Background source, ranked above the Device tier and below a
-   * Glyph override. Tri-state: omitted is unseeded, `null` is seeded with *no*
-   * background (the stick Symbol draws its own ring), a string is that tile.
+   * **Seeds** the Background source, above the Device tier (ADR-0012 §2).
+   * Tri-state: omitted is unseeded, `null` seeds *no* background, a string
+   * seeds that tile.
    */
   backgroundId?: string | null;
   /**
-   * Face this control the other way, for the left-side shoulders that share one
-   * right-facing tile with their right-side twins. Meaningless without
-   * {@link backgroundId}.
+   * Face this control the other way — the left-side shoulders share one
+   * right-facing tile. Meaningless without {@link backgroundId}.
    *
-   * A bare boolean, never a transform fragment: a transform-shaped field in this
-   * file would make `rotation: 15` legal in the one place that may only say what
-   * is present. A boolean can only mean *this control faces the other way*.
+   * A bare boolean, never a transform fragment: this file may only say what is
+   * present, and a boolean cannot grow a `rotation: 15`.
    */
   mirrored?: boolean;
 }
@@ -168,11 +161,7 @@ const KEYBOARD_DEFAULT_ENABLED: string[] = [
 // The pads enable their whole Catalog by default, so each entry list doubles as
 // the Default Selection. Order matches the labels the tool generated pre-Catalog.
 
-/**
- * The optional half of a pad Catalog entry (see {@link pad}) — exactly the
- * seed/lookup fields of a {@link CatalogInput}, minus the id and label the
- * entry tuple supplies.
- */
+/** A {@link CatalogInput}'s seed/lookup half, minus the id and label. */
 type PadEntry = Omit<CatalogInput, "id" | "label">;
 
 /**

@@ -74,14 +74,11 @@ export function resolveRenderSource(
 }
 
 /**
- * The Background source a Catalog **seeds** this Input with, if any (ADR-0012 §2)
- * — the exact parallel of {@link resolveRenderSource}'s `symbolId` fallback, and
- * the only place the Catalog's presence facts become a style value.
+ * The Background source a Catalog **seeds** this Input with (ADR-0012 §2) — the
+ * only place a Catalog's presence facts become a style value.
  *
- * `mirrored` projects into the source's `flipX`. That asymmetry is deliberate and
- * temporary: the Catalog stores a bare boolean so a transform fragment can never
- * appear in the file that may only say what is present, and `flipX` is where the
- * renderer reads orientation until it moves to `background.transform`.
+ * `mirrored` projects into `flipX`, where the renderer reads orientation until
+ * it moves to `background.transform`.
  */
 export function seedBackgroundSource(
   entry: CatalogInput | undefined,

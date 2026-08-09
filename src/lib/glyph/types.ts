@@ -26,8 +26,8 @@ export type BackgroundSource =
    *
    * A *source* rather than a fourth {@link BackgroundShape} because "draw
    * nothing" is a statement about the tile as a whole: a shape can only suppress
-   * the primitive, and a Catalog **seed** outranks the Project base, so only a
-   * source can turn off the Authored Background a bumper is seeded with.
+   * the primitive, and a Catalog **seed** outranks every tier below the Glyph,
+   * so only a source can turn off the tile a bumper is seeded with.
    */
   | { kind: "none" }
   /** The primitive named by {@link Background.shape}. */

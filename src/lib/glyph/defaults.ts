@@ -1,11 +1,8 @@
 /**
- * The values a fresh project starts from — the Project tier of the Style Cascade,
- * the default export settings, and the factories that build a default project and
- * a default Device.
+ * The values a fresh project starts from.
  *
- * Deliberately **not** called `presets.ts`: under ADR-0012 a **Preset** is a
- * shipped starting *look* that appears in the picker, which is not what any of
- * this is. Shipped Presets land in `presets/` (ADR-0012 §5).
+ * Not `presets.ts`: ADR-0012 gives "Preset" to a shipped *look*, and shipped
+ * Presets land in `presets/` (§5).
  */
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
 import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
@@ -22,9 +19,7 @@ import type {
  * enabled selection, with no custom Inputs and empty (pass-through) Style Cascade
  * overrides. The enabled array is copied so edits never mutate the shared Catalog.
  *
- * Nothing seeds `glyphStyles` here: a Catalog's art seeds are read from the
- * Catalog at resolve time (ADR-0012 §2), never pre-filled as user data, which is
- * what keeps a shipped default distinguishable from something the user set.
+ * `glyphStyles` stays empty — seeds are read at resolve time, never pre-filled.
  */
 export function createDeviceFromCatalog(catalog: DeviceCatalog): DeviceConfig {
   return {
