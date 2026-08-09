@@ -8,7 +8,6 @@ import {
   clearOverrideField,
   mergeOverride,
   resolveStyle,
-  withoutBackgroundSource,
   type StyleField,
   type StyleOverride,
   type StyleScope,
@@ -216,13 +215,7 @@ function patchDeviceStyle(
     ...project,
     devices: patchDevice(project.devices, scope.deviceIndex, (device) => {
       if (scope.tier === "device") {
-        // The Device tier cannot name a Background source (ADR-0012 §2), so any
-        // that reaches here — from a patch built before the rule, or a config
-        // that predates it — is dropped rather than stored and then ignored.
-        return {
-          ...device,
-          style: withoutBackgroundSource(edit(device.style)),
-        };
+        return { ...device, style: edit(device.style) };
       }
       const next = edit(device.glyphStyles[scope.glyphId] ?? {});
       const glyphStyles = { ...device.glyphStyles };

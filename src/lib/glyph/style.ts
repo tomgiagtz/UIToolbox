@@ -12,11 +12,9 @@
  * left unset falls up the chain. {@link resolveStyle} folds a base plus any
  * number of overrides into one effective {@link GlyphStyle}.
  *
- * **What a Glyph is drawn from is per-Glyph; how it's painted cascades.** So
- * `background.source` is settable at the Project base and the Glyph tier only —
- * the Device tier is structurally unable to name one ({@link DeviceStyleOverride})
- * — while colour, shape, radius and border cascade at every tier. A Catalog's art
- * **seed** ranks between the two: see {@link resolveGlyphStyle}.
+ * Every property is settable at every tier. A Catalog's art **seed** ranks
+ * between the Glyph and Device tiers for `background.source` alone: see
+ * {@link resolveGlyphStyle}.
  *
  * The font is deliberately **not** part of this cascade, and neither is
  * `cellSize`: both stay Project-global (see ADR-0006). `cellSize` is an atlas
@@ -69,37 +67,22 @@ export interface GlyphStyle {
   contentScale: number;
 }
 
-/**
- * The parts of a {@link Background} that describe **how a tile is painted**, as
- * opposed to what it is. Every tier may set these; unset fields fall up.
- */
-export interface BackgroundPaintOverride {
-  /** Read only where the resolved source is `{ kind: "shape" }`. */
-  shape?: Background["shape"];
-  fill?: string;
-  cornerRadius?: number;
-  border?: Partial<Background["border"]>;
-}
-
 /** A sparse patch of a {@link Background}; unset fields fall up the cascade. */
-export interface BackgroundOverride extends BackgroundPaintOverride {
+export interface BackgroundOverride {
   /**
    * Where the tile is drawn from (issue #22). Replaced wholesale, never merged —
    * a source is one choice, so patching an `image` onto an `authored` base must
    * not leave a tile that is half of each.
    *
-   * Settable at the Project base and the Glyph tier only (ADR-0012 §2); see
-   * {@link DeviceStyleOverride} for why the Device tier is excluded.
-   *
-   * Setting it to `{ kind: "shape" }` is meaningfully different from omitting it,
-   * and still is under the three-tier cascade: a Catalog **seed** outranks the
-   * Project base, so bumpers and triggers carry a tile and *omitting* the field
-   * just lets that seed through. Only an explicit "shape" turns it off, which is
-   * what makes a per-Glyph shape change stick — and likewise an explicit
-   * `{ kind: "none" }`, the only way to turn a tile off without putting a shape
-   * back.
+   * Omitting it falls to the Catalog **seed**; only an explicit value turns a
+   * seeded tile off, `{ kind: "none" }` without putting a shape back.
    */
   source?: BackgroundSource;
+  /** Read only where the resolved source is `{ kind: "shape" }`. */
+  shape?: Background["shape"];
+  fill?: string;
+  cornerRadius?: number;
+  border?: Partial<Background["border"]>;
 }
 
 /**
@@ -116,50 +99,6 @@ export interface StyleOverride {
   renderSource?: RenderSourceOverride;
   /** Scale of whatever Render Source is drawn; see {@link GlyphStyle.contentScale}. */
   contentScale?: number;
-}
-
-/**
- * The Device tier's override: everything a {@link StyleOverride} carries **except
- * `background.source`** (ADR-0012 §2).
- *
- * A device-wide "everything is a plain shape" is exactly the case the tri-state on
- * {@link BackgroundOverride.source} was written to defend against: it would flatten
- * all four shoulders under one setting. Making the tier structurally unable to say
- * it removes the collision instead of settling it by precedence — so a bumper stays
- * bumper-shaped without needing to outrank anything.
- *
- * `renderSource` is left alone here: it is per-Glyph by the same argument, but its
- * `symbolId` fallback is Glyph-only in practice so the collision never arises, and
- * narrowing it is out of scope.
- *
- * `source?: never` rather than simply omitting the property: TypeScript is
- * structural, so an omitted optional field still accepts a {@link StyleOverride}
- * that carries one. `never` is what makes assigning one an error, which is what
- * turns "the Device tier cannot say this" from a comment into a rule.
- */
-export type DeviceStyleOverride = Omit<StyleOverride, "background"> & {
-  background?: BackgroundPaintOverride & { source?: never };
-};
-
-/**
- * Narrow an override to what the Device tier may hold, dropping any
- * `background.source` and collapsing a `background` that empties out.
- *
- * The Style panel doesn't offer the control at Device scope, so in practice this
- * only ever fires on a patch built somewhere that outlived the rule. It is the
- * one place the {@link DeviceStyleOverride} type forces a decision rather than
- * letting a source through structurally.
- */
-export function withoutBackgroundSource(
-  override: StyleOverride,
-): DeviceStyleOverride {
-  const { background, ...rest } = override;
-  if (!background) return rest;
-  const paint: BackgroundPaintOverride = { ...background };
-  // The copy still carries a `source` key at runtime even though its type no
-  // longer admits one, so drop it from the copy rather than from the input.
-  delete (paint as BackgroundOverride).source;
-  return Object.keys(paint).length > 0 ? { ...rest, background: paint } : rest;
 }
 
 /** An override that changes nothing — the default at every non-Project tier. */
@@ -348,34 +287,28 @@ export function resolveStyle(
 
 /**
  * Resolve one Glyph's effective style through the three tiers plus its Catalog
- * **seed** (ADR-0012 §2).
- *
- * The seed is a *base* for the Background source, not a tier of its own:
+ * **seed** (ADR-0012 §2), which ranks between the Glyph and Device tiers:
  *
  * ```
- * source = Glyph override, if set; else the Catalog seed, if that Input has one;
- *          else the Project base
+ * source = Glyph override → Catalog seed → Device tier → Project base
  * ```
  *
- * An explicit rank rather than a "only when nothing else sets it" fallback,
- * because such a fallback would never fire — the Project base is a full
- * `Background` and always carries a source.
- *
- * The Device tier is skipped for `source` **by construction**: it cannot name one
- * ({@link DeviceStyleOverride}), so nothing has to outrank it. Resolving the
- * source here rather than folding the seed into `base` is what makes that true of
- * the *data* too — persisted overrides are validated by shape, not content, so a
- * pre-ADR-0012 save can still carry a device-tier source, and it is ignored here
- * rather than obeyed.
+ * A seed is a presence fact about *that control*, so only a statement about that
+ * control may overrule it. The accepted cost: a device-wide source no-ops on the
+ * seeded shoulders, escapable only per-Glyph.
  */
 export function resolveGlyphStyle(
   base: GlyphStyle,
   seed: BackgroundSource | undefined,
-  device: DeviceStyleOverride | undefined,
+  device: StyleOverride | undefined,
   glyph: StyleOverride | undefined,
 ): GlyphStyle {
   const style = resolveStyle(base, device, glyph);
-  const source = glyph?.background?.source ?? seed ?? base.background.source;
+  const source =
+    glyph?.background?.source ??
+    seed ??
+    device?.background?.source ??
+    base.background.source;
   return { ...style, background: { ...style.background, source } };
 }
 

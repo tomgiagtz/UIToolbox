@@ -495,8 +495,8 @@ describe("resolveScopeStyle", () => {
 
   it("keeps bumpers on their Authored Background under a device-wide shape override (issue #18)", () => {
     // A device-wide "make everything a circle" must not strip the bumper/trigger
-    // backers. `shape` still cascades at the Device tier — it is `source` the tier
-    // cannot name — so the seed stands and only the primitive changes.
+    // backers. `shape` cascades at the Device tier but the seed outranks it for
+    // `source`, so the tile stands and only the primitive changes.
     const proj = projectReducer(xboxProject(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
@@ -599,10 +599,9 @@ describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
     expect(reset.devices[0].glyphStyles["xbox-lb"]).toBeUndefined();
   });
 
-  it("drops a Background source aimed at the Device tier rather than storing it", () => {
-    // The tier cannot express one, so a patch carrying one (from a stale caller,
-    // or a config predating the rule) is laundered on the way in — otherwise it
-    // would sit in the config looking effective while the resolver ignored it.
+  it("honours a device-wide source on unseeded Inputs, while the seed still wins", () => {
+    // A device-wide source is a real capability. Its accepted cost: the eight
+    // seeded shoulders no-op on it, escapable only per-Glyph.
     const proj = projectReducer(xboxProject(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
@@ -610,7 +609,12 @@ describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
         background: { source: { kind: "none" }, fill: "#123456" },
       },
     });
-    expect(proj.devices[0].style.background).toEqual({ fill: "#123456" });
-    expect(resolved(proj).lb.style.background.source).toEqual(BUMPER);
+    expect(proj.devices[0].style.background).toEqual({
+      source: { kind: "none" },
+      fill: "#123456",
+    });
+    const { lb, a } = resolved(proj);
+    expect(a.style.background.source).toEqual({ kind: "none" });
+    expect(lb.style.background.source).toEqual(BUMPER);
   });
 });

@@ -5,13 +5,8 @@ import {
   mergeOverride,
   resolveGlyphStyle,
   resolveStyle,
-  withoutBackgroundSource,
 } from "@/lib/glyph/style";
-import type {
-  DeviceStyleOverride,
-  GlyphStyle,
-  StyleOverride,
-} from "@/lib/glyph/style";
+import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
 import type { BackgroundSource } from "@/lib/glyph/types";
 
 function base(): GlyphStyle {
@@ -156,22 +151,27 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
   });
 
   it("lets the Device tier recolour a seeded tile without replacing it", () => {
-    const device: DeviceStyleOverride = { background: { fill: "#f00" } };
+    const device: StyleOverride = { background: { fill: "#f00" } };
     const out = resolveGlyphStyle(base(), BUMPER, device, undefined);
     expect(out.background.source).toEqual(BUMPER);
     expect(out.background.fill).toBe("#f00");
   });
 
-  it("ignores a Background source left on a Device override by an older build", () => {
-    // The Device tier cannot express one now, but persisted overrides are
-    // validated by shape and not content, so a pre-ADR-0012 save can still carry
-    // one. Obeying it would flatten all four shoulders under one setting — the
-    // exact collision this rank exists to remove.
-    const legacy = {
-      background: { source: { kind: "shape" } },
-    } as unknown as DeviceStyleOverride;
+  it("applies a device-wide source to an Input the Catalog does not seed", () => {
+    const device: StyleOverride = {
+      background: { source: { kind: "image", imageId: "keycap.png" } },
+    };
     expect(
-      resolveGlyphStyle(base(), BUMPER, legacy, undefined).background.source,
+      resolveGlyphStyle(base(), undefined, device, undefined).background.source,
+    ).toEqual({ kind: "image", imageId: "keycap.png" });
+  });
+
+  it("lets the seed outrank a device-wide source on a seeded Input", () => {
+    // The accepted consequence of ranking the seed above the Device tier: a
+    // device-wide source no-ops on the shoulders, escapable only per-Glyph.
+    const device: StyleOverride = { background: { source: { kind: "none" } } };
+    expect(
+      resolveGlyphStyle(base(), BUMPER, device, undefined).background.source,
     ).toEqual(BUMPER);
   });
 
@@ -453,34 +453,5 @@ describe("clearOverrideField", () => {
     expect(clearOverrideField({ textColor: "#f00" }, "fill")).toEqual({
       textColor: "#f00",
     });
-  });
-});
-
-describe("withoutBackgroundSource", () => {
-  it("passes through an override that names no source", () => {
-    const override: StyleOverride = {
-      textColor: "#f00",
-      background: { fill: "#111" },
-    };
-    expect(withoutBackgroundSource(override)).toEqual(override);
-  });
-
-  it("drops the source, keeping the paint fields beside it", () => {
-    expect(
-      withoutBackgroundSource({
-        background: { source: { kind: "none" }, fill: "#111" },
-      }),
-    ).toEqual({ background: { fill: "#111" } });
-  });
-
-  it("collapses a background that held nothing but a source", () => {
-    // Left behind, an empty `background: {}` would read as an override that sets
-    // something, which is what surfaces a reset control in the Style panel.
-    expect(
-      withoutBackgroundSource({
-        textColor: "#f00",
-        background: { source: { kind: "shape" } },
-      }),
-    ).toEqual({ textColor: "#f00" });
   });
 });

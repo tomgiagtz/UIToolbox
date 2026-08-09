@@ -5,11 +5,7 @@
  * Background, Sprite Atlas, Sprite Name. Keep these terms; avoid the synonyms
  * noted in the glossary.
  */
-import type {
-  DeviceStyleOverride,
-  GlyphStyle,
-  StyleOverride,
-} from "@/lib/glyph/style";
+import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
 
 /** The primitive a Background draws when its source is `{ kind: "shape" }`. */
 export type BackgroundShape = "rounded-rect" | "square" | "circle";
@@ -136,11 +132,8 @@ export interface DeviceConfig {
   enabled: string[];
   /** Off-catalog Inputs, generated after the enabled ones. */
   custom: CustomInput[];
-  /**
-   * Device-tier style overrides (sparse; `{}` by default). It cannot name a
-   * Background source — see {@link DeviceStyleOverride}.
-   */
-  style: DeviceStyleOverride;
+  /** Device-tier style overrides (sparse; `{}` by default). */
+  style: StyleOverride;
   /** Per-Glyph style overrides, keyed by Catalog id or custom id (`{}` default). */
   glyphStyles: Record<string, StyleOverride>;
 }
