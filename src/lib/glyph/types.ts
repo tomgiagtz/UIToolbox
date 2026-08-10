@@ -37,26 +37,41 @@ export type BackgroundSource =
    * sentinels recoloured to this Background's `fill` / `border.color`.
    * Bumper/trigger Inputs are **seeded** with one by their Catalog entry (#18).
    */
-  | {
-      kind: "authored";
-      backgroundId: string;
-      /**
-       * Mirror the tile horizontally when drawn. The shipped bumper/trigger tiles
-       * are right-facing, so the left-side Inputs (LB, LT) set this to face the
-       * shape the other way (issue #18).
-       */
-      flipX?: boolean;
-    }
+  | { kind: "authored"; backgroundId: string }
   /**
    * A user-uploaded tile image, referenced by {@link ImageAsset} id. Drawn as
    * authored — never recoloured — fitted to the whole cell (issue #22).
    */
   | { kind: "image"; imageId: string };
 
+/**
+ * How one drawing layer is painted into its cell (ADR-0012 §2). One per layer —
+ * {@link Background.transform} for the tile, `GlyphStyle.content.transform` for
+ * whichever Render Source is drawn — and neither is aware of the other.
+ *
+ * Resolved form is **total**: identity is spelled out rather than left absent.
+ * Signed scale is the mirror: it is safe to read a negative component that way
+ * only because {@link rotation} sits beside it, so the sign is never the sole
+ * channel for orientation (negating *both* components is a 180° turn, not a
+ * mirror).
+ */
+export interface Transform {
+  /** Degrees clockwise, normalised into 0–360 on write. */
+  rotation: number;
+  /** Per-axis scale; a negative component mirrors that axis. */
+  scale: { x: number; y: number };
+}
+
 /** The tile a Glyph's Render Source is drawn on: source + fill + optional border. */
 export interface Background {
   /** Where the tile art comes from; defaults to the drawn {@link shape}. */
   source: BackgroundSource;
+  /**
+   * How the whole tile layer is painted — every source kind alike, since
+   * orientation is a property of the layer and not of where its art came from
+   * (ADR-0012 §2, superseding ADR-0009's per-source `flipX`).
+   */
+  transform: Transform;
   /** The primitive to draw. Read only while {@link source} is `{ kind: "shape" }`. */
   shape: BackgroundShape;
   /** CSS color of the fill. Ignored by a source that draws no primitive. */

@@ -265,9 +265,11 @@ describe("projectReducer — font", () => {
 describe("projectReducer — Render Source & custom images (#20)", () => {
   const image = { id: "img-1.png", fileName: "art.png", type: "image/png" };
 
-  it("starts with no images and an unscaled content default", () => {
+  it("starts with no images and both layers at identity", () => {
     expect(base().images).toEqual([]);
-    expect(base().style.contentScale).toBe(1);
+    const identity = { rotation: 0, scale: { x: 1, y: 1 } };
+    expect(base().style.content.transform).toEqual(identity);
+    expect(base().style.background.transform).toEqual(identity);
   });
 
   it("adds an uploaded image to the shared manifest", () => {
@@ -314,22 +316,31 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
     expect(next.devices[0].glyphStyles["key-w"]).toBeUndefined();
   });
 
-  it("folds a Project-tier content scale into the base style", () => {
+  it("folds a Project-tier content transform into the base style", () => {
     const next = run(base(), {
       type: "patch-style",
       scope: { tier: "project" },
-      patch: { contentScale: 0.6 },
+      patch: { content: { transform: { scale: { x: 0.6, y: 0.6 } } } },
     });
-    expect(next.style.contentScale).toBe(0.6);
+    // The Project tier is a full style, so the patch lands totalled: the axis it
+    // named changed and the rotation it didn't is still spelled out.
+    expect(next.style.content.transform).toEqual({
+      rotation: 0,
+      scale: { x: 0.6, y: 0.6 },
+    });
   });
 
-  it("stores a Device-tier content scale as an override", () => {
+  it("stores a Device-tier content transform as a sparse override", () => {
     const next = run(base(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
-      patch: { contentScale: 1.4 },
+      patch: { content: { transform: { rotation: 90 } } },
     });
-    expect(next.devices[0].style).toEqual({ contentScale: 1.4 });
-    expect(next.style.contentScale).toBe(1);
+    // Sparse at an override tier: the scale it didn't name stays absent, so it
+    // keeps falling up rather than pinning identity.
+    expect(next.devices[0].style).toEqual({
+      content: { transform: { rotation: 90 } },
+    });
+    expect(next.style.content.transform.rotation).toBe(0);
   });
 });

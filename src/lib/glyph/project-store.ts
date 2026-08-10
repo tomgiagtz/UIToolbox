@@ -25,6 +25,7 @@ import type {
   ImageAsset,
   NamingConfig,
   Project,
+  Transform,
 } from "@/lib/glyph/types";
 
 const CONFIG_KEY = "uitoolbox.glyph-creator.project";
@@ -300,10 +301,25 @@ function isBackgroundSource(value: unknown): value is BackgroundSource {
   return value.kind === "image" && typeof value.imageId === "string";
 }
 
+/**
+ * A resolved {@link Transform} is **total** — a persisted one with a component
+ * missing is not a transform that falls up, it's a broken file.
+ */
+function isTransform(value: unknown): value is Transform {
+  return (
+    isRecord(value) &&
+    typeof value.rotation === "number" &&
+    isRecord(value.scale) &&
+    typeof value.scale.x === "number" &&
+    typeof value.scale.y === "number"
+  );
+}
+
 function isBackground(value: unknown): value is Background {
   if (!isRecord(value)) return false;
   return (
     SHAPES.includes(value.shape as BackgroundShape) &&
+    isTransform(value.transform) &&
     typeof value.fill === "string" &&
     typeof value.cornerRadius === "number" &&
     isRecord(value.border) &&
@@ -333,8 +349,9 @@ function isGlyphStyle(value: unknown): value is GlyphStyle {
     isRecord(value) &&
     typeof value.textColor === "string" &&
     isBackground(value.background) &&
-    isSymbolPaints(value.symbolPaints) &&
-    typeof value.contentScale === "number"
+    isRecord(value.content) &&
+    isTransform(value.content.transform) &&
+    isSymbolPaints(value.symbolPaints)
   );
 }
 

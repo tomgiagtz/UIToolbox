@@ -8,19 +8,21 @@ import {
 } from "@/lib/glyph/style";
 import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
 import type { BackgroundSource } from "@/lib/glyph/types";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 function base(): GlyphStyle {
   return {
     textColor: "#ffffff",
     background: {
       source: { kind: "shape" },
+      transform: identityTransform(),
       shape: "rounded-rect",
       fill: "#1e293b",
       cornerRadius: 18,
       border: { width: 4, color: "#475569" },
     },
     symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-    contentScale: 1,
+    content: { transform: identityTransform() },
   };
 }
 
@@ -93,13 +95,52 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     });
   });
 
-  it("resolves the content scale through the cascade (issue #20)", () => {
-    const device: StyleOverride = { contentScale: 0.8 };
-    const glyph: StyleOverride = { contentScale: 1.5 };
-    expect(resolveStyle(base(), device).contentScale).toBe(0.8);
-    expect(resolveStyle(base(), device, glyph).contentScale).toBe(1.5);
-    // Unset at every tier falls back to the Project base.
-    expect(resolveStyle(base(), {}).contentScale).toBe(1);
+  it("resolves both layer transforms through the cascade (ADR-0012 §2)", () => {
+    const device: StyleOverride = {
+      background: { transform: { rotation: 90 } },
+      content: { transform: { scale: { x: 0.8, y: 0.8 } } },
+    };
+    const out = resolveStyle(base(), device);
+    expect(out.background.transform.rotation).toBe(90);
+    expect(out.content.transform.scale).toEqual({ x: 0.8, y: 0.8 });
+    // Neither layer is aware of the other: the tile turned, the content didn't.
+    expect(out.content.transform.rotation).toBe(0);
+    expect(out.background.transform.scale).toEqual({ x: 1, y: 1 });
+    // Unset at every tier falls back to the Project base's identity.
+    expect(resolveStyle(base(), {}).content.transform).toEqual({
+      rotation: 0,
+      scale: { x: 1, y: 1 },
+    });
+  });
+
+  it("falls each transform component up independently", () => {
+    const device: StyleOverride = { content: { transform: { rotation: 90 } } };
+    const glyph: StyleOverride = {
+      content: { transform: { scale: { x: -1 } } },
+    };
+    const out = resolveStyle(base(), device, glyph);
+    // The Glyph said nothing about rotation, so the Device's survives...
+    expect(out.content.transform.rotation).toBe(90);
+    // ...and the axis it didn't name keeps the base's scale.
+    expect(out.content.transform.scale).toEqual({ x: -1, y: 1 });
+  });
+
+  it("replaces a lower tier's rotation rather than composing with it", () => {
+    const device: StyleOverride = { content: { transform: { rotation: 90 } } };
+    const glyph: StyleOverride = { content: { transform: { rotation: 0 } } };
+    // `rotation: 0` at the Glyph tier means upright, not "turn back by 90".
+    expect(resolveStyle(base(), device, glyph).content.transform.rotation).toBe(
+      0,
+    );
+  });
+
+  it("normalises a resolved rotation into 0–360", () => {
+    const turns = (rotation: number) =>
+      resolveStyle(base(), { content: { transform: { rotation } } }).content
+        .transform.rotation;
+    expect(turns(-90)).toBe(270);
+    expect(turns(450)).toBe(90);
+    expect(turns(360)).toBe(0);
   });
 
   it("does not mutate the base style", () => {
@@ -111,17 +152,41 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
 });
 
 describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
-  const BUMPER: BackgroundSource = {
-    kind: "authored",
-    backgroundId: "bumper",
-    flipX: true,
+  /** What a mirrored shoulder's Catalog entry seeds: a tile, facing left. */
+  const TILE: BackgroundSource = { kind: "authored", backgroundId: "bumper" };
+  const SEED: StyleOverride = {
+    background: { source: TILE, transform: { scale: { x: -1 } } },
   };
 
   it("draws the seeded tile when the user has set nothing", () => {
-    const out = resolveGlyphStyle(base(), BUMPER, undefined, undefined);
-    expect(out.background.source).toEqual(BUMPER);
-    // The seed says only what the tile *is*; everything else falls up.
+    const out = resolveGlyphStyle(base(), SEED, undefined, undefined);
+    expect(out.background.source).toEqual(TILE);
+    // The seed says only what the tile *is* and which way it faces; everything
+    // else falls up — including the axis it left alone.
+    expect(out.background.transform).toEqual({
+      rotation: 0,
+      scale: { x: -1, y: 1 },
+    });
     expect(out.background.fill).toBe(base().background.fill);
+  });
+
+  it("mirrors only the tile layer, leaving the content upright", () => {
+    // What `flipX` bought by riding inside the source, kept now that it doesn't:
+    // the label or Symbol drawn on a left bumper is not written backwards.
+    const out = resolveGlyphStyle(base(), SEED, undefined, undefined);
+    expect(out.content.transform.scale).toEqual({ x: 1, y: 1 });
+  });
+
+  it("lets a Glyph face a seeded control back the other way", () => {
+    // The papercut `flipX` left: orientation is now a control of its own, so a
+    // state the Catalog put you in is one you can leave.
+    const glyph: StyleOverride = {
+      background: { transform: { scale: { x: 1 } } },
+    };
+    const out = resolveGlyphStyle(base(), SEED, undefined, glyph);
+    expect(out.background.transform.scale.x).toBe(1);
+    // ...without disturbing the tile it applies to.
+    expect(out.background.source).toEqual(TILE);
   });
 
   it("falls through to the Project base for an Input with no seed", () => {
@@ -140,9 +205,8 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
       },
     };
     expect(
-      resolveGlyphStyle(project, BUMPER, undefined, undefined).background
-        .source,
-    ).toEqual(BUMPER);
+      resolveGlyphStyle(project, SEED, undefined, undefined).background.source,
+    ).toEqual(TILE);
     // An unseeded Input on the same project does take the uploaded tile.
     expect(
       resolveGlyphStyle(project, undefined, undefined, undefined).background
@@ -152,8 +216,8 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
 
   it("lets the Device tier recolour a seeded tile without replacing it", () => {
     const device: StyleOverride = { background: { fill: "#f00" } };
-    const out = resolveGlyphStyle(base(), BUMPER, device, undefined);
-    expect(out.background.source).toEqual(BUMPER);
+    const out = resolveGlyphStyle(base(), SEED, device, undefined);
+    expect(out.background.source).toEqual(TILE);
     expect(out.background.fill).toBe("#f00");
   });
 
@@ -171,8 +235,8 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
     // device-wide source no-ops on the shoulders, escapable only per-Glyph.
     const device: StyleOverride = { background: { source: { kind: "none" } } };
     expect(
-      resolveGlyphStyle(base(), BUMPER, device, undefined).background.source,
-    ).toEqual(BUMPER);
+      resolveGlyphStyle(base(), SEED, device, undefined).background.source,
+    ).toEqual(TILE);
   });
 
   it("lets a Glyph override outrank the seed", () => {
@@ -180,7 +244,7 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
       background: { source: { kind: "authored", backgroundId: "trigger" } },
     };
     expect(
-      resolveGlyphStyle(base(), BUMPER, undefined, glyph).background.source,
+      resolveGlyphStyle(base(), SEED, undefined, glyph).background.source,
     ).toEqual({ kind: "authored", backgroundId: "trigger" });
   });
 
@@ -192,15 +256,17 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
     const explicit: StyleOverride = {
       background: { source: { kind: "shape" }, shape: "circle" },
     };
-    const out = resolveGlyphStyle(base(), BUMPER, undefined, explicit);
-    // The mirror rides on the source, so it goes with it.
+    const out = resolveGlyphStyle(base(), SEED, undefined, explicit);
     expect(out.background.source).toEqual({ kind: "shape" });
+    // Orientation is no part of a source, so replacing one leaves the seeded
+    // mirror standing — this Glyph said nothing about which way it faces.
+    expect(out.background.transform.scale.x).toBe(-1);
     expect(out.background.shape).toBe("circle");
 
     const omitted: StyleOverride = { background: { shape: "circle" } };
     expect(
-      resolveGlyphStyle(base(), BUMPER, undefined, omitted).background.source,
-    ).toEqual(BUMPER);
+      resolveGlyphStyle(base(), SEED, undefined, omitted).background.source,
+    ).toEqual(TILE);
   });
 
   it('lets a Glyph turn the seeded tile off entirely with "none"', () => {
@@ -208,14 +274,14 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
     // the drawn primitive, leaving the seeded tile showing underneath.
     const glyph: StyleOverride = { background: { source: { kind: "none" } } };
     expect(
-      resolveGlyphStyle(base(), BUMPER, undefined, glyph).background.source,
+      resolveGlyphStyle(base(), SEED, undefined, glyph).background.source,
     ).toEqual({ kind: "none" });
   });
 
   it("does not mutate the base style", () => {
     const b = base();
     const snapshot = JSON.parse(JSON.stringify(b));
-    resolveGlyphStyle(b, BUMPER, { background: { fill: "#f00" } }, undefined);
+    resolveGlyphStyle(b, SEED, { background: { fill: "#f00" } }, undefined);
     expect(b).toEqual(snapshot);
   });
 });
@@ -249,14 +315,14 @@ describe("mergeOverride", () => {
   it("replaces the Background source wholesale rather than merging it (issue #22)", () => {
     const base: StyleOverride = {
       background: {
-        source: { kind: "authored", backgroundId: "bumper", flipX: true },
+        source: { kind: "authored", backgroundId: "bumper" },
         fill: "#111",
       },
     };
     const out = mergeOverride(base, {
       background: { source: { kind: "image", imageId: "img-1.png" } },
     });
-    // No trace of the authored tile's mirror flag on the uploaded one...
+    // The new source stands alone rather than half-merging with the old...
     expect(out.background?.source).toEqual({
       kind: "image",
       imageId: "img-1.png",
@@ -275,16 +341,35 @@ describe("mergeOverride", () => {
 
   it("keeps an existing Render Source when the patch doesn't set one", () => {
     const base: StyleOverride = { renderSource: { kind: "label" } };
-    const out = mergeOverride(base, { contentScale: 0.5 });
-    expect(out).toEqual({ renderSource: { kind: "label" }, contentScale: 0.5 });
+    const out = mergeOverride(base, {
+      content: { transform: { rotation: 90 } },
+    });
+    expect(out).toEqual({
+      renderSource: { kind: "label" },
+      content: { transform: { rotation: 90 } },
+    });
   });
 
-  it("layers the content scale from the patch", () => {
-    expect(mergeOverride({ contentScale: 1.2 }, { contentScale: 0.9 })).toEqual(
-      {
-        contentScale: 0.9,
-      },
+  it("merges a layer transform component-by-component", () => {
+    const base: StyleOverride = {
+      content: { transform: { rotation: 90, scale: { x: -1 } } },
+    };
+    const out = mergeOverride(base, {
+      content: { transform: { scale: { y: 2 } } },
+    });
+    // The patch named one axis, so the rotation and the other axis stand.
+    expect(out.content?.transform).toEqual({
+      rotation: 90,
+      scale: { x: -1, y: 2 },
+    });
+  });
+
+  it("normalises a rotation as it is written into an override", () => {
+    const out = mergeOverride(
+      {},
+      { background: { transform: { rotation: -90 } } },
     );
+    expect(out.background?.transform?.rotation).toBe(270);
   });
 
   it("does not mutate either input", () => {
@@ -322,15 +407,26 @@ describe("isOverrideFieldSet", () => {
     ).toBe(false);
   });
 
-  it("detects a set Render Source and content scale (issue #20)", () => {
+  it("detects a set Render Source (issue #20)", () => {
     expect(
       isOverrideFieldSet({ renderSource: { kind: "label" } }, "renderSource"),
     ).toBe(true);
     expect(isOverrideFieldSet({}, "renderSource")).toBe(false);
-    expect(isOverrideFieldSet({ contentScale: 0.5 }, "contentScale")).toBe(
-      true,
-    );
-    expect(isOverrideFieldSet({}, "contentScale")).toBe(false);
+  });
+
+  it("detects each layer's transform separately (ADR-0012 §2)", () => {
+    const mirrored: StyleOverride = {
+      background: { transform: { scale: { x: -1 } } },
+    };
+    expect(isOverrideFieldSet(mirrored, "backgroundTransform")).toBe(true);
+    // One entry per layer, so the other layer is untouched by it.
+    expect(isOverrideFieldSet(mirrored, "contentTransform")).toBe(false);
+    expect(
+      isOverrideFieldSet(
+        { content: { transform: { rotation: 90 } } },
+        "contentTransform",
+      ),
+    ).toBe(true);
   });
 
   it("detects a set Background source", () => {
@@ -416,37 +512,66 @@ describe("clearOverrideField", () => {
         "backgroundSource",
       ),
     ).toEqual({});
-    // The mirror flag rides on the source, so it can't survive it.
+    // Orientation is no longer part of a source, so clearing one leaves the
+    // layer's transform exactly where it was.
     expect(
       clearOverrideField(
         {
           background: {
-            source: { kind: "authored", backgroundId: "bumper", flipX: true },
+            source: { kind: "authored", backgroundId: "bumper" },
+            transform: { scale: { x: -1 } },
           },
         },
         "backgroundSource",
       ),
-    ).toEqual({});
+    ).toEqual({ background: { transform: { scale: { x: -1 } } } });
   });
 
-  it("clears the Render Source and the content scale (issue #20)", () => {
+  it("clears a whole layer's transform at once (ADR-0012 §2)", () => {
+    // One reset entry per layer, not per component: a Glyph-scope mirror and a
+    // Glyph-scope rotation fall back up together. Accepted.
+    expect(
+      clearOverrideField(
+        { content: { transform: { rotation: 90, scale: { x: -1 } } } },
+        "contentTransform",
+      ),
+    ).toEqual({});
+    expect(
+      clearOverrideField(
+        { background: { fill: "#111", transform: { rotation: 90 } } },
+        "backgroundTransform",
+      ),
+    ).toEqual({ background: { fill: "#111" } });
+    // The layers clear independently.
+    expect(
+      clearOverrideField(
+        {
+          background: { transform: { rotation: 90 } },
+          content: { transform: { rotation: 45 } },
+        },
+        "backgroundTransform",
+      ),
+    ).toEqual({ content: { transform: { rotation: 45 } } });
+  });
+
+  it("clears the Render Source (issue #20)", () => {
     expect(
       clearOverrideField({ renderSource: { kind: "label" } }, "renderSource"),
     ).toEqual({});
-    expect(clearOverrideField({ contentScale: 0.5 }, "contentScale")).toEqual(
-      {},
-    );
-    // Independent of one another and of the rest of the override.
+    // Independent of the rest of the override.
     expect(
       clearOverrideField(
         {
           renderSource: { kind: "symbol" },
-          contentScale: 2,
+          content: { transform: { rotation: 90 } },
           textColor: "#f00",
         },
         "renderSource",
       ),
-    ).toEqual({ contentScale: 2, textColor: "#f00" });
+    ).toEqual({
+      content: { transform: { rotation: 90 } },
+      textColor: "#f00",
+    });
   });
 
   it("is a no-op when the field is not set", () => {

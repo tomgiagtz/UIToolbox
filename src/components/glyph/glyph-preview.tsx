@@ -2,9 +2,10 @@
 
 import { useRef, type CSSProperties } from "react";
 import { getTileBitmap } from "@/lib/glyph/background-render";
+import { identityTransform } from "@/lib/glyph/defaults";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import { getSymbolBitmap } from "@/lib/glyph/symbol-render";
-import type { SymbolPaints } from "@/lib/glyph/style";
+import type { ContentLayer, SymbolPaints } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 import { useGlyphCanvas } from "./use-glyph-canvas";
 import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
@@ -21,10 +22,10 @@ export interface GlyphPreviewProps {
    */
   symbolPaints?: SymbolPaints;
   /**
-   * Scale of the tile's content box — how large the label or Symbol is drawn
-   * inside the tile (issue #20). Defaults to the unscaled fit.
+   * How the content layer — whichever Render Source is drawn — is painted
+   * (ADR-0012 §2). Defaults to identity, drawn upright at its natural size.
    */
-  contentScale?: number;
+  content?: ContentLayer;
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
@@ -52,7 +53,7 @@ export function GlyphPreview({
   textColor,
   background,
   symbolPaints,
-  contentScale = 1,
+  content,
   fontFamily,
   symbolId,
   device,
@@ -68,7 +69,7 @@ export function GlyphPreview({
       border: textColor,
       secondary: textColor,
     },
-    contentScale,
+    content: content ?? { transform: identityTransform() },
   };
 
   // Warm the shared Render Source bitmap cache and redraw once it is ready. The
@@ -101,7 +102,7 @@ export function GlyphPreview({
       textColor,
       background,
       symbolPaints,
-      contentScale,
+      content,
       fontFamily,
       symbolId,
       device,

@@ -23,19 +23,13 @@ import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 import { ImageUploadField } from "./image-upload-field";
 import { RenderSourceControls } from "./render-source-controls";
+import { TransformField } from "./transform-field";
 
 const SHAPES: { value: BackgroundShape; label: string }[] = [
   { value: "rounded-rect", label: "Rounded rect" },
   { value: "square", label: "Square" },
   { value: "circle", label: "Circle" },
 ];
-
-/**
- * Range of the content scale slider. It runs past 1 so art can be pushed to the
- * cell edge (and beyond — the renderer clips to the cell), and stops well above
- * zero since a Render Source scaled to nothing is just an empty tile.
- */
-const CONTENT_SCALE_RANGE = { min: 0.1, max: 2, step: 0.05 };
 
 /** Stable option value for a {@link BackgroundSource} in the source picker. */
 function sourceValue(source: BackgroundSource): string {
@@ -46,21 +40,15 @@ function sourceValue(source: BackgroundSource): string {
 }
 
 /**
- * Read a picked option value back into a {@link BackgroundSource}. An Authored
- * Background keeps the mirror flag the Catalog gave it (`flipX`), so re-picking
- * a bumper's own tile doesn't quietly un-mirror it.
+ * Read a picked option value back into a {@link BackgroundSource}.
+ *
+ * Nothing is carried over from the current source: a source says only where the
+ * art comes from, and orientation left the union for the tile layer's transform
+ * (ADR-0012 §2), so replacing one wholesale can't disturb it.
  */
-function sourceFromValue(
-  value: string,
-  current: BackgroundSource,
-): BackgroundSource {
+function sourceFromValue(value: string): BackgroundSource {
   if (value.startsWith("authored:")) {
-    const backgroundId = value.slice("authored:".length);
-    const flipX =
-      current.kind === "authored" && current.backgroundId === backgroundId
-        ? current.flipX
-        : undefined;
-    return { kind: "authored", backgroundId, ...(flipX ? { flipX } : {}) };
+    return { kind: "authored", backgroundId: value.slice("authored:".length) };
   }
   if (value.startsWith("image:")) {
     return { kind: "image", imageId: value.slice("image:".length) };
@@ -104,7 +92,7 @@ function BackgroundSourceField({
             id={id}
             className={inputClass}
             value={sourceValue(source)}
-            onChange={(e) => onChange(sourceFromValue(e.target.value, source))}
+            onChange={(e) => onChange(sourceFromValue(e.target.value))}
           >
             <option value="none">None (content only)</option>
             <option value="shape">Shape</option>
@@ -337,26 +325,25 @@ export function StyleControls({
 
       {showCellSize && <CellSizeField project={project} dispatch={dispatch} />}
 
-      {/* Sizes whichever Render Source the Glyph draws, so it lives with the
-          rest of the cascade rather than beside the image picker (issue #20). */}
-      <Field
-        label={`Content scale (${Math.round(style.contentScale * 100)}%)`}
-        hint="How large the label, Symbol, or image is drawn inside the tile."
-        onReset={resetFor("contentScale")}
-      >
-        {(id) => (
-          <input
-            id={id}
-            type="range"
-            min={CONTENT_SCALE_RANGE.min}
-            max={CONTENT_SCALE_RANGE.max}
-            step={CONTENT_SCALE_RANGE.step}
-            value={style.contentScale}
-            onChange={(e) => patch({ contentScale: Number(e.target.value) })}
-            className="w-full"
-          />
-        )}
-      </Field>
+      {/* The two drawing layers, each with its own transform and neither aware of
+          the other (ADR-0012 §2). The content one paints whichever Render Source
+          the Glyph draws, so it lives here with the rest of the cascade rather
+          than beside the image picker. */}
+      <TransformField
+        label="Background transform"
+        hint="Rotates and scales the whole tile — art or drawn shape alike."
+        transform={bg.transform}
+        onChange={(transform) => patch({ background: { transform } })}
+        onReset={resetFor("backgroundTransform")}
+      />
+
+      <TransformField
+        label="Content transform"
+        hint="Rotates and scales the label, Symbol, or image drawn on the tile. A negative scale mirrors that axis."
+        transform={style.content.transform}
+        onChange={(transform) => patch({ content: { transform } })}
+        onReset={resetFor("contentTransform")}
+      />
 
       {showsPaintFields && (
         <ColorField

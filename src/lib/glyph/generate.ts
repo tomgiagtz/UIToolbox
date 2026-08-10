@@ -74,23 +74,37 @@ export function resolveRenderSource(
 }
 
 /**
- * The Background source a Catalog **seeds** this Input with (ADR-0012 §2) — the
- * only place a Catalog's presence facts become a style value.
+ * The sparse style a Catalog **seeds** this Input with (ADR-0012 §2) — the only
+ * place a Catalog's presence facts become style values, which is why the
+ * projection lives here rather than in `catalog.ts` or `style.ts`.
  *
- * `mirrored` projects into `flipX`, where the renderer reads orientation until
- * it moves to `background.transform`.
+ * Two facts project. `backgroundId` names the tile: omitted seeds nothing at all,
+ * `null` seeds an explicit *no* background, a string seeds that Authored tile.
+ * `mirrored` — a bare boolean, meaning only *this control faces the other way* —
+ * becomes `scale.x: -1` on the tile layer, and nothing else: rotation and `y`
+ * stay absent so they keep falling up the cascade.
  */
-export function seedBackgroundSource(
+export function seedStyle(
+  entry: CatalogInput | undefined,
+): StyleOverride | undefined {
+  const source = seedBackgroundSource(entry);
+  if (!source) return undefined;
+  return {
+    background: {
+      source,
+      ...(entry?.mirrored ? { transform: { scale: { x: -1 } } } : {}),
+    },
+  };
+}
+
+/** The tile a Catalog entry names, or `undefined` where it names none. */
+function seedBackgroundSource(
   entry: CatalogInput | undefined,
 ): BackgroundSource | undefined {
   if (entry?.backgroundId === undefined) return undefined;
   // `null` seeds an explicit absence, not no seed.
   if (entry.backgroundId === null) return { kind: "none" };
-  return {
-    kind: "authored",
-    backgroundId: entry.backgroundId,
-    ...(entry.mirrored ? { flipX: true } : {}),
-  };
+  return { kind: "authored", backgroundId: entry.backgroundId };
 }
 
 /** What the editor's Render Source control needs to know about one Glyph. */
@@ -162,7 +176,7 @@ export function resolveScopeStyle(
   const entry = catalog ? catalogIndex(catalog).get(scope.glyphId) : undefined;
   return resolveGlyphStyle(
     base,
-    seedBackgroundSource(entry),
+    seedStyle(entry),
     device.style,
     device.glyphStyles[scope.glyphId],
   );
@@ -199,12 +213,7 @@ export function resolveDeviceInputs(
       ...renderSourceFields(
         resolveRenderSource(entry, project.images, device.style, glyph),
       ),
-      style: resolveGlyphStyle(
-        base,
-        seedBackgroundSource(entry),
-        device.style,
-        glyph,
-      ),
+      style: resolveGlyphStyle(base, seedStyle(entry), device.style, glyph),
     };
   }
 

@@ -12,6 +12,7 @@ import type {
   ExportSettings,
   NamingConfig,
   Project,
+  Transform,
 } from "@/lib/glyph/types";
 
 /**
@@ -50,9 +51,22 @@ export const DEFAULT_SYMBOL_PAINTS: SymbolPaints = {
   secondary: "#334155",
 };
 
-/** Default rounded-rect Background: the drawn shape, no tile art. */
+/**
+ * The identity {@link Transform} — drawn upright, at its natural size. Every
+ * resolved style spells this out; only override tiers may leave it absent, where
+ * absence means "fall up" rather than identity (ADR-0012 §2).
+ *
+ * A getter rather than a constant: a resolved style's transform is mutable data
+ * handed to a caller, so the two layers must never share one object.
+ */
+export function identityTransform(): Transform {
+  return { rotation: 0, scale: { x: 1, y: 1 } };
+}
+
+/** Default rounded-rect Background: the drawn shape, no tile art, drawn upright. */
 export const DEFAULT_BACKGROUND: Background = {
   source: { kind: "shape" },
+  transform: identityTransform(),
   shape: "rounded-rect",
   fill: "#1e293b",
   cornerRadius: 18,
@@ -70,20 +84,14 @@ export const DEFAULT_NAMING: NamingConfig = {
 };
 
 /**
- * Default content scale: the Render Source fills the tile's content box exactly
- * as it did before the scale control existed (issue #20).
- */
-export const DEFAULT_CONTENT_SCALE = 1;
-
-/**
  * The base of the Style Cascade a fresh project starts from — the Project tier's
  * full {@link GlyphStyle} (ADR-0012 §6).
  */
 export const DEFAULT_STYLE: GlyphStyle = {
   textColor: DEFAULT_TEXT_COLOR,
   background: DEFAULT_BACKGROUND,
+  content: { transform: identityTransform() },
   symbolPaints: DEFAULT_SYMBOL_PAINTS,
-  contentScale: DEFAULT_CONTENT_SCALE,
 };
 
 /** Default atlas output settings: 128px cells, `{device}_{input}` in snake_case. */

@@ -89,9 +89,6 @@ so a large or rotated Glyph can't paint its neighbour in the atlas.
 
 _Avoid:_ "content scale", "flipX" — both are folded into a Transform (ADR-0012).
 
-_(ADR-0012, decided and not yet built. Today there is a uniform `contentScale`
-property and a `flipX` flag inside the authored Background source.)_
-
 ### Symbol
 
 A default artwork asset for a well-known Input (Triangle, Space, Enter, D-pad Up,

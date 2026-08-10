@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { GlyphPreview } from "./glyph-preview";
 import type { Background } from "@/lib/glyph/types";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 const roundedRect: Background = {
   source: { kind: "shape" },
+  transform: identityTransform(),
   shape: "rounded-rect",
   fill: "#1e293b",
   cornerRadius: 18,

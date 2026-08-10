@@ -146,14 +146,46 @@ describe("GlyphStylePanel", () => {
     expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
   });
 
-  it("scales the Render Source through the cascade", () => {
+  it("scales the content layer through the cascade", () => {
     const { dispatch } = renderPanel();
-    const slider = screen.getByLabelText(/content scale \(100%\)/i);
-    fireEvent.change(slider, { target: { value: "0.5" } });
+    // The box, not the slider: it takes any value, including the 0 the slider
+    // steps over.
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /content transform scale X/i }),
+      { target: { value: "0.5" } },
+    );
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { contentScale: 0.5 },
+      // One axis, so the other keeps falling up the cascade.
+      patch: { content: { transform: { scale: { x: 0.5 } } } },
+    });
+  });
+
+  it("rotates a layer in degrees, and only that layer", () => {
+    const { dispatch } = renderPanel();
+    fireEvent.change(screen.getByLabelText(/background transform rotation/i), {
+      target: { value: "90" },
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { background: { transform: { rotation: 90 } } },
+    });
+  });
+
+  it("steps the scale slider over zero rather than through it", () => {
+    // A layer scaled to nothing is an empty cell you can't see to drag back out
+    // of. The numeric box beside it still takes 0 from a user who means it.
+    const { dispatch } = renderPanel();
+    const slider = screen.getAllByRole("slider", {
+      name: /content transform scale X/i,
+    })[0];
+    fireEvent.change(slider, { target: { value: "0" } });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { content: { transform: { scale: { x: -0.1 } } } },
     });
   });
 
@@ -202,21 +234,20 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     });
   });
 
-  it("keeps a mirrored tile mirrored when it is re-picked", () => {
-    // Re-picking a bumper's own tile must not quietly un-flip it.
+  it("carries nothing over from the source it replaces", () => {
+    // Orientation left the source union, so a re-pick names the tile and only
+    // the tile — there is no flag left for it to preserve or to drop.
     const { dispatch } = renderPanel({
-      source: { kind: "authored", backgroundId: "bumper", flipX: true },
+      source: { kind: "authored", backgroundId: "bumper" },
     });
     fireEvent.change(screen.getByLabelText("Background source"), {
-      target: { value: "authored:bumper" },
+      target: { value: "authored:trigger" },
     });
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
       patch: {
-        background: {
-          source: { kind: "authored", backgroundId: "bumper", flipX: true },
-        },
+        background: { source: { kind: "authored", backgroundId: "trigger" } },
       },
     });
   });

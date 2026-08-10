@@ -16,6 +16,7 @@ import type {
   NamingConfig,
   Project,
 } from "@/lib/glyph/types";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 /**
  * A Device whose Inputs are supplied as custom (off-catalog) labels, so a test
@@ -42,13 +43,14 @@ const BASE_STYLE: GlyphStyle = {
   textColor: "#ffffff",
   background: {
     source: { kind: "shape" },
+    transform: identityTransform(),
     shape: "rounded-rect",
     fill: "#000000",
     cornerRadius: 12,
     border: { width: 2, color: "#333333" },
   },
   symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-  contentScale: 1,
+  content: { transform: identityTransform() },
 };
 
 const BASE_NAMING: NamingConfig = {
@@ -100,6 +102,9 @@ function xboxProject(): Project {
   });
 }
 
+/** The tile the Catalog seeds both shoulders with; orientation is no part of it. */
+const BUMPER = { kind: "authored", backgroundId: "bumper" };
+
 describe("Symbol Render Source threads through the cascade (issue #17)", () => {
   const xbox: DeviceConfig = {
     name: "Xbox",
@@ -130,11 +135,12 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
     // The Catalog per-Input default rides in the resolved Background, not on a
     // separate field like symbolId, so it flows to the compositor for free.
-    expect(lb.style.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-      flipX: true,
-    });
+    expect(lb.style.background.source).toEqual(BUMPER);
+    // A left-side shoulder faces the other way, which is now the tile layer's
+    // transform rather than a flag inside the source (ADR-0012 §2).
+    expect(lb.style.background.transform.scale.x).toBe(-1);
+    // ...and only the tile: what's drawn on it stays upright.
+    expect(lb.style.content.transform.scale.x).toBe(1);
     expect(a.style.background.source).toEqual({ kind: "shape" });
     expect(paddle.style.background.source).toEqual({ kind: "shape" });
 
@@ -236,15 +242,22 @@ describe("Render Source per Input (issue #20)", () => {
     expect(out.placements[0].spriteName).toBe("xbox_a");
   });
 
-  it("resolves the content scale onto every placement's style", () => {
-    const device = xbox({ "xbox-a": { contentScale: 1.5 } });
+  it("resolves the content transform onto every placement's style", () => {
+    const device = xbox({
+      "xbox-a": { content: { transform: { scale: { x: 1.5, y: 1.5 } } } },
+    });
     const [out] = generateTilesets(
       project({
         devices: [device],
-        style: { ...BASE_STYLE, contentScale: 0.8 },
+        style: {
+          ...BASE_STYLE,
+          content: { transform: { rotation: 0, scale: { x: 0.8, y: 0.8 } } },
+        },
       }),
     );
-    expect(out.placements.map((p) => p.style.contentScale)).toEqual([
+    expect(
+      out.placements.map((p) => p.style.content.transform.scale.x),
+    ).toEqual([
       1.5, // Glyph tier
       0.8, // falls up to the Project tier
       0.8,
@@ -505,11 +518,7 @@ describe("resolveScopeStyle", () => {
     const inputs = resolveDeviceInputs(proj.devices[0], proj);
     const lb = inputs.find((i) => i.id === "xbox-lb");
     const a = inputs.find((i) => i.id === "xbox-a");
-    expect(lb?.style.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-      flipX: true,
-    });
+    expect(lb?.style.background.source).toEqual(BUMPER);
     // A face button has no backer, so it does take the device-wide circle.
     expect(a?.style.background.shape).toBe("circle");
   });
@@ -536,8 +545,6 @@ describe("resolveScopeStyle", () => {
 });
 
 describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
-  const BUMPER = { kind: "authored", backgroundId: "bumper", flipX: true };
-
   function resolved(proj: Project) {
     const inputs = resolveDeviceInputs(proj.devices[0], proj);
     return {

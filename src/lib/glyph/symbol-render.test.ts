@@ -8,18 +8,20 @@ import {
   symbolInner,
   symbolRoleColors,
 } from "@/lib/glyph/symbol-render";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 const style: GlyphStyle = {
   textColor: "#33cc99",
   background: {
     source: { kind: "shape" },
+    transform: identityTransform(),
     shape: "circle",
     fill: "#222222",
     cornerRadius: 0,
     border: { width: 0, color: "#000000" },
   },
   symbolPaints: { fill: "#ff0000", border: "#0000ff", secondary: "#00ff00" },
-  contentScale: 1,
+  content: { transform: identityTransform() },
 };
 
 describe("symbolRoleColors", () => {
@@ -38,13 +40,14 @@ describe("backgroundRoleColors", () => {
       textColor: "#33cc99",
       background: {
         source: { kind: "shape" },
+        transform: identityTransform(),
         shape: "rounded-rect",
         fill: "#0e7a0d",
         cornerRadius: 8,
         border: { width: 4, color: "#ffd400" },
       },
       symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
-      contentScale: 1,
+      content: { transform: identityTransform() },
     };
     expect(backgroundRoleColors(bgStyle)).toEqual({
       fill: "#0e7a0d",
@@ -64,13 +67,14 @@ describe("backgroundRoleColors", () => {
         textColor: "#000000",
         background: {
           source: { kind: "shape" },
+          transform: identityTransform(),
           shape: "rounded-rect",
           fill: "#0e7a0d",
           cornerRadius: 0,
           border: { width: 0, color: "#ffd400" },
         },
         symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
-        contentScale: 1,
+        content: { transform: identityTransform() },
       }),
     );
     expect(out).toContain("fill:#0e7a0d;");
