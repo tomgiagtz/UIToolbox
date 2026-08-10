@@ -3,6 +3,7 @@ import {
   generateTilesets,
   resolveDeviceInputs,
   resolveScopeRenderSource,
+  seedStyle,
   resolveScopeStyle,
 } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
@@ -104,6 +105,39 @@ function xboxProject(): Project {
 
 /** The tile the Catalog seeds both shoulders with; orientation is no part of it. */
 const BUMPER = { kind: "authored", backgroundId: "bumper" };
+
+describe("seedStyle — the Catalog's presence facts as style (ADR-0012 §2)", () => {
+  it("seeds nothing for an entry that names no art", () => {
+    expect(seedStyle({ id: "key-w", label: "W" })).toBeUndefined();
+    expect(seedStyle(undefined)).toBeUndefined();
+  });
+
+  it("seeds an explicit absence from a null backgroundId", () => {
+    const seed = seedStyle({ id: "s", label: "Stick", backgroundId: null });
+    expect(seed).toEqual({ background: { source: { kind: "none" } } });
+  });
+
+  it("projects `mirrored` into the tile layer's scale, and only that", () => {
+    const seed = seedStyle({
+      id: "xbox-lb",
+      label: "LB",
+      backgroundId: "bumper",
+      mirrored: true,
+    });
+    expect(seed).toEqual({
+      background: { source: BUMPER, transform: { scale: { x: -1 } } },
+    });
+  });
+
+  it("seeds each fact on its own, neither depending on the other", () => {
+    // The Catalog's own invariant keeps this pair from arising (`mirrored` is
+    // meaningless without a tile), but a seed supplies only what it seeds — so
+    // one fact going missing must not take the other with it.
+    expect(seedStyle({ id: "x", label: "X", mirrored: true })).toEqual({
+      background: { transform: { scale: { x: -1 } } },
+    });
+  });
+});
 
 describe("Symbol Render Source threads through the cascade (issue #17)", () => {
   const xbox: DeviceConfig = {

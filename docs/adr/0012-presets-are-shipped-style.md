@@ -1,8 +1,8 @@
 # ADR-0012: A Catalog says what is present; a Preset says what it looks like
 
 - **Status:** Accepted — partly built. §1 and §2's three-tier cascade and Catalog
-  seeds landed with #78; the font, the transforms, §3–§7 and the Presets
-  themselves are still filed as issues off this ADR.
+  seeds landed with #78, and §2's two layer transforms with #79; the font, §3–§7
+  and the Presets themselves are still filed as issues off this ADR.
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
   land-as-one-change requirement withdrawn 2026-08-07, §2's per-Glyph-only
   `background.source` withdrawn 2026-08-08
@@ -595,7 +595,9 @@ change should keep a test asserting the previous shape is rejected.
 - **`StyleField` gains `"font"`, `backgroundTransform`, `contentTransform` and
   loses `contentScale`** — one entry per transform _layer_, not per component, so
   a Glyph-scope mirror and a Glyph-scope rotation clear together. Accepted.
-- **Deleted outright:** `CatalogInput.defaultStyle`, `sourceFromValue`,
+- **Deleted outright:** `CatalogInput.defaultStyle`, `sourceFromValue`'s
+  flag-preserving `current` parameter — what survives is the `<select>`'s own
+  value parser, which has nothing left to carry across a source change —
   `projectBaseStyle`, `GlyphStyle.contentScale`, `BackgroundSource`'s `flipX`,
   `FONT_KEY`, and the "font is whatever entry is left" import heuristic.
   `catalog.ts`'s stale claim that `symbolId` and `defaultStyle` "ship empty until

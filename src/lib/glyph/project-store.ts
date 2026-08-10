@@ -303,16 +303,22 @@ function isBackgroundSource(value: unknown): value is BackgroundSource {
 
 /**
  * A resolved {@link Transform} is **total** — a persisted one with a component
- * missing is not a transform that falls up, it's a broken file.
+ * missing is not a transform that falls up, it's a broken file. Finite, too:
+ * `NaN` survives `typeof x === "number"` but reaches the canvas as an invisible
+ * layer, which ADR-0010 would rather discard than draw.
  */
 function isTransform(value: unknown): value is Transform {
   return (
     isRecord(value) &&
-    typeof value.rotation === "number" &&
+    isFiniteNumber(value.rotation) &&
     isRecord(value.scale) &&
-    typeof value.scale.x === "number" &&
-    typeof value.scale.y === "number"
+    isFiniteNumber(value.scale.x) &&
+    isFiniteNumber(value.scale.y)
   );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function isBackground(value: unknown): value is Background {

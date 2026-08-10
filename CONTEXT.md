@@ -252,25 +252,31 @@ tier. The Project base always carries a source, being a full style rather than a
 sparse override.
 
 Three tiers **plus seeded values**: a Catalog **Seed** ranks between the Glyph
-and Device tiers for `background.source` alone, so a bumper keeps its authored
-tile against a project- or device-wide source, and only a per-Glyph override
-replaces it. Deleting ADR-0006's Catalog per-Input tier removed a style tier, not
-a precedence position — what survives is an ordering fact about one field.
+and Device tiers, so a bumper keeps its authored tile against a project- or
+device-wide source, and only a per-Glyph override replaces it. Deleting
+ADR-0006's Catalog per-Input tier removed a style tier, not a precedence
+position — what survives is an ordering fact about the fields a Catalog seeds.
 
 The grid **cell size** is the one exception: it stays Project-global for a
 uniform grid, and lives in the project's export settings.
 
-_(The font and the layer **transforms** are ADR-0012, decided and not yet built:
-today the font stays Project-global and neither transform exists.)_
+_(The font is ADR-0012, decided and not yet built: today it stays
+Project-global.)_
 
 ### Seed
 
-A Catalog-supplied starting value for one Background property, ranked above the
-**Device** tier and below a **Glyph** override (ADR-0012 §2). A seed is **not** a
-cascade tier and not a selectable scope: it is not a style override, it is not
-user-editable, and it covers one field. It says what a control _is_ — a bumper is
-bumper-shaped under any look — which is the same kind of statement `symbolId`
-makes.
+A Catalog-supplied starting value, ranked above the **Device** tier and below a
+**Glyph** override (ADR-0012 §2). A seed is **not** a cascade tier and not a
+selectable scope: it is not a style override, it is not user-editable, and it
+supplies only what it seeds. It says what a control _is_ — a bumper is
+bumper-shaped under any look, and a left-side one faces the other way — which is
+the same kind of statement `symbolId` makes.
+
+Two facts are seeded, each on its own: the Background **source**, and for the
+four left-side shoulders a `scale.x` of −1 on the tile's **Transform**. The
+Catalog stores the second as a bare `mirrored` boolean and never a transform
+fragment, so the one file that may only say what is _present_ cannot grow a
+`rotation: 15`.
 
 A seed is tri-state: an Input may name a tile, may seed _no_ background at all
 (the sticks, whose Symbol draws its own ring), or may be unseeded and fall
@@ -333,7 +339,7 @@ See `docs/adr/`:
 - **ADR-0011** — Loading a project replaces the custom-image set outright, and a
   save reads bytes from the runtime registry rather than IndexedDB (amends
   ADR-0008).
-- **ADR-0012** — _Accepted, not yet built._ A **Catalog** says what is present; a
+- **ADR-0012** — _Accepted, partly built._ A **Catalog** says what is present; a
   **Preset** says what it looks like. Catalogs stay code-maintained registries and
   absorb the shipped tile art as seeds; the Style Cascade drops to three tiers,
   gains the font and two layer Transforms, and loses `contentScale`. A Preset is

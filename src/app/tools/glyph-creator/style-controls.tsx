@@ -325,10 +325,8 @@ export function StyleControls({
 
       {showCellSize && <CellSizeField project={project} dispatch={dispatch} />}
 
-      {/* The two drawing layers, each with its own transform and neither aware of
-          the other (ADR-0012 §2). The content one paints whichever Render Source
-          the Glyph draws, so it lives here with the rest of the cascade rather
-          than beside the image picker. */}
+      {/* The content transform paints whichever Render Source the Glyph draws, so
+          it lives with the cascade rather than beside the image picker. */}
       <TransformField
         label="Background transform"
         hint="Rotates and scales the whole tile — art or drawn shape alike."

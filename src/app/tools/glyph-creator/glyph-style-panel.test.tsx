@@ -148,8 +148,7 @@ describe("GlyphStylePanel", () => {
 
   it("scales the content layer through the cascade", () => {
     const { dispatch } = renderPanel();
-    // The box, not the slider: it takes any value, including the 0 the slider
-    // steps over.
+    // The box, not the slider: the value arrives unrounded, as typed.
     fireEvent.change(
       screen.getByRole("spinbutton", { name: /content transform scale X/i }),
       { target: { value: "0.5" } },

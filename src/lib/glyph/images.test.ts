@@ -92,8 +92,8 @@ describe("imageAppearanceKey", () => {
   });
 
   it("takes nothing but the id and the size", () => {
-    // Notably not the content scale: the renderer scales at draw time, so
-    // dragging the scale slider must not re-rasterize. Guarding the whole key
+    // Notably not the content transform: the renderer transforms at draw time,
+    // so dragging a scale slider must not re-rasterize. Guarding the whole key
     // rather than one absent field — anything added to the appearance has to
     // earn its place here.
     expect(Object.keys(base)).toEqual(["id", "size"]);

@@ -75,9 +75,9 @@ export function clearImages(): void {
 // --- Rasterization cache ---------------------------------------------------
 //
 // Unlike a Symbol, a custom image has no resolved colours — it draws as authored
-// — so its appearance is just its id and the cell size. The content scale isn't
-// part of it either: the renderer scales at draw time, so dragging the scale
-// slider never re-rasterizes.
+// — so its appearance is just its id and the cell size. The content transform
+// isn't part of it either: the renderer transforms at draw time, so dragging a
+// scale slider never re-rasterizes.
 
 /** One custom image's drawable appearance. */
 export interface ImageAppearance {
@@ -89,16 +89,17 @@ export interface ImageAppearance {
 /**
  * Flatten an appearance to its cache key. Every field that changes what the
  * bitmap looks like has to appear here, or two appearances share one decode and
- * the wrong art draws — hence the direct test. The content scale is deliberately
- * not one of them (see above).
+ * the wrong art draws — hence the direct test. The content transform is
+ * deliberately not one of them (see above).
  */
 export function imageAppearanceKey({ id, size }: ImageAppearance): string {
   return `${id}|${size}`;
 }
 
 /**
- * Headroom factor on the rasterized size, so a content scale above 1 still draws
- * from more pixels than the cell has rather than upscaling a cell-sized bitmap.
+ * Headroom factor on the rasterized size, so a content layer scaled above 1 still
+ * draws from more pixels than the cell has rather than upscaling a cell-sized
+ * bitmap.
  */
 const OVERSAMPLE = 2;
 

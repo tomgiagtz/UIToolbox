@@ -169,9 +169,14 @@ export type StyleField =
   | "symbolSecondary"
   | "renderSource";
 
-/** Fold degrees into 0–360, so a stored rotation always reads as an angle. */
-export function normalizeRotation(degrees: number): number {
-  if (!Number.isFinite(degrees)) return 0;
+/**
+ * Fold degrees into 0–360, so a stored rotation always reads as an angle.
+ *
+ * Finiteness is not this function's job: `NaN` is caught at the boundary it can
+ * enter by (`isTransform`, on load), rather than guarded again here where the
+ * check would be unreachable and its absence unexplainable.
+ */
+function normalizeRotation(degrees: number): number {
   return ((degrees % 360) + 360) % 360;
 }
 
@@ -220,14 +225,14 @@ export function mergeOverride(
         : {}),
     };
   }
-  if (patch.content?.transform) {
-    next.content = {
-      ...base.content,
-      transform: mergeTransform(
+  if (patch.content) {
+    next.content = { ...base.content, ...patch.content };
+    if (patch.content.transform) {
+      next.content.transform = mergeTransform(
         base.content?.transform,
         patch.content.transform,
-      ),
-    };
+      );
+    }
   }
   if (patch.symbolPaints) {
     next.symbolPaints = { ...base.symbolPaints, ...patch.symbolPaints };

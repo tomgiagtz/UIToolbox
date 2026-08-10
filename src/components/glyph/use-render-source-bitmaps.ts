@@ -62,7 +62,7 @@ export function useRenderSourceBitmaps(
     "~" +
     withTiles.map((s) => tileKey(s.style)).join("|") +
     // A custom image draws as authored, so only its id varies the bitmap — not
-    // any resolved colour, and not the content scale (applied at draw time).
+    // any resolved colour, and not its transform (applied at draw time).
     "~" +
     withImages.map((s) => s.imageId).join("|") +
     `@${size}#${device ?? ""}`;

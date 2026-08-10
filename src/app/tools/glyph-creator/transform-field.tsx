@@ -8,8 +8,11 @@ import { ResetButton, inputClass } from "./controls-ui";
 /**
  * Rotation is in **degrees**, and free rather than snapped: a Preset export is
  * hand-authorable, and `90` means something there that `1.5708` does not.
+ *
+ * The slider stops one step short of a full turn, because 360° normalises to 0
+ * and the thumb would spring back from the end it was just dragged to.
  */
-const ROTATION_RANGE = { min: 0, max: 360, step: 1 };
+const ROTATION_RANGE = { min: 0, max: 359, step: 1 };
 
 /**
  * Range of the scale sliders. They run past 1 so a layer can be pushed to the

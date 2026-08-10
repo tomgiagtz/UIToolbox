@@ -376,10 +376,11 @@ test.describe("Input Glyph Creator", () => {
 
     // Scaling the content redraws it again, at a different size on the tile.
     const withImage = await pixels();
-    // Scoped to the popover: the sidebar carries the same control at Project scope.
+    // Scoped to the popover: the sidebar carries the same control at Project
+    // scope. The box rather than the slider beside it, since `fill` types a value.
     await page
       .getByRole("region", { name: /edit glyph/i })
-      .getByLabel(/content scale/i)
+      .getByRole("spinbutton", { name: /content transform scale X/i })
       .fill("1.5");
     await expect
       .poll(pixels, { message: "preview should redraw at the new scale" })
