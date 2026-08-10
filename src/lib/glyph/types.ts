@@ -46,8 +46,13 @@ export type BackgroundSource =
 
 /**
  * How one drawing layer is painted into its cell (ADR-0012 §2). One per layer —
- * {@link Background.transform} for the tile, `GlyphStyle.content.transform` for
- * whichever Render Source is drawn — and neither is aware of the other.
+ * {@link Background.transform} for the tile, `Foreground.transform` for whichever
+ * Render Source is drawn — and neither is aware of the other. The same shape on
+ * both, declared once, so the layers cannot drift apart.
+ *
+ * Applied about the **centre of the cell**, rotating **before** scaling. That
+ * order is what keeps a negative component meaning "mirrored" under a rotation
+ * set at another tier: the axes it mirrors are the layer's own, not the cell's.
  *
  * Resolved form is **total**: identity is spelled out rather than left absent.
  * Signed scale is the mirror: it is safe to read a negative component that way
@@ -55,8 +60,12 @@ export type BackgroundSource =
  * channel for orientation (negating *both* components is a 180° turn, not a
  * mirror).
  */
-export interface Transform {
-  /** Degrees clockwise, normalised into 0–360 on write. */
+export interface LayerTransform {
+  /**
+   * Degrees clockwise. Any finite value draws correctly; writes canonicalise
+   * into −180…180 (`normalizeRotation`), which is the range the control spans
+   * and the spelling a hand-authored Preset should carry.
+   */
   rotation: number;
   /** Per-axis scale; a negative component mirrors that axis. */
   scale: { x: number; y: number };
@@ -71,7 +80,7 @@ export interface Background {
    * orientation is a property of the layer and not of where its art came from
    * (ADR-0012 §2, superseding ADR-0009's per-source `flipX`).
    */
-  transform: Transform;
+  transform: LayerTransform;
   /** The primitive to draw. Read only while {@link source} is `{ kind: "shape" }`. */
   shape: BackgroundShape;
   /** CSS color of the fill. Ignored by a source that draws no primitive. */

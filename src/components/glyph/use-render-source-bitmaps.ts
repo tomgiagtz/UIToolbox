@@ -55,7 +55,7 @@ export function useRenderSourceBitmaps(
   const key =
     withSymbols
       .map((s) => {
-        const p = s.style.symbolPaints;
+        const p = s.style.foreground.symbolPaints;
         return `${s.symbolId}:${p.fill}:${p.border}:${p.secondary}`;
       })
       .join("|") +

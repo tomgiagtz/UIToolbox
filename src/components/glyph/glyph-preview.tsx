@@ -2,10 +2,9 @@
 
 import { useRef, type CSSProperties } from "react";
 import { getTileBitmap } from "@/lib/glyph/background-render";
-import { identityTransform } from "@/lib/glyph/defaults";
 import { renderGlyph } from "@/lib/glyph/renderer";
 import { getSymbolBitmap } from "@/lib/glyph/symbol-render";
-import type { ContentLayer, SymbolPaints } from "@/lib/glyph/style";
+import type { Foreground } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 import { useGlyphCanvas } from "./use-glyph-canvas";
 import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
@@ -13,19 +12,14 @@ import { useRenderSourceBitmaps } from "./use-render-source-bitmaps";
 export interface GlyphPreviewProps {
   label: string;
   cellSize?: number;
-  textColor: string;
+  /** The tile layer: where its art comes from, and how it is painted. */
   background: Background;
   /**
-   * Symbol Paint Role colours (fill / border / secondary) for a Symbol Render
-   * Source. Defaults to the label `textColor` for all three roles when unset, so a
-   * label-only or single-colour preview needs no extra props (ADR-0007 §3).
+   * The foreground layer: how whichever Render Source is drawn is placed and
+   * painted (ADR-0012 §2). The two props are the two layers, so a preview is
+   * specified exactly as a resolved {@link GlyphStyle} is.
    */
-  symbolPaints?: SymbolPaints;
-  /**
-   * How the content layer — whichever Render Source is drawn — is painted
-   * (ADR-0012 §2). Defaults to identity, drawn upright at its natural size.
-   */
-  content?: ContentLayer;
+  foreground: Foreground;
   /** Registered FontFace family name (or any CSS family for previews). */
   fontFamily: string;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
@@ -50,10 +44,8 @@ export interface GlyphPreviewProps {
 export function GlyphPreview({
   label,
   cellSize = 128,
-  textColor,
   background,
-  symbolPaints,
-  content,
+  foreground,
   fontFamily,
   symbolId,
   device,
@@ -61,16 +53,7 @@ export function GlyphPreview({
   style,
 }: GlyphPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const glyphStyle = {
-    textColor,
-    background,
-    symbolPaints: symbolPaints ?? {
-      fill: textColor,
-      border: textColor,
-      secondary: textColor,
-    },
-    content: content ?? { transform: identityTransform() },
-  };
+  const glyphStyle = { background, foreground };
 
   // Warm the shared Render Source bitmap cache and redraw once it is ready. The
   // spec is passed unconditionally: even a label-only Glyph can carry tile art in
@@ -99,10 +82,8 @@ export function GlyphPreview({
     [
       label,
       cellSize,
-      textColor,
       background,
-      symbolPaints,
-      content,
+      foreground,
       fontFamily,
       symbolId,
       device,

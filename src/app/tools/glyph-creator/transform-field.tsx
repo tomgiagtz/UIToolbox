@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import type { TransformOverride } from "@/lib/glyph/style";
-import type { Transform } from "@/lib/glyph/types";
+import type { LayerTransform } from "@/lib/glyph/types";
 import { ResetButton, inputClass } from "./controls-ui";
 
 /**
@@ -117,7 +117,7 @@ function ScaleAxis({
 }
 
 /**
- * Edits one drawing layer's {@link Transform} — the tile's or the content's
+ * Edits one drawing layer's {@link LayerTransform} — the tile's or the content's
  * (ADR-0012 §2). Rotation and both scale axes each patch on their own, so a tier
  * that only mirrors doesn't also pin a rotation it never asked about.
  *
@@ -136,7 +136,7 @@ export function TransformField({
   label: string;
   hint?: string;
   /** The effective transform at the current scope. */
-  transform: Transform;
+  transform: LayerTransform;
   onChange: (patch: TransformOverride) => void;
   /**
    * When set, a reset button clears the **whole layer's** transform — one entry

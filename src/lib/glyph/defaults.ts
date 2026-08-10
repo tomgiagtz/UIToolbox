@@ -12,7 +12,7 @@ import type {
   ExportSettings,
   NamingConfig,
   Project,
-  Transform,
+  LayerTransform,
 } from "@/lib/glyph/types";
 
 /**
@@ -52,14 +52,14 @@ export const DEFAULT_SYMBOL_PAINTS: SymbolPaints = {
 };
 
 /**
- * The identity {@link Transform} — drawn upright, at its natural size. Every
+ * The identity {@link LayerTransform} — drawn upright, at its natural size. Every
  * resolved style spells this out; only override tiers may leave it absent, where
  * absence means "fall up" rather than identity (ADR-0012 §2).
  *
  * A getter rather than a constant: a resolved style's transform is mutable data
  * handed to a caller, so the two layers must never share one object.
  */
-export function identityTransform(): Transform {
+export function identityTransform(): LayerTransform {
   return { rotation: 0, scale: { x: 1, y: 1 } };
 }
 
@@ -88,10 +88,12 @@ export const DEFAULT_NAMING: NamingConfig = {
  * full {@link GlyphStyle} (ADR-0012 §6).
  */
 export const DEFAULT_STYLE: GlyphStyle = {
-  textColor: DEFAULT_TEXT_COLOR,
   background: DEFAULT_BACKGROUND,
-  content: { transform: identityTransform() },
-  symbolPaints: DEFAULT_SYMBOL_PAINTS,
+  foreground: {
+    transform: identityTransform(),
+    textColor: DEFAULT_TEXT_COLOR,
+    symbolPaints: DEFAULT_SYMBOL_PAINTS,
+  },
 };
 
 /** Default atlas output settings: 128px cells, `{device}_{input}` in snake_case. */

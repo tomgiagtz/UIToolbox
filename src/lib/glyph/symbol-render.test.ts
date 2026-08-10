@@ -11,7 +11,6 @@ import {
 import { identityTransform } from "@/lib/glyph/defaults";
 
 const style: GlyphStyle = {
-  textColor: "#33cc99",
   background: {
     source: { kind: "shape" },
     transform: identityTransform(),
@@ -20,8 +19,11 @@ const style: GlyphStyle = {
     cornerRadius: 0,
     border: { width: 0, color: "#000000" },
   },
-  symbolPaints: { fill: "#ff0000", border: "#0000ff", secondary: "#00ff00" },
-  content: { transform: identityTransform() },
+  foreground: {
+    transform: identityTransform(),
+    textColor: "#33cc99",
+    symbolPaints: { fill: "#ff0000", border: "#0000ff", secondary: "#00ff00" },
+  },
 };
 
 describe("symbolRoleColors", () => {
@@ -37,7 +39,6 @@ describe("symbolRoleColors", () => {
 describe("backgroundRoleColors", () => {
   it("maps fill to the Background fill and border to the border colour (issue #18)", () => {
     const bgStyle: GlyphStyle = {
-      textColor: "#33cc99",
       background: {
         source: { kind: "shape" },
         transform: identityTransform(),
@@ -46,8 +47,11 @@ describe("backgroundRoleColors", () => {
         cornerRadius: 8,
         border: { width: 4, color: "#ffd400" },
       },
-      symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
-      content: { transform: identityTransform() },
+      foreground: {
+        transform: identityTransform(),
+        textColor: "#33cc99",
+        symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
+      },
     };
     expect(backgroundRoleColors(bgStyle)).toEqual({
       fill: "#0e7a0d",
@@ -64,7 +68,6 @@ describe("backgroundRoleColors", () => {
     const out = recolorSymbolSvg(
       bumper,
       backgroundRoleColors({
-        textColor: "#000000",
         background: {
           source: { kind: "shape" },
           transform: identityTransform(),
@@ -73,8 +76,11 @@ describe("backgroundRoleColors", () => {
           cornerRadius: 0,
           border: { width: 0, color: "#ffd400" },
         },
-        symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
-        content: { transform: identityTransform() },
+        foreground: {
+          transform: identityTransform(),
+          textColor: "#000000",
+          symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
+        },
       }),
     );
     expect(out).toContain("fill:#0e7a0d;");

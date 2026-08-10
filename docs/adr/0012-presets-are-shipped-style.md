@@ -9,7 +9,7 @@
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
   loses `contentScale`, and `cellSize` moves without changing status), ADR-0007 §3
   (its four-tier framing of `symbolPaints`, and where the brand palette ships),
-  ADR-0008 (`contentScale` is replaced by `content.transform`), ADR-0009 (`flipX`
+  ADR-0008 (`contentScale` is replaced by `foreground.transform`), ADR-0009 (`flipX`
   leaves the authored-source union)
 - **Supersedes:** its own first two drafts — the layered-config model, and the
   preset-is-a-serialized-`Project` model that replaced it
@@ -244,9 +244,24 @@ interface Transform {
 ```
 
 One per drawing layer, neither aware of the other: **`background.transform`** for
-the tile, and **`content.transform`** for whichever Render Source is drawn.
-`GlyphStyle` gains a **`content` object** so the two layers are structurally
-identical rather than one nested and one bare.
+the tile, and **`foreground.transform`** for whichever Render Source is drawn.
+
+`GlyphStyle` becomes **exactly two layers and nothing else** —
+`{ background, foreground }`. The new **`foreground` object** takes the fields
+that were loose at the top level and belong to the drawn content: its
+`transform`, the label's `textColor`, and the Symbol's `symbolPaints`;
+`StyleOverride.renderSource` joins them, so the layer the user edits is whole
+even though the resolved one can't carry a Render Source (resolving that needs
+the Catalog and the image manifest, not just the cascade).
+
+_Structural symmetry is the wrong argument for this and was the first one
+offered._ Had `foreground` held only a transform, the layers would still not have
+matched: `background` carries its own paint and the content's paint would have
+stayed outside. What the object actually buys is one shape in three places —
+`ForegroundOverride` mirrors `BackgroundOverride`, so `mergeOverride`,
+`clearOverrideField` and `isOverrideFieldSet` each gain a branch of a type they
+already know rather than a fourth shape — and a Style panel that can be read: one
+group per layer, every control in a group writing one property of one object.
 
 Sign-as-mirror is safe only because rotation is first-class beside it. Negating a
 uniform scale is a 180° rotation, not a mirror — a real trap, and without a
@@ -254,7 +269,7 @@ rotation field the sign would be the only channel for orientation and the
 encoding would be a pun. With one, signed per-axis scale is the ordinary
 decomposition every scene graph uses.
 
-**`contentScale` is deleted**, folded into `content.transform.scale` — two fields
+**`contentScale` is deleted**, folded into `foreground.transform.scale` — two fields
 scaling one layer is the pair of half-concepts this replaces, so keeping it as
 uniform sugar was rejected. It does hand users a way to stretch an uploaded
 image, which the renderer currently refuses on their behalf; accepted, because
@@ -542,7 +557,7 @@ to "empty or unknown" and repairing silently as it does today.
 | **ADR-0006** — tri-state `backgroundId` (its #18 amendment) | **Kept, on a new field.** The distinction survives on `source` (see the erratum below), and `CatalogInput.backgroundId` is itself tri-state: `null` seeds _no_ background, as all four sticks now do. |
 | **ADR-0007 §3** — `symbolPaints` through four tiers         | **Superseded** to three. Its "the Device tier may set uniform role defaults; per-Input defaults outrank it" loses its middle term.                                                                    |
 | **ADR-0007 §3** — the brand palette ships at Catalog tier   | **Superseded.** There is no such tier. The palette is Preset payload — a Background fill plus a desaturated `symbolPaints.fill` — and is filed separately (#75).                                      |
-| **ADR-0008** — `contentScale` joins the cascade             | **Superseded.** `contentScale` is deleted, replaced by `content.transform`.                                                                                                                           |
+| **ADR-0008** — `contentScale` joins the cascade             | **Superseded.** `contentScale` is deleted, replaced by `foreground.transform`.                                                                                                                        |
 | **ADR-0009** — `flipX` rides inside the authored source     | **Superseded.** Orientation is a layer property, so the source no longer carries it; the union loses `flipX`.                                                                                         |
 | **ADR-0009** — a source is settable at any scope            | **Unchanged** (the ban that superseded it was withdrawn 2026-08-08). A source is settable at every tier; a Catalog seed outranks the Device tier for one Input.                                       |
 | **ADR-0010** — validate, discard, report                    | **Unchanged, and relied on.** It never applies to shipped Presets, which are never parsed at runtime. It is exactly what makes the migration note below tolerable.                                    |

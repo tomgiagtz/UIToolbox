@@ -42,7 +42,7 @@ Device.
 How an Input's Glyph content is drawn: its font-rendered **label** (default for
 arbitrary Inputs), a bundled **Symbol** (default for well-known Inputs), or a
 user-uploaded **custom image**. Whichever source is chosen is composited onto the
-same Background tile, sized and oriented by its **content transform**.
+same Background tile, sized and oriented by its **foreground transform**.
 
 The default comes from the Catalog — a well-known Input draws its Symbol, anything
 else its label — and any Glyph can override it through the **Style Cascade**. An
@@ -79,15 +79,16 @@ _(ADR-0012, decided and not yet built. Today a project has exactly one font.)_
 
 A rotation in degrees plus a **signed per-axis scale**, applied to one whole
 drawing layer. A Glyph has two independent ones — a **background transform** on
-the tile and a **content transform** on whichever Render Source is drawn — and
+the tile and a **foreground transform** on whichever Render Source is drawn — and
 both resolve through the **Style Cascade** at every tier. A negative scale
 component mirrors that axis, which is how a left-side bumper faces the other way;
-that reads unambiguously only because rotation sits beside it. The content
+that reads unambiguously only because rotation sits beside it. The foreground
 transform scales whichever Render Source a Glyph happens to use, so switching
 sources never discards the sizing. Above `1` a layer is clipped to its own cell,
 so a large or rotated Glyph can't paint its neighbour in the atlas.
 
-_Avoid:_ "content scale", "flipX" — both are folded into a Transform (ADR-0012).
+_Avoid:_ "content scale", "content transform", "flipX" — the drawn content is
+the **foreground** layer, and its sizing folded into a Transform (ADR-0012).
 
 ### Symbol
 
@@ -230,6 +231,20 @@ showing. Catalog Inputs whose identity is their tile _shape_ (bumpers, triggers)
 corner radius, shape and the **background transform** all cascade normally; fill
 and border paint a shape or recolour an authored tile, while an uploaded image
 draws as authored, fitted to the cell and never recoloured.
+
+### Foreground
+
+The other drawing layer: whichever **Render Source** a Glyph draws, and how it is
+placed and painted — its **Transform**, the label's colour, and the Symbol's
+**Paint Role** colours. A resolved style is exactly these two layers, Background
+and Foreground, and nothing else (ADR-0012 §2).
+
+The resolved Foreground does not name _which_ source is drawn, though a cascade
+override does: resolving that needs the **Catalog** and the image manifest as well
+as the cascade, so it has a resolver of its own.
+
+_Avoid:_ "the content layer" — the layer is the Foreground; "content" is what it
+happens to be drawing.
 
 ### Authored Background
 

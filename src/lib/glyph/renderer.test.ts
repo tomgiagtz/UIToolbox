@@ -34,7 +34,6 @@ function fakeCtx() {
 }
 
 const style: GlyphStyle = {
-  textColor: "#ffffff",
   background: {
     source: { kind: "authored", backgroundId: "bumper" },
     transform: identityTransform(),
@@ -43,8 +42,11 @@ const style: GlyphStyle = {
     cornerRadius: 8,
     border: { width: 0, color: "#ffd400" },
   },
-  symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-  content: { transform: identityTransform() },
+  foreground: {
+    transform: identityTransform(),
+    textColor: "#ffffff",
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+  },
 };
 
 const base = { label: "RB", cellSize: 128, style, fontFamily: "TestFont" };
@@ -124,7 +126,10 @@ describe("renderGlyph — the two layer transforms (ADR-0012 §2)", () => {
         ...style.background,
         transform: { rotation: 90, scale: { x: 1, y: 1 } },
       },
-      content: { transform: { rotation: 180, scale: { x: 1, y: 1 } } },
+      foreground: {
+        ...style.foreground,
+        transform: { rotation: 180, scale: { x: 1, y: 1 } },
+      },
     };
     renderGlyph(ctx, 0, 0, { ...base, style: turned });
 
@@ -287,7 +292,10 @@ describe("renderGlyph — custom image Render Source (issue #20)", () => {
       ...base,
       style: {
         ...style,
-        content: { transform: { rotation: 0, scale: { x: 2, y: 2 } } },
+        foreground: {
+          ...style.foreground,
+          transform: { rotation: 0, scale: { x: 2, y: 2 } },
+        },
       },
       image: bitmapOf(64, 64),
     });
@@ -330,7 +338,10 @@ describe("renderGlyph — scaling the content layer", () => {
   /** Half width only — a stretch the old uniform scale could not ask for. */
   const squashed: GlyphStyle = {
     ...style,
-    content: { transform: { rotation: 0, scale: { x: 0.5, y: 1 } } },
+    foreground: {
+      ...style.foreground,
+      transform: { rotation: 0, scale: { x: 0.5, y: 1 } },
+    },
   };
 
   it("scales the layer rather than each source's own geometry", () => {

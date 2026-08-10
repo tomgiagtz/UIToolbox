@@ -33,7 +33,7 @@ export type RoleColors = Record<PaintRole, string>;
  * of the label `textColor` (ADR-0007 §3).
  */
 export function symbolRoleColors(style: GlyphStyle): RoleColors {
-  const { fill, border, secondary } = style.symbolPaints;
+  const { fill, border, secondary } = style.foreground.symbolPaints;
   return { fill, border, secondary };
 }
 

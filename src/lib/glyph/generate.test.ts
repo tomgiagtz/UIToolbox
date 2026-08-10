@@ -41,7 +41,6 @@ function device(
 
 /** The Project tier every test project starts from. */
 const BASE_STYLE: GlyphStyle = {
-  textColor: "#ffffff",
   background: {
     source: { kind: "shape" },
     transform: identityTransform(),
@@ -50,8 +49,11 @@ const BASE_STYLE: GlyphStyle = {
     cornerRadius: 12,
     border: { width: 2, color: "#333333" },
   },
-  symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-  content: { transform: identityTransform() },
+  foreground: {
+    transform: identityTransform(),
+    textColor: "#ffffff",
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+  },
 };
 
 const BASE_NAMING: NamingConfig = {
@@ -174,7 +176,7 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     // transform rather than a flag inside the source (ADR-0012 §2).
     expect(lb.style.background.transform.scale.x).toBe(-1);
     // ...and only the tile: what's drawn on it stays upright.
-    expect(lb.style.content.transform.scale.x).toBe(1);
+    expect(lb.style.foreground.transform.scale.x).toBe(1);
     expect(a.style.background.source).toEqual({ kind: "shape" });
     expect(paddle.style.background.source).toEqual({ kind: "shape" });
 
@@ -207,7 +209,9 @@ describe("Render Source per Input (issue #20)", () => {
   };
 
   it("renders the label when a Glyph override picks it over the Symbol", () => {
-    const device = xbox({ "xbox-a": { renderSource: { kind: "label" } } });
+    const device = xbox({
+      "xbox-a": { foreground: { renderSource: { kind: "label" } } },
+    });
     const [a] = resolveDeviceInputs(device, project({ devices: [device] }));
     expect(a.symbolId).toBeUndefined();
     expect(a.imageId).toBeUndefined();
@@ -217,7 +221,9 @@ describe("Render Source per Input (issue #20)", () => {
 
   it("renders a custom image when a Glyph override picks one", () => {
     const device = xbox({
-      "xbox-a": { renderSource: { kind: "image", imageId: image.id } },
+      "xbox-a": {
+        foreground: { renderSource: { kind: "image", imageId: image.id } },
+      },
     });
     const [a] = resolveDeviceInputs(
       device,
@@ -230,8 +236,12 @@ describe("Render Source per Input (issue #20)", () => {
   it("falls back to the default when the chosen image isn't in the project", () => {
     // ADR-0004: a config can outlive its image bytes, and must degrade, not break.
     const device = xbox({
-      "xbox-a": { renderSource: { kind: "image", imageId: "gone.png" } },
-      c0: { renderSource: { kind: "image", imageId: "gone.png" } },
+      "xbox-a": {
+        foreground: { renderSource: { kind: "image", imageId: "gone.png" } },
+      },
+      c0: {
+        foreground: { renderSource: { kind: "image", imageId: "gone.png" } },
+      },
     });
     const [a, , paddle] = resolveDeviceInputs(
       device,
@@ -244,7 +254,9 @@ describe("Render Source per Input (issue #20)", () => {
   });
 
   it("falls back to the label when an Input has no Symbol to switch to", () => {
-    const device = xbox({ c0: { renderSource: { kind: "symbol" } } });
+    const device = xbox({
+      c0: { foreground: { renderSource: { kind: "symbol" } } },
+    });
     const [, , paddle] = resolveDeviceInputs(
       device,
       project({ devices: [device] }),
@@ -253,7 +265,9 @@ describe("Render Source per Input (issue #20)", () => {
   });
 
   it("lets a Glyph override switch a label-rendered Input back to its Symbol", () => {
-    const device = xbox({ "xbox-lb": { renderSource: { kind: "symbol" } } });
+    const device = xbox({
+      "xbox-lb": { foreground: { renderSource: { kind: "symbol" } } },
+    });
     const [, lb] = resolveDeviceInputs(device, project({ devices: [device] }));
     // The bumper has no Symbol of its own — its identity is the tile — so it
     // stays label-rendered rather than borrowing another Input's art.
@@ -262,7 +276,9 @@ describe("Render Source per Input (issue #20)", () => {
 
   it("carries a custom image id onto the packed placements for the compositor", () => {
     const device = xbox({
-      "xbox-a": { renderSource: { kind: "image", imageId: image.id } },
+      "xbox-a": {
+        foreground: { renderSource: { kind: "image", imageId: image.id } },
+      },
     });
     const [out] = generateTilesets(
       project({ devices: [device], images: [image] }),
@@ -278,19 +294,22 @@ describe("Render Source per Input (issue #20)", () => {
 
   it("resolves the content transform onto every placement's style", () => {
     const device = xbox({
-      "xbox-a": { content: { transform: { scale: { x: 1.5, y: 1.5 } } } },
+      "xbox-a": { foreground: { transform: { scale: { x: 1.5, y: 1.5 } } } },
     });
     const [out] = generateTilesets(
       project({
         devices: [device],
         style: {
           ...BASE_STYLE,
-          content: { transform: { rotation: 0, scale: { x: 0.8, y: 0.8 } } },
+          foreground: {
+            ...BASE_STYLE.foreground,
+            transform: { rotation: 0, scale: { x: 0.8, y: 0.8 } },
+          },
         },
       }),
     );
     expect(
-      out.placements.map((p) => p.style.content.transform.scale.x),
+      out.placements.map((p) => p.style.foreground.transform.scale.x),
     ).toEqual([
       1.5, // Glyph tier
       0.8, // falls up to the Project tier
@@ -299,7 +318,9 @@ describe("Render Source per Input (issue #20)", () => {
   });
 
   it("resolves the Render Source for a scope, for the editor's controls", () => {
-    const device = xbox({ "xbox-a": { renderSource: { kind: "label" } } });
+    const device = xbox({
+      "xbox-a": { foreground: { renderSource: { kind: "label" } } },
+    });
     const proj = project({ devices: [device] });
     expect(
       resolveScopeRenderSource(proj, {
@@ -533,10 +554,14 @@ describe("resolveScopeStyle", () => {
         scope: { tier: "device", deviceIndex: 0 },
         patch: { background: { shape: "circle" } },
       } as const,
-      { type: "patch-style", scope, patch: { textColor: "#0f0" } } as const,
+      {
+        type: "patch-style",
+        scope,
+        patch: { foreground: { textColor: "#0f0" } },
+      } as const,
     ].reduce(projectReducer, createDefaultProject("TestFont"));
     const style = resolveScopeStyle(proj, scope);
-    expect(style.textColor).toBe("#0f0"); // Glyph tier
+    expect(style.foreground.textColor).toBe("#0f0"); // Glyph tier
     expect(style.background.shape).toBe("circle"); // Device tier
   });
 

@@ -31,7 +31,11 @@ describe("projectReducer — style cascade (#4, #19)", () => {
   it("folds a Project-tier patch into the full base style", () => {
     const next = run(
       base(),
-      { type: "patch-style", scope: project, patch: { textColor: "#ff0000" } },
+      {
+        type: "patch-style",
+        scope: project,
+        patch: { foreground: { textColor: "#ff0000" } },
+      },
       {
         type: "patch-style",
         scope: project,
@@ -43,7 +47,7 @@ describe("projectReducer — style cascade (#4, #19)", () => {
         patch: { background: { border: { width: 8 } } },
       },
     );
-    expect(next.style.textColor).toBe("#ff0000");
+    expect(next.style.foreground.textColor).toBe("#ff0000");
     expect(next.style.background.fill).toBe("#123456");
     // Border deep-merges: width changes, color survives.
     expect(next.style.background.border).toEqual({
@@ -66,10 +70,10 @@ describe("projectReducer — style cascade (#4, #19)", () => {
     const next = run(base(), {
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "key-w" },
-      patch: { textColor: "#0f0" },
+      patch: { foreground: { textColor: "#0f0" } },
     });
     expect(next.devices[0].glyphStyles).toEqual({
-      "key-w": { textColor: "#0f0" },
+      "key-w": { foreground: { textColor: "#0f0" } },
     });
   });
 
@@ -91,7 +95,11 @@ describe("projectReducer — style cascade (#4, #19)", () => {
     const scope = { tier: "glyph", deviceIndex: 0, glyphId: "key-w" } as const;
     const next = run(
       base(),
-      { type: "patch-style", scope, patch: { textColor: "#0f0" } },
+      {
+        type: "patch-style",
+        scope,
+        patch: { foreground: { textColor: "#0f0" } },
+      },
       { type: "clear-style", scope, field: "textColor" },
     );
     expect(next.devices[0].glyphStyles).toEqual({});
@@ -268,7 +276,7 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
   it("starts with no images and both layers at identity", () => {
     expect(base().images).toEqual([]);
     const identity = { rotation: 0, scale: { x: 1, y: 1 } };
-    expect(base().style.content.transform).toEqual(identity);
+    expect(base().style.foreground.transform).toEqual(identity);
     expect(base().style.background.transform).toEqual(identity);
   });
 
@@ -289,11 +297,13 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
       {
         type: "patch-style",
         scope,
-        patch: { renderSource: { kind: "image", imageId: image.id } },
+        patch: {
+          foreground: { renderSource: { kind: "image", imageId: image.id } },
+        },
       },
     );
     expect(next.devices[0].glyphStyles["key-w"]).toEqual({
-      renderSource: { kind: "image", imageId: image.id },
+      foreground: { renderSource: { kind: "image", imageId: image.id } },
     });
   });
 
@@ -308,7 +318,7 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
       {
         type: "patch-style",
         scope,
-        patch: { renderSource: { kind: "label" } },
+        patch: { foreground: { renderSource: { kind: "label" } } },
       },
       { type: "clear-style", scope, field: "renderSource" },
     );
@@ -320,11 +330,11 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
     const next = run(base(), {
       type: "patch-style",
       scope: { tier: "project" },
-      patch: { content: { transform: { scale: { x: 0.6, y: 0.6 } } } },
+      patch: { foreground: { transform: { scale: { x: 0.6, y: 0.6 } } } },
     });
     // The Project tier is a full style, so the patch lands totalled: the axis it
     // named changed and the rotation it didn't is still spelled out.
-    expect(next.style.content.transform).toEqual({
+    expect(next.style.foreground.transform).toEqual({
       rotation: 0,
       scale: { x: 0.6, y: 0.6 },
     });
@@ -334,13 +344,13 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
     const next = run(base(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
-      patch: { content: { transform: { rotation: 90 } } },
+      patch: { foreground: { transform: { rotation: 90 } } },
     });
     // Sparse at an override tier: the scale it didn't name stays absent, so it
     // keeps falling up rather than pinning identity.
     expect(next.devices[0].style).toEqual({
-      content: { transform: { rotation: 90 } },
+      foreground: { transform: { rotation: 90 } },
     });
-    expect(next.style.content.transform.rotation).toBe(0);
+    expect(next.style.foreground.transform.rotation).toBe(0);
   });
 });

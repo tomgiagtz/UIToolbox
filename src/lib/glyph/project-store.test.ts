@@ -55,7 +55,10 @@ describe("ProjectStore — config (localStorage)", () => {
       ...base,
       style: {
         ...base.style,
-        content: { transform: { rotation: 90, scale: { x: -1, y: 0.75 } } },
+        foreground: {
+          ...base.style.foreground,
+          transform: { rotation: 90, scale: { x: -1, y: 0.75 } },
+        },
       },
       images: [{ id: "img-1.png", fileName: "art.png", type: "image/png" }],
     };

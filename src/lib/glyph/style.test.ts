@@ -12,7 +12,6 @@ import { identityTransform } from "@/lib/glyph/defaults";
 
 function base(): GlyphStyle {
   return {
-    textColor: "#ffffff",
     background: {
       source: { kind: "shape" },
       transform: identityTransform(),
@@ -21,8 +20,15 @@ function base(): GlyphStyle {
       cornerRadius: 18,
       border: { width: 4, color: "#475569" },
     },
-    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-    content: { transform: identityTransform() },
+    foreground: {
+      transform: identityTransform(),
+      textColor: "#ffffff",
+      symbolPaints: {
+        fill: "#ffffff",
+        border: "#ffffff",
+        secondary: "#ffffff",
+      },
+    },
   };
 }
 
@@ -37,8 +43,8 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
   });
 
   it("overrides the text color at a higher tier", () => {
-    const out = resolveStyle(base(), { textColor: "#ff0000" });
-    expect(out.textColor).toBe("#ff0000");
+    const out = resolveStyle(base(), { foreground: { textColor: "#ff0000" } });
+    expect(out.foreground.textColor).toBe("#ff0000");
     // Background untouched.
     expect(out.background).toEqual(base().background);
   });
@@ -63,12 +69,12 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     };
     const glyph: StyleOverride = {
       background: { fill: "#222" },
-      textColor: "#0f0",
+      foreground: { textColor: "#0f0" },
     };
     const out = resolveStyle(base(), device, glyph);
     expect(out.background.shape).toBe("circle"); // from device
     expect(out.background.fill).toBe("#222"); // glyph outranks device
-    expect(out.textColor).toBe("#0f0"); // from glyph
+    expect(out.foreground.textColor).toBe("#0f0"); // from glyph
   });
 
   it("lets an explicit Glyph override outrank the Device tier", () => {
@@ -78,19 +84,27 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
   });
 
   it("resolves each Symbol Paint Role independently through the cascade (#37)", () => {
-    const device: StyleOverride = { symbolPaints: { fill: "#0f0" } };
-    const glyph: StyleOverride = { symbolPaints: { border: "#00f" } };
+    const device: StyleOverride = {
+      foreground: { symbolPaints: { fill: "#0f0" } },
+    };
+    const glyph: StyleOverride = {
+      foreground: { symbolPaints: { border: "#00f" } },
+    };
     const out = resolveStyle(base(), device, glyph);
-    expect(out.symbolPaints.fill).toBe("#0f0"); // device tier
-    expect(out.symbolPaints.border).toBe("#00f"); // glyph tier
+    expect(out.foreground.symbolPaints.fill).toBe("#0f0"); // device tier
+    expect(out.foreground.symbolPaints.border).toBe("#00f"); // glyph tier
     // Unset role falls up to the base.
-    expect(out.symbolPaints.secondary).toBe(base().symbolPaints.secondary);
+    expect(out.foreground.symbolPaints.secondary).toBe(
+      base().foreground.symbolPaints.secondary,
+    );
   });
 
   it("lets a higher tier override just one Symbol Paint Role", () => {
-    const out = resolveStyle(base(), { symbolPaints: { secondary: "#f0f" } });
-    expect(out.symbolPaints).toEqual({
-      ...base().symbolPaints,
+    const out = resolveStyle(base(), {
+      foreground: { symbolPaints: { secondary: "#f0f" } },
+    });
+    expect(out.foreground.symbolPaints).toEqual({
+      ...base().foreground.symbolPaints,
       secondary: "#f0f",
     });
   });
@@ -98,46 +112,50 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
   it("resolves both layer transforms through the cascade (ADR-0012 §2)", () => {
     const device: StyleOverride = {
       background: { transform: { rotation: 90 } },
-      content: { transform: { scale: { x: 0.8, y: 0.8 } } },
+      foreground: { transform: { scale: { x: 0.8, y: 0.8 } } },
     };
     const out = resolveStyle(base(), device);
     expect(out.background.transform.rotation).toBe(90);
-    expect(out.content.transform.scale).toEqual({ x: 0.8, y: 0.8 });
+    expect(out.foreground.transform.scale).toEqual({ x: 0.8, y: 0.8 });
     // Neither layer is aware of the other: the tile turned, the content didn't.
-    expect(out.content.transform.rotation).toBe(0);
+    expect(out.foreground.transform.rotation).toBe(0);
     expect(out.background.transform.scale).toEqual({ x: 1, y: 1 });
     // Unset at every tier falls back to the Project base's identity.
-    expect(resolveStyle(base(), {}).content.transform).toEqual({
+    expect(resolveStyle(base(), {}).foreground.transform).toEqual({
       rotation: 0,
       scale: { x: 1, y: 1 },
     });
   });
 
   it("falls each transform component up independently", () => {
-    const device: StyleOverride = { content: { transform: { rotation: 90 } } };
+    const device: StyleOverride = {
+      foreground: { transform: { rotation: 90 } },
+    };
     const glyph: StyleOverride = {
-      content: { transform: { scale: { x: -1 } } },
+      foreground: { transform: { scale: { x: -1 } } },
     };
     const out = resolveStyle(base(), device, glyph);
     // The Glyph said nothing about rotation, so the Device's survives...
-    expect(out.content.transform.rotation).toBe(90);
+    expect(out.foreground.transform.rotation).toBe(90);
     // ...and the axis it didn't name keeps the base's scale.
-    expect(out.content.transform.scale).toEqual({ x: -1, y: 1 });
+    expect(out.foreground.transform.scale).toEqual({ x: -1, y: 1 });
   });
 
   it("replaces a lower tier's rotation rather than composing with it", () => {
-    const device: StyleOverride = { content: { transform: { rotation: 90 } } };
-    const glyph: StyleOverride = { content: { transform: { rotation: 0 } } };
+    const device: StyleOverride = {
+      foreground: { transform: { rotation: 90 } },
+    };
+    const glyph: StyleOverride = { foreground: { transform: { rotation: 0 } } };
     // `rotation: 0` at the Glyph tier means upright, not "turn back by 90".
-    expect(resolveStyle(base(), device, glyph).content.transform.rotation).toBe(
-      0,
-    );
+    expect(
+      resolveStyle(base(), device, glyph).foreground.transform.rotation,
+    ).toBe(0);
   });
 
   it("normalises a resolved rotation into 0–360", () => {
     const turns = (rotation: number) =>
-      resolveStyle(base(), { content: { transform: { rotation } } }).content
-        .transform.rotation;
+      resolveStyle(base(), { foreground: { transform: { rotation } } })
+        .foreground.transform.rotation;
     expect(turns(-90)).toBe(270);
     expect(turns(450)).toBe(90);
     expect(turns(360)).toBe(0);
@@ -174,7 +192,7 @@ describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
     // What `flipX` bought by riding inside the source, kept now that it doesn't:
     // the label or Symbol drawn on a left bumper is not written backwards.
     const out = resolveGlyphStyle(base(), SEED, undefined, undefined);
-    expect(out.content.transform.scale).toEqual({ x: 1, y: 1 });
+    expect(out.foreground.transform.scale).toEqual({ x: 1, y: 1 });
   });
 
   it("lets a Glyph face a seeded control back the other way", () => {
@@ -292,8 +310,8 @@ describe("mergeOverride", () => {
   });
 
   it("layers text color and background from the patch", () => {
-    const out = mergeOverride({}, { textColor: "#f00" });
-    expect(out).toEqual({ textColor: "#f00" });
+    const out = mergeOverride({}, { foreground: { textColor: "#f00" } });
+    expect(out).toEqual({ foreground: { textColor: "#f00" } });
   });
 
   it("deep-merges background so the patch keeps the base's other fields", () => {
@@ -333,32 +351,38 @@ describe("mergeOverride", () => {
 
   it("replaces the Render Source wholesale rather than merging it (issue #20)", () => {
     const base: StyleOverride = {
-      renderSource: { kind: "image", imageId: "img-1.png" },
+      foreground: { renderSource: { kind: "image", imageId: "img-1.png" } },
     };
-    const out = mergeOverride(base, { renderSource: { kind: "label" } });
-    expect(out.renderSource).toEqual({ kind: "label" });
+    const out = mergeOverride(base, {
+      foreground: { renderSource: { kind: "label" } },
+    });
+    expect(out.foreground?.renderSource).toEqual({ kind: "label" });
   });
 
   it("keeps an existing Render Source when the patch doesn't set one", () => {
-    const base: StyleOverride = { renderSource: { kind: "label" } };
+    const base: StyleOverride = {
+      foreground: { renderSource: { kind: "label" } },
+    };
     const out = mergeOverride(base, {
-      content: { transform: { rotation: 90 } },
+      foreground: { transform: { rotation: 90 } },
     });
     expect(out).toEqual({
-      renderSource: { kind: "label" },
-      content: { transform: { rotation: 90 } },
+      foreground: {
+        renderSource: { kind: "label" },
+        transform: { rotation: 90 },
+      },
     });
   });
 
   it("merges a layer transform component-by-component", () => {
     const base: StyleOverride = {
-      content: { transform: { rotation: 90, scale: { x: -1 } } },
+      foreground: { transform: { rotation: 90, scale: { x: -1 } } },
     };
     const out = mergeOverride(base, {
-      content: { transform: { scale: { y: 2 } } },
+      foreground: { transform: { scale: { y: 2 } } },
     });
     // The patch named one axis, so the rotation and the other axis stand.
-    expect(out.content?.transform).toEqual({
+    expect(out.foreground?.transform).toEqual({
       rotation: 90,
       scale: { x: -1, y: 2 },
     });
@@ -382,7 +406,9 @@ describe("mergeOverride", () => {
 
 describe("isOverrideFieldSet", () => {
   it("detects a set top-level and nested field", () => {
-    expect(isOverrideFieldSet({ textColor: "#f00" }, "textColor")).toBe(true);
+    expect(
+      isOverrideFieldSet({ foreground: { textColor: "#f00" } }, "textColor"),
+    ).toBe(true);
     expect(
       isOverrideFieldSet(
         { background: { border: { width: 2 } } },
@@ -400,16 +426,25 @@ describe("isOverrideFieldSet", () => {
 
   it("detects a set Symbol Paint Role", () => {
     expect(
-      isOverrideFieldSet({ symbolPaints: { fill: "#0f0" } }, "symbolFill"),
+      isOverrideFieldSet(
+        { foreground: { symbolPaints: { fill: "#0f0" } } },
+        "symbolFill",
+      ),
     ).toBe(true);
     expect(
-      isOverrideFieldSet({ symbolPaints: { fill: "#0f0" } }, "symbolBorder"),
+      isOverrideFieldSet(
+        { foreground: { symbolPaints: { fill: "#0f0" } } },
+        "symbolBorder",
+      ),
     ).toBe(false);
   });
 
   it("detects a set Render Source (issue #20)", () => {
     expect(
-      isOverrideFieldSet({ renderSource: { kind: "label" } }, "renderSource"),
+      isOverrideFieldSet(
+        { foreground: { renderSource: { kind: "label" } } },
+        "renderSource",
+      ),
     ).toBe(true);
     expect(isOverrideFieldSet({}, "renderSource")).toBe(false);
   });
@@ -420,11 +455,11 @@ describe("isOverrideFieldSet", () => {
     };
     expect(isOverrideFieldSet(mirrored, "backgroundTransform")).toBe(true);
     // One entry per layer, so the other layer is untouched by it.
-    expect(isOverrideFieldSet(mirrored, "contentTransform")).toBe(false);
+    expect(isOverrideFieldSet(mirrored, "foregroundTransform")).toBe(false);
     expect(
       isOverrideFieldSet(
-        { content: { transform: { rotation: 90 } } },
-        "contentTransform",
+        { foreground: { transform: { rotation: 90 } } },
+        "foregroundTransform",
       ),
     ).toBe(true);
   });
@@ -452,7 +487,9 @@ describe("isOverrideFieldSet", () => {
 
 describe("clearOverrideField", () => {
   it("removes the text color, collapsing to empty", () => {
-    expect(clearOverrideField({ textColor: "#f00" }, "textColor")).toEqual({});
+    expect(
+      clearOverrideField({ foreground: { textColor: "#f00" } }, "textColor"),
+    ).toEqual({});
   });
 
   it("removes a background sub-property but keeps the rest", () => {
@@ -488,16 +525,16 @@ describe("clearOverrideField", () => {
 
   it("removes one Symbol Paint Role but keeps the others", () => {
     const out = clearOverrideField(
-      { symbolPaints: { fill: "#0f0", border: "#00f" } },
+      { foreground: { symbolPaints: { fill: "#0f0", border: "#00f" } } },
       "symbolFill",
     );
-    expect(out).toEqual({ symbolPaints: { border: "#00f" } });
+    expect(out).toEqual({ foreground: { symbolPaints: { border: "#00f" } } });
   });
 
   it("collapses the symbolPaints group when its last role is cleared", () => {
     expect(
       clearOverrideField(
-        { symbolPaints: { secondary: "#f0f" } },
+        { foreground: { symbolPaints: { secondary: "#f0f" } } },
         "symbolSecondary",
       ),
     ).toEqual({});
@@ -532,8 +569,8 @@ describe("clearOverrideField", () => {
     // Glyph-scope rotation fall back up together. Accepted.
     expect(
       clearOverrideField(
-        { content: { transform: { rotation: 90, scale: { x: -1 } } } },
-        "contentTransform",
+        { foreground: { transform: { rotation: 90, scale: { x: -1 } } } },
+        "foregroundTransform",
       ),
     ).toEqual({});
     expect(
@@ -547,36 +584,40 @@ describe("clearOverrideField", () => {
       clearOverrideField(
         {
           background: { transform: { rotation: 90 } },
-          content: { transform: { rotation: 45 } },
+          foreground: { transform: { rotation: 45 } },
         },
         "backgroundTransform",
       ),
-    ).toEqual({ content: { transform: { rotation: 45 } } });
+    ).toEqual({ foreground: { transform: { rotation: 45 } } });
   });
 
   it("clears the Render Source (issue #20)", () => {
     expect(
-      clearOverrideField({ renderSource: { kind: "label" } }, "renderSource"),
+      clearOverrideField(
+        { foreground: { renderSource: { kind: "label" } } },
+        "renderSource",
+      ),
     ).toEqual({});
     // Independent of the rest of the override.
     expect(
       clearOverrideField(
         {
-          renderSource: { kind: "symbol" },
-          content: { transform: { rotation: 90 } },
-          textColor: "#f00",
+          foreground: {
+            renderSource: { kind: "symbol" },
+            transform: { rotation: 90 },
+            textColor: "#f00",
+          },
         },
         "renderSource",
       ),
     ).toEqual({
-      content: { transform: { rotation: 90 } },
-      textColor: "#f00",
+      foreground: { transform: { rotation: 90 }, textColor: "#f00" },
     });
   });
 
   it("is a no-op when the field is not set", () => {
-    expect(clearOverrideField({ textColor: "#f00" }, "fill")).toEqual({
-      textColor: "#f00",
-    });
+    expect(
+      clearOverrideField({ foreground: { textColor: "#f00" } }, "fill"),
+    ).toEqual({ foreground: { textColor: "#f00" } });
   });
 });

@@ -1,5 +1,5 @@
 import type { GlyphStyle } from "@/lib/glyph/style";
-import type { Background, Transform } from "@/lib/glyph/types";
+import type { Background, LayerTransform } from "@/lib/glyph/types";
 
 /**
  * The subset of the 2D canvas context shared by the on-screen preview
@@ -62,7 +62,7 @@ export function renderGlyph(
 ): void {
   const { cellSize, style, fontFamily, label, symbol, image, backgroundImage } =
     opts;
-  const { background, textColor } = style;
+  const { background, foreground } = style;
 
   ctx.save();
   ctx.translate(ox, oy);
@@ -95,13 +95,20 @@ export function renderGlyph(
   // than an empty cell.
   const box = contentBox(cellSize, background.border.width);
   if (box.size > 0) {
-    withTransform(ctx, cellSize, style.content.transform, () => {
+    withTransform(ctx, cellSize, foreground.transform, () => {
       if (image) {
         drawImage(ctx, cellSize, image, box.size);
       } else if (symbol) {
         drawSymbol(ctx, cellSize, symbol, box.size);
       } else {
-        drawLabel(ctx, cellSize, label, textColor, fontFamily, box.size);
+        drawLabel(
+          ctx,
+          cellSize,
+          label,
+          foreground.textColor,
+          fontFamily,
+          box.size,
+        );
       }
     });
   }
@@ -110,7 +117,7 @@ export function renderGlyph(
 }
 
 /**
- * Run `draw` with one layer's {@link Transform} applied about the centre of the
+ * Run `draw` with one layer's {@link LayerTransform} applied about the centre of the
  * cell, then restore.
  *
  * Both scale and rotation are canvas operations, and deliberately so: the layer
@@ -122,7 +129,7 @@ export function renderGlyph(
 function withTransform(
   ctx: Canvas2DContext,
   cellSize: number,
-  transform: Transform,
+  transform: LayerTransform,
   draw: () => void,
 ): void {
   ctx.save();

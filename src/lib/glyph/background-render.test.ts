@@ -25,7 +25,6 @@ const { getImageBitmap, ensureImageBitmap } =
 
 function styleWith(source: BackgroundSource): GlyphStyle {
   return {
-    textColor: "#ffffff",
     background: {
       source,
       transform: identityTransform(),
@@ -34,8 +33,15 @@ function styleWith(source: BackgroundSource): GlyphStyle {
       cornerRadius: 18,
       border: { width: 4, color: "#475569" },
     },
-    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-    content: { transform: identityTransform() },
+    foreground: {
+      transform: identityTransform(),
+      textColor: "#ffffff",
+      symbolPaints: {
+        fill: "#ffffff",
+        border: "#ffffff",
+        secondary: "#ffffff",
+      },
+    },
   };
 }
 

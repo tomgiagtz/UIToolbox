@@ -10,6 +10,7 @@ import {
   resolveGlyphStyle,
   resolveStyle,
   type GlyphStyle,
+  type RenderSourceOverride,
   type StyleOverride,
   type StyleScope,
 } from "@/lib/glyph/style";
@@ -55,9 +56,10 @@ export function resolveRenderSource(
     ? { kind: "symbol", symbolId: entry.symbolId }
     : { kind: "label" };
 
-  let chosen: StyleOverride["renderSource"];
+  let chosen: RenderSourceOverride | undefined;
   for (const override of overrides) {
-    if (override?.renderSource !== undefined) chosen = override.renderSource;
+    const picked = override?.foreground?.renderSource;
+    if (picked !== undefined) chosen = picked;
   }
   if (!chosen) return fallback;
 

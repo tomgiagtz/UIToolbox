@@ -380,7 +380,7 @@ test.describe("Input Glyph Creator", () => {
     // scope. The box rather than the slider beside it, since `fill` types a value.
     await page
       .getByRole("region", { name: /edit glyph/i })
-      .getByRole("spinbutton", { name: /content transform scale X/i })
+      .getByRole("spinbutton", { name: /foreground transform scale X/i })
       .fill("1.5");
     await expect
       .poll(pixels, { message: "preview should redraw at the new scale" })
