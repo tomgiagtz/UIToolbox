@@ -137,6 +137,29 @@ describe("renderGlyph — the two layer transforms (ADR-0012 §2)", () => {
     expect(spies.rotate).toHaveBeenCalledWith(Math.PI);
   });
 
+  it("rotates before it scales, so a mirror stays a mirror under a rotation", () => {
+    // Order is load-bearing for the seeded shoulders (ADR-0012 §2): rotating
+    // first mirrors the art along its own axis, so `scale.x: -1` still means
+    // "this control faces the other way" at 90°. Scaling first would mirror
+    // along the cell's horizontal and flip a turned bumper end-for-end.
+    const { ctx, spies } = fakeCtx();
+    const order: string[] = [];
+    vi.mocked(spies.rotate).mockImplementation(() => order.push("rotate"));
+    vi.mocked(spies.scale).mockImplementation(() => order.push("scale"));
+    renderGlyph(ctx, 0, 0, {
+      ...base,
+      style: {
+        ...style,
+        background: {
+          ...style.background,
+          transform: { rotation: 90, scale: { x: -1, y: 1 } },
+        },
+      },
+    });
+
+    expect(order.slice(0, 2)).toEqual(["rotate", "scale"]);
+  });
+
   it("leaves an untransformed Glyph drawn exactly where it always was", () => {
     const { ctx, spies } = fakeCtx();
     renderGlyph(ctx, 0, 0, base);

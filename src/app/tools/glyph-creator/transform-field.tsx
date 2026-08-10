@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { normalizeRotation } from "@/lib/glyph/style";
 import type { TransformOverride } from "@/lib/glyph/style";
 import type { LayerTransform } from "@/lib/glyph/types";
 import { ResetButton, inputClass } from "./controls-ui";
@@ -9,28 +10,23 @@ import { ResetButton, inputClass } from "./controls-ui";
  * Rotation is in **degrees**, and free rather than snapped: a Preset export is
  * hand-authorable, and `90` means something there that `1.5708` does not.
  *
- * The slider stops one step short of a full turn, because 360° normalises to 0
- * and the thumb would spring back from the end it was just dragged to.
+ * The range is centred on 0 rather than running 0–360, so turning a layer
+ * anticlockwise is half the slider instead of the far end of it. Both extremes
+ * are legal and stable — see `normalizeRotation`.
  */
-const ROTATION_RANGE = { min: 0, max: 359, step: 1 };
+const ROTATION_RANGE = { min: -180, max: 180, step: 1 };
 
 /**
  * Range of the scale sliders. They run past 1 so a layer can be pushed to the
  * cell edge and beyond (the renderer clips to the cell), and symmetrically below
  * zero because a negative component is how you mirror an axis.
+ *
+ * Zero is on the grid and reachable. It is not a degenerate value needing a
+ * guard: the canvas draws nothing through a non-invertible matrix, the number
+ * shows in the box beside the slider, and one reset undoes it — and it is the
+ * only way to say "draw this layer's art, but not this one".
  */
 const SCALE_RANGE = { min: -2, max: 2, step: 0.1 };
-
-/**
- * Move a scale slider to `next`, stepping **over** zero — from −0.1 straight to
- * 0.1. A layer scaled to nothing is an empty cell you can't see to drag back out
- * of, so the slider skips the degenerate value; the numeric box beside it still
- * accepts it, since a user who types `0` means it.
- */
-function stepOverZero(next: number, current: number): number {
-  if (next !== 0) return next;
-  return current < 0 ? SCALE_RANGE.step : -SCALE_RANGE.step;
-}
 
 /** Round a slider's float to the precision its step implies. */
 function round(value: number): number {
@@ -100,9 +96,7 @@ function ScaleAxis({
           max={SCALE_RANGE.max}
           step={SCALE_RANGE.step}
           value={value}
-          onChange={(e) =>
-            onChange(round(stepOverZero(Number(e.target.value), value)))
-          }
+          onChange={(e) => onChange(round(Number(e.target.value)))}
           className="min-w-0 flex-1"
         />
         <NumberBox
@@ -117,9 +111,10 @@ function ScaleAxis({
 }
 
 /**
- * Edits one drawing layer's {@link LayerTransform} — the tile's or the content's
- * (ADR-0012 §2). Rotation and both scale axes each patch on their own, so a tier
- * that only mirrors doesn't also pin a rotation it never asked about.
+ * Edits one drawing layer's {@link LayerTransform} — the tile's or the
+ * foreground's (ADR-0012 §2). Rotation and both scale axes each patch on their
+ * own, so a tier that only mirrors doesn't also pin a rotation it never asked
+ * about, and each has its own reset because each is its own control.
  *
  * There is deliberately **no flip affordance**: a negative scale is the familiar
  * way to mirror, and a checkbox beside the number that means the same thing is a
@@ -130,7 +125,8 @@ export function TransformField({
   hint,
   transform,
   onChange,
-  onReset,
+  onResetRotation,
+  onResetScale,
 }: {
   /** Names the layer, e.g. "Background transform". */
   label: string;
@@ -138,18 +134,29 @@ export function TransformField({
   /** The effective transform at the current scope. */
   transform: LayerTransform;
   onChange: (patch: TransformOverride) => void;
-  /**
-   * When set, a reset button clears the **whole layer's** transform — one entry
-   * per layer, so rotation and scale fall back up together.
-   */
-  onReset?: () => void;
+  /** Set when this scope overrides the layer's rotation; clears that alone. */
+  onResetRotation?: () => void;
+  /** Set when this scope overrides the layer's scale; clears both axes. */
+  onResetScale?: () => void;
 }) {
   const rotationId = useId();
+  /**
+   * Scaling both axes together is the everyday gesture and per-axis scaling the
+   * rare one, so the axes start linked — but only when they agree. A seeded
+   * mirror (`x: -1, y: 1`) opens unlinked with the mirror visible, since a linked
+   * drag through it would silently un-mirror the control.
+   *
+   * Panel state, deliberately: it is how this control is being used, not part of
+   * the style, so it never persists and never cascades.
+   */
+  const [linked, setLinked] = useState(transform.scale.x === transform.scale.y);
+  const setScale = (value: number, axis: "x" | "y") =>
+    onChange({ scale: linked ? { x: value, y: value } : { [axis]: value } });
+
   return (
     <fieldset className="flex flex-col gap-2.5">
       <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
         <span>{label}</span>
-        {onReset && <ResetButton label={label} onReset={onReset} />}
       </legend>
 
       <div className="flex flex-col gap-1.5">
@@ -164,27 +171,52 @@ export function TransformField({
             max={ROTATION_RANGE.max}
             step={ROTATION_RANGE.step}
             value={transform.rotation}
-            onChange={(e) => onChange({ rotation: Number(e.target.value) })}
+            onChange={(e) =>
+              onChange({ rotation: normalizeRotation(Number(e.target.value)) })
+            }
             className="min-w-0 flex-1"
           />
           <NumberBox
             label={`${label} rotation`}
             value={transform.rotation}
             step={ROTATION_RANGE.step}
-            onCommit={(rotation) => onChange({ rotation })}
+            onCommit={(rotation) =>
+              onChange({ rotation: normalizeRotation(rotation) })
+            }
           />
+          {onResetRotation && (
+            <ResetButton
+              label={`${label} rotation`}
+              onReset={onResetRotation}
+            />
+          )}
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={linked}
+            onChange={(e) => setLinked(e.target.checked)}
+            className="size-3.5"
+          />
+          {`Link ${label.toLowerCase()} scale axes`}
+        </label>
+        {onResetScale && (
+          <ResetButton label={`${label} scale`} onReset={onResetScale} />
+        )}
       </div>
 
       <ScaleAxis
         name={`${label} scale X`}
         value={transform.scale.x}
-        onChange={(x) => onChange({ scale: { x } })}
+        onChange={(x) => setScale(x, "x")}
       />
       <ScaleAxis
         name={`${label} scale Y`}
         value={transform.scale.y}
-        onChange={(y) => onChange({ scale: { y } })}
+        onChange={(y) => setScale(y, "y")}
       />
 
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}

@@ -161,6 +161,11 @@ export type StyleScope =
  * control. Layer sub-properties are flattened so a single field names exactly
  * one setting the user can override or clear — which is why `borderWidth` and
  * `borderColor` are two entries and not one `border`.
+ *
+ * A transform is two entries per layer for the same reason: rotation and scale
+ * are separate controls, and one reset button over a pair of them would have no
+ * honest home in the panel. `x` and `y` stay together under `…Scale`, because
+ * mirroring is one gesture and the two numbers are one control.
  */
 export type StyleField =
   | "textColor"
@@ -170,22 +175,61 @@ export type StyleField =
   | "borderWidth"
   | "borderColor"
   | "backgroundSource"
-  | "backgroundTransform"
-  | "foregroundTransform"
+  | "backgroundRotation"
+  | "backgroundScale"
+  | "foregroundRotation"
+  | "foregroundScale"
   | "symbolFill"
   | "symbolBorder"
   | "symbolSecondary"
   | "renderSource";
 
 /**
- * Fold degrees into 0–360, so a stored rotation always reads as an angle.
+ * Fold degrees into −180…180, the canonical spelling of an angle here: the range
+ * the control spans, centred on 0 so a quarter-turn anticlockwise reads `-90`
+ * rather than `270`.
  *
- * Finiteness is not this function's job: `NaN` is caught at the boundary it can
- * enter by (`isTransform`, on load), rather than guarded again here where the
- * check would be unreachable and its absence unexplainable.
+ * A value **already** in range is returned untouched, which is the whole reason
+ * this isn't the usual one-liner: `((d + 180) % 360 + 360) % 360 - 180` maps
+ * `180` to `-180`, so dragging the slider to one end would snap the thumb to the
+ * other. Both ends are legal and stable.
+ *
+ * Call it where a rotation is **written** — the control's commit, and the Preset
+ * build gate. Not in {@link resolveStyle}: any finite value draws correctly
+ * (`deg * π / 180` is right for `-90`, `450` and `0` alike), so normalising
+ * during resolution would make a pure fold over plain data do arithmetic on
+ * every render for no observable gain. Finiteness is likewise not this function's
+ * job — `NaN` is caught at the boundary it can enter by, `isLayerTransform`.
  */
-function normalizeRotation(degrees: number): number {
-  return ((degrees % 360) + 360) % 360;
+export function normalizeRotation(degrees: number): number {
+  if (degrees >= -180 && degrees <= 180) return degrees;
+  return ((((degrees + 180) % 360) + 360) % 360) - 180;
+}
+
+/**
+ * Drop one component from a sparse transform, returning `undefined` once nothing
+ * is left — so clearing a layer's rotation when it set no scale collapses the
+ * whole override rather than leaving an empty `transform: {}` behind, which
+ * `isOverrideFieldSet` would then report as "set" for neither component and the
+ * reset button would offer forever.
+ */
+function clearTransformComponent(
+  transform: TransformOverride | undefined,
+  part: "rotation" | "scale",
+): TransformOverride | undefined {
+  if (!transform) return undefined;
+  const next: TransformOverride = { ...transform };
+  delete next[part];
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/** Set or drop a layer override's `transform`, keeping the layer collapsible. */
+function setTransform(
+  layer: BackgroundOverride | ForegroundOverride,
+  transform: TransformOverride | undefined,
+): void {
+  if (transform) layer.transform = transform;
+  else delete layer.transform;
 }
 
 /**
@@ -198,8 +242,6 @@ function mergeTransform(
   patch: TransformOverride,
 ): TransformOverride {
   const next: TransformOverride = { ...base, ...patch };
-  if (patch.rotation !== undefined)
-    next.rotation = normalizeRotation(patch.rotation);
   const scale = { ...base?.scale, ...patch.scale };
   if (Object.keys(scale).length > 0) next.scale = scale;
   return next;
@@ -274,10 +316,14 @@ export function isOverrideFieldSet(
       return override.background?.border?.color !== undefined;
     case "backgroundSource":
       return override.background?.source !== undefined;
-    case "backgroundTransform":
-      return override.background?.transform !== undefined;
-    case "foregroundTransform":
-      return override.foreground?.transform !== undefined;
+    case "backgroundRotation":
+      return override.background?.transform?.rotation !== undefined;
+    case "backgroundScale":
+      return override.background?.transform?.scale !== undefined;
+    case "foregroundRotation":
+      return override.foreground?.transform?.rotation !== undefined;
+    case "foregroundScale":
+      return override.foreground?.transform?.scale !== undefined;
     case "symbolFill":
       return override.foreground?.symbolPaints?.fill !== undefined;
     case "symbolBorder":
@@ -302,7 +348,8 @@ export function clearOverrideField(
   if (
     field === "textColor" ||
     field === "renderSource" ||
-    field === "foregroundTransform" ||
+    field === "foregroundRotation" ||
+    field === "foregroundScale" ||
     field === "symbolFill" ||
     field === "symbolBorder" ||
     field === "symbolSecondary"
@@ -311,8 +358,15 @@ export function clearOverrideField(
     const fg: ForegroundOverride = { ...next.foreground };
     if (field === "textColor") delete fg.textColor;
     else if (field === "renderSource") delete fg.renderSource;
-    else if (field === "foregroundTransform") delete fg.transform;
-    else if (fg.symbolPaints) {
+    else if (field === "foregroundRotation" || field === "foregroundScale") {
+      setTransform(
+        fg,
+        clearTransformComponent(
+          fg.transform,
+          field === "foregroundRotation" ? "rotation" : "scale",
+        ),
+      );
+    } else if (fg.symbolPaints) {
       const sp: Partial<SymbolPaints> = { ...fg.symbolPaints };
       if (field === "symbolFill") delete sp.fill;
       else if (field === "symbolBorder") delete sp.border;
@@ -328,8 +382,15 @@ export function clearOverrideField(
   const bg: BackgroundOverride = { ...next.background };
   if (field === "shape") delete bg.shape;
   else if (field === "backgroundSource") delete bg.source;
-  else if (field === "backgroundTransform") delete bg.transform;
-  else if (field === "fill") delete bg.fill;
+  else if (field === "backgroundRotation" || field === "backgroundScale") {
+    setTransform(
+      bg,
+      clearTransformComponent(
+        bg.transform,
+        field === "backgroundRotation" ? "rotation" : "scale",
+      ),
+    );
+  } else if (field === "fill") delete bg.fill;
   else if (field === "cornerRadius") delete bg.cornerRadius;
   else if (field === "borderWidth" || field === "borderColor") {
     if (bg.border) {
@@ -431,8 +492,7 @@ function applyTransform(
   patch: TransformOverride,
 ): LayerTransform {
   const next = copyTransform(transform);
-  if (patch.rotation !== undefined)
-    next.rotation = normalizeRotation(patch.rotation);
+  if (patch.rotation !== undefined) next.rotation = patch.rotation;
   if (patch.scale?.x !== undefined) next.scale.x = patch.scale.x;
   if (patch.scale?.y !== undefined) next.scale.y = patch.scale.y;
   return next;

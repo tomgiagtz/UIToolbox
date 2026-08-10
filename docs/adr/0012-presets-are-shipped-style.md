@@ -235,13 +235,34 @@ take a user-supplied family (`loadFontFromFile` always generates
 #### Two transforms replace `flipX` and `contentScale`
 
 ```ts
-interface Transform {
-  /** Degrees, normalised into 0–360 on write. */
+interface LayerTransform {
+  /** Degrees clockwise; canonicalised into −180…180 where a rotation is written. */
   rotation: number;
   /** Signed per-axis scale; a negative component mirrors that axis. */
   scale: { x: number; y: number };
 }
 ```
+
+**Rotation happens before scale, about the centre of the cell.** The order is not
+a detail: take a device-wide `rotation: 90` on the tile layer under a seeded
+`scale.x: -1`. Rotating first mirrors the art along its _own_ axis and then turns
+it — the boolean still means "this control faces the other way". Scaling first
+would mirror along the cell's horizontal, which after a quarter turn cuts across
+the tile and flips a bumper end-for-end instead. Only one of the two orders keeps
+`mirrored` meaning one thing at every rotation, and it is the ordinary
+translate-rotate-scale of every scene graph.
+
+**Degrees are canonicalised into −180…180, not 0–360, and only where a rotation
+is written** — the control's commit and the Preset build gate. Centred on zero
+because that is what makes an anticlockwise turn half of a slider rather than the
+far end of one, and `-90` is what a hand author writes for a quarter-turn left,
+which was the argument for degrees over radians in the first place. Both extremes
+are legal and stable: the usual `((d + 180) % 360 + 360) % 360 - 180` maps `180`
+to `-180`, so a value already in range is passed through untouched instead.
+Resolution does **not** normalise — every finite value already draws correctly
+(`deg * π / 180` is right for `-90` and `450` alike), and rotations are never
+compared for equality, so making a pure fold do arithmetic on every render would
+buy nothing.
 
 One per drawing layer, neither aware of the other: **`background.transform`** for
 the tile, and **`foreground.transform`** for whichever Render Source is drawn.
@@ -287,8 +308,18 @@ painted_, so unlike `source` it is not Glyph-only, and a device-wide rotation is
 a legitimate thing to want. Components fall up **independently but resolve by
 replacement, never composition**: a Device setting `rotation: 90` and a Glyph
 setting `scale.x: -1` both take effect, and a Glyph setting `rotation: 0`
-_replaces_ the Device's 90 rather than composing to it. This is what
-`resolveStyle` already does for every field, so no new merge machinery is needed.
+_replaces_ the Device's 90 rather than composing to it. That is the **resolution
+semantics** `resolveStyle` already has for every field, and they need no change.
+
+_Corrected while building._ This paragraph originally continued "so no new merge
+machinery is needed", and that part was wrong. An override must be sparse **to
+the leaf** — `{ rotation?, scale?: { x?, y? } }` — which is one level deeper than
+anything that existed, `background.border.width` being the previous deepest. It
+is not sparse for tidiness: the Catalog seed supplies `scale.x` alone and
+outranks the Device tier, so a transform replaced wholesale would silently erase
+a device-wide rotation on exactly the four mirrored shoulders and nowhere else. A
+named `mergeTransform` helper is shared by the three functions that need it.
+
 The resolved form is **total** — identity spelled out as
 `{ rotation: 0, scale: { x: 1, y: 1 } }`; absence means "fall up" at override
 tiers only, never identity.
@@ -307,6 +338,21 @@ tile — so deleting `defaultStyle` would otherwise have left a state you can en
 but not leave. The mirror now leaves the source union entirely, so replacing the
 source wholesale cannot touch orientation; `sourceFromValue` is deleted and no
 compensating control is needed.
+
+**And it opens a smaller one, knowingly.** Because the seed now supplies two
+independent things, the mirror outlives the tile it arrived with: a user who
+points LB at their own uploaded art — already drawn facing left — gets it
+flipped, because nothing they did was a statement about the transform. Today that
+state is unreachable, since orientation rides inside the source and goes with it.
+
+It is accepted rather than fixed. The fix would be to condition the seeded
+transform on the resolved source still being the seeded tile, which re-couples
+orientation to art — the exact defect being removed — and makes the seed's rank
+depend on the outcome of another field's resolution, so `resolveGlyphStyle` stops
+being a straight ordered fold. The honest statement is that the mirror belongs to
+**the control's place on the device**, not to the art: LB faces left whatever you
+put there, until you say otherwise. And you can now say otherwise, which is the
+half of this that today's code cannot do at all.
 
 ### 3. A Preset is style-only, in two species that are nearly one thing
 
@@ -602,14 +648,42 @@ change should keep a test asserting the previous shape is rejected.
   else.
 - **Renderer and compositor lose their `fontFamily` parameter**; the family comes
   off the resolved style.
-- **The tile draw moves inside the content clip.** The tile is drawn at exactly
-  `cellSize` today and only the content is clipped, so a rotated or upscaled tile
-  would overflow into its neighbours in a packed atlas. A tile rotated 45° then
-  shows empty cell corners — honest, not a bug, since the art is square and
-  full-bleed.
-- **`StyleField` gains `"font"`, `backgroundTransform`, `contentTransform` and
-  loses `contentScale`** — one entry per transform _layer_, not per component, so
-  a Glyph-scope mirror and a Glyph-scope rotation clear together. Accepted.
+- **Both layers draw inside one cell clip, and a rotated layer is clipped.** The
+  tile is drawn at exactly `cellSize` today and only the content is clipped, so a
+  rotated or upscaled tile would overflow into its neighbours in a packed atlas.
+  What that clipping looks like differs by source, and all three are accepted: an
+  Authored tile rotated 45° shows empty cell corners (the art is square and
+  full-bleed), while a **drawn primitive** or a square uploaded tile has its
+  corners **cut off** — a circle, meanwhile, is unaffected, so the same rotation
+  reads as a bug on one shape and a no-op on another. Auto-inscribing the layer
+  to fit its rotated bounds was rejected: it would make rotation silently change
+  size, so `rotation: 45` with `scale: 1` would not draw at scale 1, and it takes
+  from the user a choice they can make themselves by scaling to ~0.71. Exempting
+  the primitive from rotation was rejected outright — a transform meaningful for
+  some source kinds and not others is `flipX` again.
+- **`StyleField` gains `"font"` and four transform entries —
+  `backgroundRotation`, `backgroundScale`, `foregroundRotation`,
+  `foregroundScale` — and loses `contentScale`.** Two per layer, not one:
+  `style.ts` already states that a field names exactly one setting the user can
+  override or clear (which is why `borderWidth` and `borderColor` are separate),
+  and rotation and scale are separate controls, so a single reset button would
+  have had no honest home between them. `x` and `y` stay together, because
+  mirroring is one gesture and the two numbers are one control.
+- **The scale control links its axes by default.** Uniform scaling is the
+  everyday gesture and `contentScale` served it with one slider, so the panel
+  keeps that: linked, one number drives both axes; unlinked, they move
+  independently. The toggle is **panel state, never style** — it is how the
+  control is being used, not part of the cascade, and storing it would be the
+  third half-concept this section exists to remove. Its initial state is derived
+  rather than stored: linked when the resolved axes agree, so a seeded shoulder
+  (`x: -1, y: 1`) opens unlinked with its mirror visible instead of having it
+  silently dragged away.
+- **Zero scale is reachable.** The old `contentScale` floor of 0.1 does not carry
+  over: the canvas draws nothing through a non-invertible matrix (no error, no
+  `NaN`), the value stays visible in the numeric box, one reset undoes it, and it
+  is the only way to say "draw the tile but not its content". Skipping it on the
+  slider would have required a custom control that tracked drag direction and
+  broke keyboard stepping.
 - **Deleted outright:** `CatalogInput.defaultStyle`, `sourceFromValue`'s
   flag-preserving `current` parameter — what survives is the `<select>`'s own
   value parser, which has nothing left to carry across a source change —

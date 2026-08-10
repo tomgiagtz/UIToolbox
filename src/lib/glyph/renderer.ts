@@ -70,8 +70,13 @@ export function renderGlyph(
 
   // Both layers are clipped to the cell. Either transform can reach past it — a
   // rotated tile, an upscaled Symbol — and cells are packed edge-to-edge, so an
-  // unclipped layer would paint its neighbour. A tile rotated 45° shows empty
-  // cell corners as a result: honest, since the art is square and full-bleed.
+  // unclipped layer would paint its neighbour.
+  //
+  // A rotated layer therefore loses what falls outside, and what that looks like
+  // depends on the art: square full-bleed tile art shows empty corners, while a
+  // drawn primitive has its corners cut off. Both are the transform doing what
+  // was asked; the escape is to scale down, which is the user's call to make and
+  // not one to make for them by shrinking the layer to fit its rotated bounds.
   ctx.beginPath();
   ctx.rect(0, 0, cellSize, cellSize);
   ctx.clip();

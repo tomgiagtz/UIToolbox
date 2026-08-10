@@ -3,6 +3,7 @@ import {
   clearOverrideField,
   isOverrideFieldSet,
   mergeOverride,
+  normalizeRotation,
   resolveGlyphStyle,
   resolveStyle,
 } from "@/lib/glyph/style";
@@ -152,13 +153,15 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     ).toBe(0);
   });
 
-  it("normalises a resolved rotation into 0–360", () => {
+  it("resolves a rotation without normalising it", () => {
+    // Normalisation is a write-boundary job (`normalizeRotation`), not this
+    // fold's: every finite value already draws correctly, so doing the
+    // arithmetic on every render would buy nothing.
     const turns = (rotation: number) =>
       resolveStyle(base(), { foreground: { transform: { rotation } } })
         .foreground.transform.rotation;
-    expect(turns(-90)).toBe(270);
-    expect(turns(450)).toBe(90);
-    expect(turns(360)).toBe(0);
+    expect(turns(-90)).toBe(-90);
+    expect(turns(450)).toBe(450);
   });
 
   it("does not mutate the base style", () => {
@@ -388,12 +391,12 @@ describe("mergeOverride", () => {
     });
   });
 
-  it("normalises a rotation as it is written into an override", () => {
+  it("keeps a rotation exactly as the patch spelled it", () => {
     const out = mergeOverride(
       {},
       { background: { transform: { rotation: -90 } } },
     );
-    expect(out.background?.transform?.rotation).toBe(270);
+    expect(out.background?.transform?.rotation).toBe(-90);
   });
 
   it("does not mutate either input", () => {
@@ -401,6 +404,25 @@ describe("mergeOverride", () => {
     const snapshot = JSON.parse(JSON.stringify(base));
     mergeOverride(base, { background: { border: { color: "#0f0" } } });
     expect(base).toEqual(snapshot);
+  });
+});
+
+describe("normalizeRotation", () => {
+  it("folds an out-of-range angle into −180…180", () => {
+    expect(normalizeRotation(270)).toBe(-90);
+    expect(normalizeRotation(450)).toBe(90);
+    expect(normalizeRotation(-270)).toBe(90);
+    expect(normalizeRotation(720)).toBe(0);
+  });
+
+  it("passes an in-range angle through untouched, both extremes included", () => {
+    // The reason this isn't the usual one-liner: that maps 180 to −180, so the
+    // slider would snap to the opposite end from the one just dragged to.
+    expect(normalizeRotation(180)).toBe(180);
+    expect(normalizeRotation(-180)).toBe(-180);
+    expect(normalizeRotation(-90)).toBe(-90);
+    expect(normalizeRotation(0)).toBe(0);
+    expect(normalizeRotation(22.5)).toBe(22.5);
   });
 });
 
@@ -449,17 +471,19 @@ describe("isOverrideFieldSet", () => {
     expect(isOverrideFieldSet({}, "renderSource")).toBe(false);
   });
 
-  it("detects each layer's transform separately (ADR-0012 §2)", () => {
+  it("detects rotation and scale separately, per layer (ADR-0012 §2)", () => {
     const mirrored: StyleOverride = {
       background: { transform: { scale: { x: -1 } } },
     };
-    expect(isOverrideFieldSet(mirrored, "backgroundTransform")).toBe(true);
-    // One entry per layer, so the other layer is untouched by it.
-    expect(isOverrideFieldSet(mirrored, "foregroundTransform")).toBe(false);
+    expect(isOverrideFieldSet(mirrored, "backgroundScale")).toBe(true);
+    // Two entries per layer: mirroring says nothing about the rotation...
+    expect(isOverrideFieldSet(mirrored, "backgroundRotation")).toBe(false);
+    // ...and nothing at all about the other layer.
+    expect(isOverrideFieldSet(mirrored, "foregroundScale")).toBe(false);
     expect(
       isOverrideFieldSet(
         { foreground: { transform: { rotation: 90 } } },
-        "foregroundTransform",
+        "foregroundRotation",
       ),
     ).toBe(true);
   });
@@ -564,19 +588,26 @@ describe("clearOverrideField", () => {
     ).toEqual({ background: { transform: { scale: { x: -1 } } } });
   });
 
-  it("clears a whole layer's transform at once (ADR-0012 §2)", () => {
-    // One reset entry per layer, not per component: a Glyph-scope mirror and a
-    // Glyph-scope rotation fall back up together. Accepted.
+  it("clears one transform component, leaving the other (ADR-0012 §2)", () => {
+    // Two reset entries per layer, because rotation and scale are two controls:
+    // clearing the mirror must not take a rotation set beside it.
     expect(
       clearOverrideField(
         { foreground: { transform: { rotation: 90, scale: { x: -1 } } } },
-        "foregroundTransform",
+        "foregroundScale",
+      ),
+    ).toEqual({ foreground: { transform: { rotation: 90 } } });
+    // Clearing the last component collapses the transform, then the layer.
+    expect(
+      clearOverrideField(
+        { foreground: { transform: { rotation: 90 } } },
+        "foregroundRotation",
       ),
     ).toEqual({});
     expect(
       clearOverrideField(
         { background: { fill: "#111", transform: { rotation: 90 } } },
-        "backgroundTransform",
+        "backgroundRotation",
       ),
     ).toEqual({ background: { fill: "#111" } });
     // The layers clear independently.
@@ -586,7 +617,7 @@ describe("clearOverrideField", () => {
           background: { transform: { rotation: 90 } },
           foreground: { transform: { rotation: 45 } },
         },
-        "backgroundTransform",
+        "backgroundRotation",
       ),
     ).toEqual({ foreground: { transform: { rotation: 45 } } });
   });

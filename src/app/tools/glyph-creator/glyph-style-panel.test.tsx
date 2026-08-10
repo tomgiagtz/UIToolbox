@@ -146,9 +146,29 @@ describe("GlyphStylePanel", () => {
     expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
   });
 
-  it("scales the content layer through the cascade", () => {
+  it("scales both axes together while they are linked", () => {
     const { dispatch } = renderPanel();
-    // The box, not the slider: the value arrives unrounded, as typed.
+    // The box, not the slider: the value arrives unrounded, as typed. The axes
+    // start linked because they agree, so one number moves both — scaling a
+    // Symbol up is one gesture, as it was under the old uniform control.
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /foreground transform scale X/i }),
+      { target: { value: "0.5" } },
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { foreground: { transform: { scale: { x: 0.5, y: 0.5 } } } },
+    });
+  });
+
+  it("scales one axis alone once the link is off", () => {
+    const { dispatch } = renderPanel();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /link foreground transform scale axes/i,
+      }),
+    );
     fireEvent.change(
       screen.getByRole("spinbutton", { name: /foreground transform scale X/i }),
       { target: { value: "0.5" } },
@@ -173,9 +193,11 @@ describe("GlyphStylePanel", () => {
     });
   });
 
-  it("steps the scale slider over zero rather than through it", () => {
-    // A layer scaled to nothing is an empty cell you can't see to drag back out
-    // of. The numeric box beside it still takes 0 from a user who means it.
+  it("lets the scale slider pass through zero", () => {
+    // Zero is not degenerate enough to guard against: the canvas draws nothing
+    // through a non-invertible matrix, the number stays visible in the box, and
+    // one reset undoes it. Skipping it would need a custom control that broke
+    // keyboard stepping.
     const { dispatch } = renderPanel();
     const slider = screen.getAllByRole("slider", {
       name: /foreground transform scale X/i,
@@ -184,7 +206,7 @@ describe("GlyphStylePanel", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { foreground: { transform: { scale: { x: -0.1 } } } },
+      patch: { foreground: { transform: { scale: { x: 0, y: 0 } } } },
     });
   });
 

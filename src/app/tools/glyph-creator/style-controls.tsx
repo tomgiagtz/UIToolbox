@@ -337,7 +337,8 @@ export function StyleControls({
           hint="Rotates and scales the whole tile — art or drawn shape alike."
           transform={bg.transform}
           onChange={(transform) => patch({ background: { transform } })}
-          onReset={resetFor("backgroundTransform")}
+          onResetRotation={resetFor("backgroundRotation")}
+          onResetScale={resetFor("backgroundScale")}
         />
 
         {showsPaintFields && (
@@ -433,7 +434,8 @@ export function StyleControls({
           hint="Rotates and scales the label, Symbol, or image drawn on the tile. A negative scale mirrors that axis."
           transform={fg.transform}
           onChange={(transform) => patch({ foreground: { transform } })}
-          onReset={resetFor("foregroundTransform")}
+          onResetRotation={resetFor("foregroundRotation")}
+          onResetScale={resetFor("foregroundScale")}
         />
 
         {/* Symbol Paint Role colours (ADR-0007): fill / border / secondary

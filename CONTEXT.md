@@ -78,14 +78,21 @@ _(ADR-0012, decided and not yet built. Today a project has exactly one font.)_
 ### Transform
 
 A rotation in degrees plus a **signed per-axis scale**, applied to one whole
-drawing layer. A Glyph has two independent ones — a **background transform** on
-the tile and a **foreground transform** on whichever Render Source is drawn — and
-both resolve through the **Style Cascade** at every tier. A negative scale
-component mirrors that axis, which is how a left-side bumper faces the other way;
-that reads unambiguously only because rotation sits beside it. The foreground
-transform scales whichever Render Source a Glyph happens to use, so switching
-sources never discards the sizing. Above `1` a layer is clipped to its own cell,
-so a large or rotated Glyph can't paint its neighbour in the atlas.
+drawing layer, **rotating before scaling and about the cell's centre**. A Glyph
+has two independent ones — a **background transform** on the tile and a
+**foreground transform** on whichever Render Source is drawn — and both resolve
+through the **Style Cascade** at every tier, component by component. A negative
+scale component mirrors that axis, which is how a left-side bumper faces the
+other way; that reads unambiguously only because rotation sits beside it, and it
+keeps meaning "the other way" under any rotation only because rotation is applied
+first. The foreground transform scales whichever Render Source a Glyph happens to
+use, so switching sources never discards the sizing.
+
+Degrees are canonicalised into **−180…180** where a rotation is written, not
+during resolution. Each layer is clipped to its own cell, so a large or rotated
+Glyph can't paint its neighbour in the atlas — which means a rotated layer loses
+whatever falls outside the cell: empty corners on square full-bleed tile art, cut
+corners on a drawn square.
 
 _Avoid:_ "content scale", "content transform", "flipX" — the drawn content is
 the **foreground** layer, and its sizing folded into a Transform (ADR-0012).
