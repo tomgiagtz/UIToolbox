@@ -76,8 +76,6 @@ function sourceFromValue(
  * shape, a shipped **Authored Background**, or one of the user's uploaded tile
  * images (issue #22).
  *
- * An ordinary cascade property, settable at Project, Device or Glyph scope.
- *
  * Picking "Shape" writes an explicit `{ kind: "shape" }` rather than clearing the
  * field: a Catalog **seed** outranks it, so bumpers and triggers would otherwise
  * just fall back to their authored tile.
@@ -266,7 +264,6 @@ export function StyleControls({
   onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const bg = style.background;
-  /** Show the shape and radius controls — nothing else draws the primitive. */
   const showsShapeFields = bg.source.kind === "shape";
   /**
    * Show the fill and border controls: they paint an Authored tile's sentinel

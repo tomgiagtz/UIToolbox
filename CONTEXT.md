@@ -281,8 +281,8 @@ through like any other Input. Because a seed is a base rather than pre-filled
 user data, resetting a Glyph lands back on the shipped tile rather than on the
 Device tier.
 
-Accepted consequence of the rank: a **device-wide** source change no-ops on the
-eight seeded shoulder Inputs, and the only escape is a per-Glyph override.
+Because a seed outranks the Device tier, a **device-wide** source change no-ops
+on the eight seeded shoulder Inputs, and the only escape is a per-Glyph override.
 
 ### Sprite Atlas
 

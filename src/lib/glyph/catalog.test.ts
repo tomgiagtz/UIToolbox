@@ -287,8 +287,7 @@ describe("Bumper/trigger Inputs seed an Authored Background (issue #18, ADR-0012
   });
 
   it("seeds every stick with no Background at all", () => {
-    // `null` is not `undefined`: the stick Symbol draws its own ring, so these
-    // are seeded *bare* rather than left to fall through to the Project base.
+    // `null` seeds a bare stick; `undefined` would fall through.
     for (const id of ["xbox-left-stick", "xbox-right-stick"])
       expect(backgroundOf("xbox", id), id).toBeNull();
     for (const id of ["ps-left-stick", "ps-right-stick"])

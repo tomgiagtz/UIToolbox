@@ -413,8 +413,7 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
   }
 
   it("offers the Background source control at Device scope", () => {
-    // A device-wide source is a real capability — one uploaded keycap tile for
-    // every key, or a device with no backers at all.
+    // A device-wide source is a real capability.
     renderAt({ tier: "device", deviceIndex: 0 });
     expect(screen.getByLabelText("Background source")).toBeInTheDocument();
   });

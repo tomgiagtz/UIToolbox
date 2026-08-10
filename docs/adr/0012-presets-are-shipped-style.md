@@ -149,9 +149,9 @@ with no backers at all — and the ban traded that away to buy protection the ra
 below already provides. The collision was never unsettleable; it just needed an
 order.
 
-The accepted cost of the order is stated plainly: a device-wide source change
-**no-ops on the eight seeded shoulder Inputs**, and the only escape is a
-per-Glyph override. That is deliberate. A seed is a presence fact about _that
+What the order costs, stated plainly: because a seed outranks the Device tier, a
+device-wide source change **no-ops on the eight seeded shoulder Inputs**, and the
+only escape is a per-Glyph override. That is deliberate. A seed is a presence fact about _that
 control_, so only a statement about that control may overrule it.
 
 Worth recording, because it is the case that motivated the ban: "keyboards may

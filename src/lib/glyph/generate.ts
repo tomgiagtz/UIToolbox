@@ -84,8 +84,7 @@ export function seedBackgroundSource(
   entry: CatalogInput | undefined,
 ): BackgroundSource | undefined {
   if (entry?.backgroundId === undefined) return undefined;
-  // A `null` seed is an explicit absence, and outranks the Device tier as any
-  // other seed does; `undefined` above is no seed at all.
+  // `null` seeds an explicit absence, not no seed.
   if (entry.backgroundId === null) return { kind: "none" };
   return {
     kind: "authored",
