@@ -76,11 +76,9 @@ function sourceFromValue(
  * shape, a shipped **Authored Background**, or one of the user's uploaded tile
  * images (issue #22).
  *
- * The choice is an ordinary cascade property, so it is written with the same
- * scoped `patch-style` as any other and can be set at Project, Device, or Glyph
- * scope. Picking "Shape" writes an explicit `{ kind: "shape" }` rather than
- * clearing the field: the Catalog per-Input tier outranks the Device tier, so
- * bumpers and triggers would otherwise just fall back to their authored tile.
+ * Picking "Shape" writes an explicit `{ kind: "shape" }` rather than clearing the
+ * field: a Catalog **seed** outranks it, so bumpers and triggers would otherwise
+ * just fall back to their authored tile.
  */
 function BackgroundSourceField({
   source,
@@ -266,14 +264,13 @@ export function StyleControls({
   onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const bg = style.background;
-  /** The Background draws its `shape` primitive — nothing else supplies one. */
-  const drawsShape = bg.source.kind === "shape";
+  const showsShapeFields = bg.source.kind === "shape";
   /**
-   * Fill and border are live: they paint an Authored tile's sentinel roles, or a
-   * drawn shape. An uploaded tile draws as authored and "none" draws nothing, so
-   * neither reaches them.
+   * Show the fill and border controls: they paint an Authored tile's sentinel
+   * roles or a drawn shape. An uploaded tile draws as authored and "none" draws
+   * nothing, so at a scope resolving to either they would be inert.
    */
-  const paintsApply = drawsShape || bg.source.kind === "authored";
+  const showsPaintFields = showsShapeFields || bg.source.kind === "authored";
 
   /** A reset handler for `field`, or undefined when it isn't overridden here. */
   function resetFor(field: StyleField): (() => void) | undefined {
@@ -306,7 +303,7 @@ export function StyleControls({
           primitive at all, so the shape and radius controls would be inert under
           either. Fill and border survive a tile — they tint it through its
           sentinel paint roles. */}
-      {drawsShape && (
+      {showsShapeFields && (
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
             <span>Background shape</span>
@@ -361,7 +358,7 @@ export function StyleControls({
         )}
       </Field>
 
-      {paintsApply && (
+      {showsPaintFields && (
         <ColorField
           label="Background fill"
           value={bg.fill}
@@ -370,7 +367,7 @@ export function StyleControls({
         />
       )}
 
-      {drawsShape && bg.shape === "rounded-rect" && (
+      {showsShapeFields && bg.shape === "rounded-rect" && (
         <Field
           label={`Corner radius (${bg.cornerRadius}px)`}
           onReset={resetFor("cornerRadius")}
@@ -391,7 +388,7 @@ export function StyleControls({
         </Field>
       )}
 
-      {paintsApply && (
+      {showsPaintFields && (
         <>
           <Field
             label={`Border width (${bg.border.width}px)`}

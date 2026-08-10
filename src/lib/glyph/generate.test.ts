@@ -7,7 +7,7 @@ import {
 } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
 import { projectReducer } from "@/lib/glyph/project";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import { createDefaultProject } from "@/lib/glyph/defaults";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import type {
   DeviceConfig,
@@ -83,7 +83,7 @@ function exportSettingsWithNaming(
 
 /**
  * A one-Device Xbox project holding a face button and a bumper — the pair that
- * separates the Catalog per-Input Background tier from the Device tier (#18).
+ * separates a seeded Input from an unseeded one (#18, ADR-0012 §2).
  */
 function xboxProject(): Project {
   return project({
@@ -494,8 +494,9 @@ describe("resolveScopeStyle", () => {
   });
 
   it("keeps bumpers on their Authored Background under a device-wide shape override (issue #18)", () => {
-    // The Catalog per-Input tier outranks the Device tier, so a project-wide
-    // "make everything a circle" must not strip the bumper/trigger backers.
+    // A device-wide "make everything a circle" must not strip the bumper/trigger
+    // backers. `shape` cascades at the Device tier but the seed outranks it for
+    // `source`, so the tile stands and only the primitive changes.
     const proj = projectReducer(xboxProject(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
@@ -531,5 +532,126 @@ describe("resolveScopeStyle", () => {
     expect(resolveScopeStyle(proj, { tier: "device", deviceIndex: 9 })).toEqual(
       proj.style,
     );
+  });
+});
+
+describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
+  const BUMPER = { kind: "authored", backgroundId: "bumper", flipX: true };
+
+  function resolved(proj: Project) {
+    const inputs = resolveDeviceInputs(proj.devices[0], proj);
+    return {
+      lb: inputs.find((i) => i.id === "xbox-lb")!,
+      a: inputs.find((i) => i.id === "xbox-a")!,
+    };
+  }
+
+  it("outranks a project-wide tile, which unseeded Inputs still take", () => {
+    // The row that proves the seed is a rank and not a fallback. A fallback could
+    // never fire: the Project base is a full Background and always has a source.
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "project" },
+      patch: {
+        background: { source: { kind: "image", imageId: "img-1.png" } },
+      },
+    });
+    const { lb, a } = resolved({
+      ...proj,
+      images: [{ id: "img-1.png", fileName: "t.png", type: "image/png" }],
+    });
+    expect(lb.style.background.source).toEqual(BUMPER);
+    expect(a.style.background.source).toEqual({
+      kind: "image",
+      imageId: "img-1.png",
+    });
+  });
+
+  it("recolours a seeded tile from the Device tier without replacing it", () => {
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { fill: "#ff0000" } },
+    });
+    const { lb } = resolved(proj);
+    expect(lb.style.background.source).toEqual(BUMPER);
+    expect(lb.style.background.fill).toBe("#ff0000");
+  });
+
+  it("returns a reset Glyph to its seeded tile, not to the Device tier", () => {
+    // Separability: because a seed is a base rather than pre-filled user data,
+    // clearing the user's own override lands back on the shipped tile. This is
+    // what the withdrawn layered-config draft would have paid to get.
+    const off = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      patch: { background: { source: { kind: "shape" } } },
+    });
+    expect(resolved(off).lb.style.background.source).toEqual({ kind: "shape" });
+
+    const reset = projectReducer(off, {
+      type: "clear-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      field: "backgroundSource",
+    });
+    expect(resolved(reset).lb.style.background.source).toEqual(BUMPER);
+    // And the override is gone entirely, leaving no trace of the edit.
+    expect(reset.devices[0].glyphStyles["xbox-lb"]).toBeUndefined();
+  });
+
+  it.each([
+    ["xbox", "xbox-left-stick"],
+    ["xbox", "xbox-right-stick"],
+    ["playstation", "ps-left-stick"],
+    ["playstation", "ps-right-stick"],
+  ])(
+    "resolves %s %s to no Background, and holds it against a device-wide source",
+    (catalogId, inputId) => {
+      // The stick Symbol draws its own ring, so its seed is an explicit absence —
+      // which outranks the Device tier exactly as an authored tile does.
+      function stickSource(proj: Project) {
+        return resolveDeviceInputs(proj.devices[0], proj).find(
+          (i) => i.id === inputId,
+        )?.style.background.source;
+      }
+      const withStick = project({
+        devices: [
+          {
+            name: catalogId,
+            catalogId,
+            enabled: [inputId],
+            custom: [],
+            style: {},
+            glyphStyles: {},
+          },
+        ],
+      });
+      expect(stickSource(withStick), inputId).toEqual({ kind: "none" });
+
+      const proj = projectReducer(withStick, {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 0 },
+        patch: { background: { source: { kind: "shape" } } },
+      });
+      expect(stickSource(proj), inputId).toEqual({ kind: "none" });
+    },
+  );
+
+  it("honours a device-wide source on unseeded Inputs, while the seed still wins", () => {
+    // The seed outranks a device-wide source.
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: {
+        background: { source: { kind: "none" }, fill: "#123456" },
+      },
+    });
+    expect(proj.devices[0].style.background).toEqual({
+      source: { kind: "none" },
+      fill: "#123456",
+    });
+    const { lb, a } = resolved(proj);
+    expect(a.style.background.source).toEqual({ kind: "none" });
+    expect(lb.style.background.source).toEqual(BUMPER);
   });
 });

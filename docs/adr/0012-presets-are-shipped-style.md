@@ -1,9 +1,11 @@
 # ADR-0012: A Catalog says what is present; a Preset says what it looks like
 
-- **Status:** Accepted — decided, not yet built. Implementation is filed as issues
-  off this ADR.
+- **Status:** Accepted — partly built. §1 and §2's three-tier cascade and Catalog
+  seeds landed with #78; the font, the transforms, §3–§7 and the Presets
+  themselves are still filed as issues off this ADR.
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
-  land-as-one-change requirement withdrawn 2026-08-07
+  land-as-one-change requirement withdrawn 2026-08-07, §2's per-Glyph-only
+  `background.source` withdrawn 2026-08-08
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
   loses `contentScale`, and `cellSize` moves without changing status), ADR-0007 §3
   (its four-tier framing of `symbolPaints`, and where the brand palette ships),
@@ -127,38 +129,74 @@ Note this is a change to the **resolver only**. `StyleScope` is already
 Device and Glyph, never a selectable scope. No scope disappears from the Style
 tab and the reset control keeps its mechanism.
 
-#### What a Glyph is drawn from is per-Glyph; how it's painted cascades
+#### `background.source` cascades at every tier; the seed outranks the Device tier
 
-`background.source` becomes **per-Glyph-only**, exactly like `renderSource`. The
-Device tier keeps `fill` / `border` / `cornerRadius` / `shape`, but never
-`source`.
+`background.source` is settable at all three tiers, like every other style
+property. The protection the shoulders need comes from the seed's **rank**, not
+from a hole in a tier.
 
-This is not tidiness. `symbolId` gets away with being a fallback rather than a
-tier because `renderSource` is only ever set per Glyph; `background.source` is
-the opposite — a device-wide "everything is a plain shape" is the exact case
-`style.ts`'s tri-state was written to defend. Copying the `symbolId` fallback
-pattern naively would have flattened all four shoulders under such a device
-override. Making the Device tier structurally unable to set `source` removes the
-collision rather than settling it by precedence.
+_Amended 2026-08-08, in place._ As accepted, this subsection read _"What a Glyph
+is drawn from is per-Glyph; how it's painted cascades"_ and made
+`background.source` **per-Glyph-only**: the Device tier was structurally unable
+to name one (`DeviceStyleOverride`, a `source?: never` split, and a launder in
+`patchDeviceStyle`). The argument was that a device-wide "everything is a plain
+shape" would flatten all four shoulders, and that removing the collision by
+construction beat settling it by precedence.
+
+It loses because it priced the collision wrong. A device-wide source is a real
+capability — a keyboard whose every key is one uploaded keycap tile, a device
+with no backers at all — and the ban traded that away to buy protection the rank
+below already provides. The collision was never unsettleable; it just needed an
+order.
+
+What the order costs, stated plainly: because a seed outranks the Device tier, a
+device-wide source change **no-ops on the eight seeded shoulder Inputs**, and the
+only escape is a per-Glyph override. That is deliberate. A seed is a presence fact about _that
+control_, so only a statement about that control may overrule it.
+
+Worth recording, because it is the case that motivated the ban: "keyboards may
+have square backgrounds while controllers have circle" is `background.shape`,
+which has always cascaded at the Device tier and was never touched here.
 
 #### The Catalog seed has an explicit rank
 
 > effective background source = the **Glyph override**, if set; otherwise the
-> **Catalog seed**, if that Input has one; otherwise the **Project base**.
+> **Catalog seed**, if that Input has one; otherwise the **Device override**;
+> otherwise the **Project base**.
 
 | the user does                   | LB draws                                   |
 | ------------------------------- | ------------------------------------------ |
 | nothing                         | bumper tile _(seed)_                       |
 | project-wide: uploaded tile     | bumper tile _(seed outranks project base)_ |
-| device-wide: plain rounded rect | bumper tile _(Device can't set source)_    |
+| device-wide: plain rounded rect | bumper tile _(seed outranks Device)_       |
 | device-wide: red fill           | bumper tile, **recoloured red**            |
 | on LB: plain shape              | rounded rect _(Glyph override wins)_       |
 
-An Input with no seed (`key-space`) falls through to Project on every row.
+An Input with no seed (`key-space`, `xbox-a`) falls through on every row — row 3
+included, so a device-wide source really does reach every unseeded Input.
+
+**Deleting the Catalog tier removed a style tier, not a precedence position.**
+The tier is gone: a Catalog holds no `StyleOverride`, nothing there is
+user-editable, and no scope disappeared from the Style tab, because the Catalog
+tier was never a selectable one. What survived is an **ordering fact** about one
+field — where a seeded `source` sits relative to the tiers that remain. A seed
+is not a fourth tier, and the cascade is still three tiers **plus seeded
+values**.
 
 The rank is explicit rather than a "only when nothing sets it" fallback because
 such a fallback would **never fire**: the Project base is a full `Background` and
 `DEFAULT_BACKGROUND` always carries `source: { kind: "shape" }`.
+
+_Erratum, 2026-08-08 (found while building this section)._ The amendment table
+below says this supersedes ADR-0006's **tri-state `backgroundId`**. That is right
+about the field ADR-0006 named — which ADR-0009 had already deleted when it
+replaced the Background's tile fields with the `source` union — but it reads as
+retiring the _distinction_, and the distinction survives. On `source`, _omitting_
+the field and setting it explicitly to `{ kind: "shape" }` still differ: an
+omitted source now falls to the **seed**, so only an explicit value can turn a
+bumper's tile off. Row 5 of the table above depends on exactly that. What changed
+is the shape of the premise, not the behaviour: the seed outranks the Device tier
+directly, where before an entire Catalog tier sat above Device.
 
 **Separability is preserved, not forgone** — the cost the withdrawn draft
 accepted is one we don't pay. Reset is `clearOverrideField` on the user's own
@@ -496,18 +534,18 @@ to "empty or unknown" and repairing silently as it does today.
 
 ## What this amends
 
-| Record                                                      | Change                                                                                                                                                             |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **ADR-0006** — four-tier cascade                            | **Superseded to three tiers.** The Catalog per-Input tier is deleted; its payload becomes Catalog seed fields with an explicit rank for `background.source`.       |
-| **ADR-0006** — "the font is deliberately not cascadable"    | **Superseded.** `fontFamily` cascades at all three tiers. `style.ts`'s module doc says the same thing and follows.                                                 |
-| **ADR-0006** — "cellSize is deliberately not cascadable"    | **Clarified, not superseded.** `exportSettings.cellSize` is still Project-global and still uncascadable; only its path changes.                                    |
-| **ADR-0006** — tri-state `backgroundId` (its #18 amendment) | **Superseded.** The tri-state existed because the Catalog tier outranked Device; with `source` per-Glyph-only and the seed explicitly ranked, the reason is gone.  |
-| **ADR-0007 §3** — `symbolPaints` through four tiers         | **Superseded** to three. Its "the Device tier may set uniform role defaults; per-Input defaults outrank it" loses its middle term.                                 |
-| **ADR-0007 §3** — the brand palette ships at Catalog tier   | **Superseded.** There is no such tier. The palette is Preset payload — a Background fill plus a desaturated `symbolPaints.fill` — and is filed separately (#75).   |
-| **ADR-0008** — `contentScale` joins the cascade             | **Superseded.** `contentScale` is deleted, replaced by `content.transform`.                                                                                        |
-| **ADR-0009** — `flipX` rides inside the authored source     | **Superseded.** Orientation is a layer property, so the source no longer carries it; the union loses `flipX`.                                                      |
-| **ADR-0009** — a source is settable at any scope            | **Superseded.** `background.source` is per-Glyph-only. Wholesale replacement, and "none" as a source rather than a shape, both stand.                              |
-| **ADR-0010** — validate, discard, report                    | **Unchanged, and relied on.** It never applies to shipped Presets, which are never parsed at runtime. It is exactly what makes the migration note below tolerable. |
+| Record                                                      | Change                                                                                                                                                                                                |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ADR-0006** — four-tier cascade                            | **Superseded to three tiers.** The Catalog per-Input tier is deleted; its payload becomes Catalog seed fields with an explicit rank for `background.source`.                                          |
+| **ADR-0006** — "the font is deliberately not cascadable"    | **Superseded.** `fontFamily` cascades at all three tiers. `style.ts`'s module doc says the same thing and follows.                                                                                    |
+| **ADR-0006** — "cellSize is deliberately not cascadable"    | **Clarified, not superseded.** `exportSettings.cellSize` is still Project-global and still uncascadable; only its path changes.                                                                       |
+| **ADR-0006** — tri-state `backgroundId` (its #18 amendment) | **Kept, on a new field.** The distinction survives on `source` (see the erratum below), and `CatalogInput.backgroundId` is itself tri-state: `null` seeds _no_ background, as all four sticks now do. |
+| **ADR-0007 §3** — `symbolPaints` through four tiers         | **Superseded** to three. Its "the Device tier may set uniform role defaults; per-Input defaults outrank it" loses its middle term.                                                                    |
+| **ADR-0007 §3** — the brand palette ships at Catalog tier   | **Superseded.** There is no such tier. The palette is Preset payload — a Background fill plus a desaturated `symbolPaints.fill` — and is filed separately (#75).                                      |
+| **ADR-0008** — `contentScale` joins the cascade             | **Superseded.** `contentScale` is deleted, replaced by `content.transform`.                                                                                                                           |
+| **ADR-0009** — `flipX` rides inside the authored source     | **Superseded.** Orientation is a layer property, so the source no longer carries it; the union loses `flipX`.                                                                                         |
+| **ADR-0009** — a source is settable at any scope            | **Unchanged** (the ban that superseded it was withdrawn 2026-08-08). A source is settable at every tier; a Catalog seed outranks the Device tier for one Input.                                       |
+| **ADR-0010** — validate, discard, report                    | **Unchanged, and relied on.** It never applies to shipped Presets, which are never parsed at runtime. It is exactly what makes the migration note below tolerable.                                    |
 
 ## Migration
 

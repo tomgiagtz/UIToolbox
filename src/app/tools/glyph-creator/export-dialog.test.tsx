@@ -2,7 +2,7 @@ import { createRef } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ExportDialog, type ExportSelection } from "./export-dialog";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import { createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
 

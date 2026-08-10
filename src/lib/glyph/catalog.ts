@@ -2,18 +2,18 @@
  * Device Catalogs (ADR-0005).
  *
  * A Device owns a **fixed Catalog** of known Inputs — every keyboard key, every
- * pad button. Each entry has a stable `id`, a default `label`, and (later, once
- * authored) an optional default Symbol and a Catalog per-Input style default.
- * A **Preset** is the default-enabled subset of a Catalog's ids, in generation
- * order: the Keyboard enables ~24 common gaming keys out of a full board; the
- * pads enable their whole Catalog.
+ * pad button. **A Catalog says what is present** (ADR-0012 §1): each entry has a
+ * stable `id`, a default `label`, and which shipped art *depicts* that control.
+ * Its **Default Selection** is the subset enabled on a fresh Device, in
+ * generation order: the Keyboard enables ~24 common gaming keys out of a full
+ * board; the pads enable their whole Catalog.
  *
  * The Catalog is code-maintained data, not authored art — adding a device means
- * adding entries here, not drawing anything (ADR-0005). The Symbol / authored
- * Background wiring is intentionally left as a skeleton: `symbolId` and
- * `defaultStyle` exist on the type but ship empty until those assets land.
+ * adding entries here, not drawing anything (ADR-0005).
+ *
+ * Nothing here is style. The art fields are **seeds** — they name the asset a
+ * control *is* — so this file has no dependency on the Style Cascade.
  */
-import type { StyleOverride } from "@/lib/glyph/style";
 
 /** One known Input a Device offers. Stable `id`; `label` is its default text. */
 export interface CatalogInput {
@@ -21,7 +21,7 @@ export interface CatalogInput {
   id: string;
   /** Default label shown / rendered for this Input (e.g. "Space", "A"). */
   label: string;
-  /** Default Symbol id, once Symbols are authored (skeleton: unset for now). */
+  /** The Symbol that depicts this Input, drawn unless a Glyph overrides it. */
   symbolId?: string;
   /**
    * Other names this Input answers to — the other pad's word for the same
@@ -31,14 +31,22 @@ export interface CatalogInput {
    */
   aliases?: string[];
   /**
-   * Catalog per-Input style default — the third cascade tier. Lets a bumper keep
-   * its authored Background even under a device-wide override (ADR-0006).
-   * Skeleton: unset until authored Backgrounds land.
+   * **Seeds** the Background source, above the Device tier (ADR-0012 §2).
+   * Tri-state: omitted is unseeded, `null` seeds *no* background, a string
+   * seeds that tile.
    */
-  defaultStyle?: StyleOverride;
+  backgroundId?: string | null;
+  /**
+   * Face this control the other way — the left-side shoulders share one
+   * right-facing tile. Meaningless without {@link backgroundId}.
+   *
+   * A bare boolean, never a transform fragment: this file may only say what is
+   * present, and a boolean cannot grow a `rotation: 15`.
+   */
+  mirrored?: boolean;
 }
 
-/** A Device's fixed Catalog plus its default-enabled Preset (ordered ids). */
+/** A Device's fixed Catalog plus its **Default Selection** (ordered ids). */
 export interface DeviceCatalog {
   /** Stable Catalog / Device kind id, e.g. "keyboard". */
   id: string;
@@ -46,8 +54,12 @@ export interface DeviceCatalog {
   name: string;
   /** Every known Input, in Device-Layout reading order. */
   inputs: CatalogInput[];
-  /** The Preset: default-enabled ids, in the order they generate. */
-  preset: string[];
+  /**
+   * The **Default Selection**: which ids start enabled on a fresh Device, in the
+   * order they generate. Named for what it is rather than "preset", which
+   * ADR-0012 gives to a shipped *look*.
+   */
+  defaultEnabled: string[];
 }
 
 // --- Keyboard catalog ------------------------------------------------------
@@ -113,11 +125,11 @@ const KEYBOARD_INPUTS: CatalogInput[] = [
 ];
 
 /**
- * The Keyboard Preset: the ~24 common gaming keys enabled by default, in the
- * exact order the tool generated them before the Catalog model. The rest of the
- * board ships in the Catalog but disabled.
+ * The Keyboard's Default Selection: the ~24 common gaming keys enabled by
+ * default, in the exact order the tool generated them before the Catalog model.
+ * The rest of the board ships in the Catalog but disabled.
  */
-const KEYBOARD_PRESET: string[] = [
+const KEYBOARD_DEFAULT_ENABLED: string[] = [
   "key-w",
   "key-a",
   "key-s",
@@ -147,26 +159,14 @@ const KEYBOARD_PRESET: string[] = [
 // --- Pad catalogs ----------------------------------------------------------
 //
 // The pads enable their whole Catalog by default, so each entry list doubles as
-// the Preset. Order matches the labels the tool generated pre-Catalog.
+// the Default Selection. Order matches the labels the tool generated pre-Catalog.
 
-/** The optional half of a pad Catalog entry (see {@link pad}). */
-interface PadEntry {
-  /** Default Symbol as Render Source (issue #17). */
-  symbolId?: string;
-  /** Default Authored Background tile, via the per-Input style tier (issue #18). */
-  backgroundId?: string;
-  /**
-   * Mirror that tile horizontally, so a left-side bumper/trigger faces opposite
-   * the right-side one it shares right-facing art with.
-   */
-  flipX?: boolean;
-  /** Other names this Input answers to (see {@link CatalogInput.aliases}). */
-  aliases?: string[];
-}
+/** A {@link CatalogInput}'s seed/lookup half, minus the id and label. */
+type PadEntry = Omit<CatalogInput, "id" | "label">;
 
 /**
  * Build a pad Catalog. Each entry is `[slug, label, PadEntry?]`, where the third
- * element carries whatever defaults that Input has. Face buttons the shipped
+ * element carries whatever seeds that Input has. Face buttons the shipped
  * atlases don't yet author simply stay label-rendered.
  */
 function pad(
@@ -174,24 +174,14 @@ function pad(
   entries: [string, string, PadEntry?][],
 ): CatalogInput[] {
   return entries.map(
-    ([slug, label, { symbolId, backgroundId, flipX, aliases } = {}]) => ({
+    ([slug, label, { symbolId, backgroundId, mirrored, aliases } = {}]) => ({
       id: `${prefix}-${slug}`,
       label,
       ...(symbolId ? { symbolId } : {}),
       ...(aliases ? { aliases } : {}),
-      ...(backgroundId
-        ? {
-            defaultStyle: {
-              background: {
-                source: {
-                  kind: "authored" as const,
-                  backgroundId,
-                  ...(flipX ? { flipX: true } : {}),
-                },
-              },
-            },
-          }
-        : {}),
+      // `!== undefined`, not truthiness: `null` is a seed, not an absent one.
+      ...(backgroundId !== undefined ? { backgroundId } : {}),
+      ...(mirrored ? { mirrored: true } : {}),
     }),
   );
 }
@@ -210,9 +200,17 @@ function shoulder(
 ): PadEntry {
   return {
     backgroundId: tile,
-    ...(side === "left" ? { flipX: true } : {}),
+    ...(side === "left" ? { mirrored: true } : {}),
     aliases,
   };
+}
+
+/**
+ * A stick Input: its Symbol draws its own ring, so it seeds *no* Background
+ * rather than leaving one to fall through from the Project base.
+ */
+function stick(): PadEntry {
+  return { symbolId: "stick", backgroundId: null };
 }
 
 // Asset ids are bare: the Device supplies the scope at resolve time, so both pads
@@ -228,8 +226,8 @@ const XBOX_INPUTS = pad("xbox", [
   ["rt", "RT", shoulder("trigger", "right", "R2", "Right Trigger")],
   ["view", "View", { symbolId: "view" }],
   ["menu", "Menu", { symbolId: "menu" }],
-  ["left-stick", "Left Stick", { symbolId: "stick" }],
-  ["right-stick", "Right Stick", { symbolId: "stick" }],
+  ["left-stick", "Left Stick", stick()],
+  ["right-stick", "Right Stick", stick()],
   ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
   ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
   ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
@@ -247,8 +245,8 @@ const PLAYSTATION_INPUTS = pad("ps", [
   ["r2", "R2", shoulder("trigger", "right", "RT", "Right Trigger")],
   ["share", "Share", { symbolId: "share" }],
   ["options", "Options", { symbolId: "options" }],
-  ["left-stick", "Left Stick", { symbolId: "stick" }],
-  ["right-stick", "Right Stick", { symbolId: "stick" }],
+  ["left-stick", "Left Stick", stick()],
+  ["right-stick", "Right Stick", stick()],
   ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
   ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
   ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
@@ -261,19 +259,19 @@ export const DEVICE_CATALOGS: DeviceCatalog[] = [
     id: "keyboard",
     name: "Keyboard",
     inputs: KEYBOARD_INPUTS,
-    preset: KEYBOARD_PRESET,
+    defaultEnabled: KEYBOARD_DEFAULT_ENABLED,
   },
   {
     id: "xbox",
     name: "Xbox",
     inputs: XBOX_INPUTS,
-    preset: XBOX_INPUTS.map((i) => i.id),
+    defaultEnabled: XBOX_INPUTS.map((i) => i.id),
   },
   {
     id: "playstation",
     name: "PlayStation",
     inputs: PLAYSTATION_INPUTS,
-    preset: PLAYSTATION_INPUTS.map((i) => i.id),
+    defaultEnabled: PLAYSTATION_INPUTS.map((i) => i.id),
   },
 ];
 
@@ -303,8 +301,8 @@ export function catalogNameIndex(catalog: DeviceCatalog): Map<string, string> {
   return byName;
 }
 
-/** The labels a Catalog's Preset resolves to, in generation order. */
-export function catalogPresetLabels(catalog: DeviceCatalog): string[] {
+/** The labels a Catalog's Default Selection resolves to, in generation order. */
+export function defaultEnabledLabels(catalog: DeviceCatalog): string[] {
   const byId = catalogIndex(catalog);
-  return catalog.preset.map((id) => byId.get(id)?.label ?? "");
+  return catalog.defaultEnabled.map((id) => byId.get(id)?.label ?? "");
 }

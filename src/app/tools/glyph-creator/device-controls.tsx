@@ -10,7 +10,7 @@ import { DeviceLayout } from "./device-layout";
 
 /**
  * Controls for Devices (#5): pick which Devices to generate (each seeded from a
- * Catalog Preset) and choose which one to preview/edit. The chosen Device's
+ * Catalog's Default Selection) and choose which one to preview/edit. The chosen Device's
  * enabled Catalog Inputs and custom Inputs are edited by {@link InputEditor} in
  * the Inputs section.
  */

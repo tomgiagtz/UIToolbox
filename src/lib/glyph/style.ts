@@ -1,16 +1,20 @@
 /**
- * The Style Cascade (ADR-0006).
+ * The Style Cascade (ADR-0006, amended to three tiers by ADR-0012 §2).
  *
- * A Glyph's visual style resolves through four tiers, lowest precedence first:
+ * A Glyph's visual style resolves through three tiers, lowest precedence first:
  *
  * ```
- * Project defaults → Device overrides → Catalog per-Input default → Glyph overrides
+ * Project base → Device override → Glyph override
  * ```
  *
  * The Project tier is a **full** {@link GlyphStyle}; every higher tier is a
  * sparse {@link StyleOverride} that patches only the properties it sets. Anything
  * left unset falls up the chain. {@link resolveStyle} folds a base plus any
  * number of overrides into one effective {@link GlyphStyle}.
+ *
+ * Every property is settable at every tier. A Catalog's art **seed** ranks
+ * between the Glyph and Device tiers for `background.source` alone: see
+ * {@link resolveGlyphStyle}.
  *
  * The font is deliberately **not** part of this cascade, and neither is
  * `cellSize`: both stay Project-global (see ADR-0006). `cellSize` is an atlas
@@ -66,16 +70,12 @@ export interface GlyphStyle {
 /** A sparse patch of a {@link Background}; unset fields fall up the cascade. */
 export interface BackgroundOverride {
   /**
-   * Where this tier draws its tile from (issue #22). Replaced wholesale, never
-   * merged — a source is one choice, so patching an `image` onto an `authored`
-   * base must not leave a tile that is half of each.
+   * Where the tile is drawn from (issue #22). Replaced wholesale, never merged —
+   * a source is one choice, so patching an `image` onto an `authored` base must
+   * not leave a tile that is half of each.
    *
-   * Setting it to `{ kind: "shape" }` is meaningfully different from omitting it:
-   * the Catalog per-Input tier outranks the Device tier, so bumpers and triggers
-   * carry a tile by default and *omitting* the field just lets that tile fall
-   * through. Only an explicit "shape" turns it off, which is what makes a
-   * per-Glyph shape change stick — and likewise an explicit `{ kind: "none" }`,
-   * the only way to turn an inherited tile off without putting a shape back.
+   * Omitting it falls to the Catalog **seed**; only an explicit value turns a
+   * seeded tile off, `{ kind: "none" }` without putting a shape back.
    */
   source?: BackgroundSource;
   /** Read only where the resolved source is `{ kind: "shape" }`. */
@@ -86,9 +86,9 @@ export interface BackgroundOverride {
 }
 
 /**
- * A sparse override applied at the Device, Catalog per-Input, or Glyph tier.
- * An empty object (`{}`) is a no-op, which is the default state at every tier
- * above Project — so a fresh project resolves to its Project style untouched.
+ * A sparse override applied at the Glyph tier (and the shape a Project-tier patch
+ * takes). An empty object (`{}`) is a no-op, which is the default state at every
+ * tier above Project — so a fresh project resolves to its Project style untouched.
  */
 export interface StyleOverride {
   textColor?: string;
@@ -283,6 +283,37 @@ export function resolveStyle(
   }
 
   return { textColor, background, symbolPaints, contentScale };
+}
+
+/**
+ * Resolve one Glyph's effective style through the three tiers plus its Catalog
+ * **seed** (ADR-0012 §2), which ranks between the Glyph and Device tiers:
+ *
+ * ```
+ * source = Glyph override → Catalog seed → Device tier → Project base
+ * ```
+ *
+ * A seed is a presence fact about *that control*, so only a statement about that
+ * control may overrule it. Because the seed outranks the Device tier, a
+ * device-wide source no-ops on the eight seeded shoulder Inputs, and the only
+ * escape is a per-Glyph override.
+ *
+ * The seed rides in as a pseudo-tier rather than a second pass: `applyBackground`
+ * replaces `source` wholesale, so a tier carrying only that field leaves the
+ * Device tier's `fill` and border intact.
+ */
+export function resolveGlyphStyle(
+  base: GlyphStyle,
+  seed: BackgroundSource | undefined,
+  device: StyleOverride | undefined,
+  glyph: StyleOverride | undefined,
+): GlyphStyle {
+  return resolveStyle(
+    base,
+    device,
+    seed && { background: { source: seed } },
+    glyph,
+  );
 }
 
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */

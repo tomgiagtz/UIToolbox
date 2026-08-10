@@ -26,8 +26,8 @@ export type BackgroundSource =
    *
    * A *source* rather than a fourth {@link BackgroundShape} because "draw
    * nothing" is a statement about the tile as a whole: a shape can only suppress
-   * the primitive, and the Catalog per-Input tier outranks the Device tier, so
-   * only a source can turn off an inherited Authored Background.
+   * the primitive, and a Catalog **seed** outranks every tier below the Glyph,
+   * so only a source can turn off the tile a bumper is seeded with.
    */
   | { kind: "none" }
   /** The primitive named by {@link Background.shape}. */
@@ -35,7 +35,7 @@ export type BackgroundSource =
   /**
    * A shipped Authored Background tile, drawn from its SVG with the fill/border
    * sentinels recoloured to this Background's `fill` / `border.color`.
-   * Bumper/trigger Inputs default to one via the Catalog per-Input tier (#18).
+   * Bumper/trigger Inputs are **seeded** with one by their Catalog entry (#18).
    */
   | {
       kind: "authored";
@@ -169,7 +169,7 @@ export interface ResolvedInput {
   style: GlyphStyle;
   /**
    * Render Source: the Symbol id to draw in place of the label. Well-known
-   * Catalog Inputs default to their Symbol via the Catalog per-Input tier.
+   * Catalog Inputs fall back to the Symbol their Catalog entry names.
    */
   symbolId?: string;
   /** Render Source: the {@link ImageAsset} id to draw in place of the label. */

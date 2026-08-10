@@ -4,10 +4,12 @@
 - **Date:** 2026-07-27
 - **Amends:** ADR-0006 (the Style Cascade's Background property)
 - **Amended by:** ADR-0012 — `flipX` leaves the union (orientation becomes a
-  layer transform, so the source no longer needs to carry it), and a source is no
-  longer settable at any scope: it is **per-Glyph-only**, with a Catalog seed
-  ranked beneath it. Wholesale replacement, and "none" as a source rather than a
-  fourth shape, both stand.
+  layer transform, so the source no longer needs to carry it). A source stays
+  settable at **every** scope; what changed is that a Catalog **seed** outranks
+  the Device tier for the Input it names. Wholesale replacement, and "none" as a
+  source rather than a fourth shape, both stand. _(An earlier draft of ADR-0012
+  §2 made the source per-Glyph-only with the seed ranked beneath it; that was
+  withdrawn 2026-08-08.)_
 
 ## Context
 
@@ -18,7 +20,9 @@ bumper-shaped — as an optional `backgroundId` beside the shape, with a `flipX`
 flag to mirror the left-side ones. Inside a sparse override the id could also be
 `null`, meaning "no tile, draw the plain shape", because the Catalog per-Input
 tier outranks the Device tier and omitting the field would just let a bumper's
-tile fall through again.
+tile fall through again. _(ADR-0012 §2 deleted that tier; the premise is now that
+a Catalog **seed** outranks the Device tier directly, and the conclusion is
+unchanged.)_
 
 Issue #22 adds a third kind of tile: an **uploaded image**, the user's own tile
 graphic. Bolting a second optional id onto the Background would leave three
@@ -51,8 +55,8 @@ type BackgroundSource =
   `shape: "none"`, and that was the wrong axis: the renderer drew tile art
   whenever it had a bitmap and never consulted the shape, so "none" on a bumper
   still drew the bumper tile. A shape can only ever suppress the primitive, and
-  the Catalog per-Input tier outranks the Device tier — so only a source can turn
-  off inherited art. `{ kind: "none" }` draws no primitive **and** no tile,
+  a bumper's tile outranks the tier a shape would be set at — so only a source can
+  turn off inherited art. `{ kind: "none" }` draws no primitive **and** no tile,
   leaving a transparent, content-only Glyph at whatever scope sets it.
 - An **uploaded tile** references an `ImageAsset` id — the same manifest,
   registry, IndexedDB store and ZIP bundling that custom image Render Sources use

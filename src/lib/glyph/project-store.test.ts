@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
-import { DEFAULT_FONT_FAMILY, createDefaultProject } from "@/lib/glyph/presets";
+import {
+  DEFAULT_FONT_FAMILY,
+  createDefaultProject,
+} from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { Project } from "@/lib/glyph/types";
 

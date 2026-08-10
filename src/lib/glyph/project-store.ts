@@ -13,7 +13,7 @@
  * access is defensively guarded so a private-mode / quota / SSR failure degrades
  * to "start fresh" rather than throwing.
  */
-import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/defaults";
 import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,

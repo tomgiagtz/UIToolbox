@@ -3,7 +3,7 @@ import {
   DEVICE_CATALOGS,
   catalogIndex,
   catalogNameIndex,
-  catalogPresetLabels,
+  defaultEnabledLabels,
   getCatalog,
 } from "@/lib/glyph/catalog";
 import {
@@ -97,40 +97,44 @@ describe("DEVICE_CATALOGS", () => {
     }
   });
 
-  it("lists every preset id as a real Catalog entry", () => {
+  it("lists every Default Selection id as a real Catalog entry", () => {
     for (const catalog of DEVICE_CATALOGS) {
       const ids = new Set(catalog.inputs.map((i) => i.id));
-      for (const presetId of catalog.preset) {
-        expect(ids.has(presetId)).toBe(true);
+      for (const enabledId of catalog.defaultEnabled) {
+        expect(ids.has(enabledId)).toBe(true);
       }
-      // Preset ids themselves are unique.
-      expect(new Set(catalog.preset).size).toBe(catalog.preset.length);
+      // Default Selection ids themselves are unique.
+      expect(new Set(catalog.defaultEnabled).size).toBe(
+        catalog.defaultEnabled.length,
+      );
     }
   });
 });
 
-describe("Presets seed the legacy default-enabled subset", () => {
-  it("keyboard preset resolves to the ~24 legacy keys, in order", () => {
-    expect(catalogPresetLabels(getCatalog("keyboard")!)).toEqual(
+describe("The Default Selection is the legacy default-enabled subset", () => {
+  it("keyboard resolves to the ~24 legacy keys, in order", () => {
+    expect(defaultEnabledLabels(getCatalog("keyboard")!)).toEqual(
       LEGACY_KEYBOARD,
     );
   });
 
-  it("keyboard Catalog is larger than its enabled preset", () => {
+  it("keyboard Catalog is larger than its Default Selection", () => {
     const keyboard = getCatalog("keyboard")!;
-    expect(keyboard.inputs.length).toBeGreaterThan(keyboard.preset.length);
+    expect(keyboard.inputs.length).toBeGreaterThan(
+      keyboard.defaultEnabled.length,
+    );
   });
 
-  it("xbox preset enables the whole Catalog, in legacy order", () => {
+  it("xbox enables the whole Catalog, in legacy order", () => {
     const xbox = getCatalog("xbox")!;
-    expect(xbox.preset.length).toBe(xbox.inputs.length);
-    expect(catalogPresetLabels(xbox)).toEqual(LEGACY_XBOX);
+    expect(xbox.defaultEnabled.length).toBe(xbox.inputs.length);
+    expect(defaultEnabledLabels(xbox)).toEqual(LEGACY_XBOX);
   });
 
-  it("playstation preset enables the whole Catalog, in legacy order", () => {
+  it("playstation enables the whole Catalog, in legacy order", () => {
     const ps = getCatalog("playstation")!;
-    expect(ps.preset.length).toBe(ps.inputs.length);
-    expect(catalogPresetLabels(ps)).toEqual(LEGACY_PLAYSTATION);
+    expect(ps.defaultEnabled.length).toBe(ps.inputs.length);
+    expect(defaultEnabledLabels(ps)).toEqual(LEGACY_PLAYSTATION);
   });
 });
 
@@ -230,19 +234,17 @@ describe("Shoulder Inputs carry cross-pad aliases", () => {
   });
 });
 
-describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", () => {
+describe("Bumper/trigger Inputs seed an Authored Background (issue #18, ADR-0012 §2)", () => {
   function backgroundOf(catalogId: string, inputId: string) {
-    const source = catalogIndex(getCatalog(catalogId)!).get(inputId)
-      ?.defaultStyle?.background?.source;
-    return source?.kind === "authored" ? source.backgroundId : undefined;
+    return catalogIndex(getCatalog(catalogId)!).get(inputId)?.backgroundId;
   }
 
-  it("defaults both Xbox bumpers to the bumper tile", () => {
+  it("seeds both Xbox bumpers with the bumper tile", () => {
     expect(backgroundOf("xbox", "xbox-lb")).toBe("bumper");
     expect(backgroundOf("xbox", "xbox-rb")).toBe("bumper");
   });
 
-  it("defaults both Xbox triggers to the trigger tile", () => {
+  it("seeds both Xbox triggers with the trigger tile", () => {
     expect(backgroundOf("xbox", "xbox-lt")).toBe("trigger");
     expect(backgroundOf("xbox", "xbox-rt")).toBe("trigger");
   });
@@ -265,9 +267,7 @@ describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", 
 
   it("mirrors the left-side bumper/trigger so it faces opposite the right-side one", () => {
     function flipOf(catalogId: string, inputId: string) {
-      const source = catalogIndex(getCatalog(catalogId)!).get(inputId)
-        ?.defaultStyle?.background?.source;
-      return source?.kind === "authored" ? source.flipX : undefined;
+      return catalogIndex(getCatalog(catalogId)!).get(inputId)?.mirrored;
     }
     // Both sides share one right-facing tile; only the left ones are flipped.
     expect(flipOf("xbox", "xbox-lb")).toBe(true);
@@ -281,18 +281,37 @@ describe("Bumper/trigger Inputs default to an Authored Background (issue #18)", 
     expect(flipOf("playstation", "ps-r2")).toBeUndefined();
   });
 
-  it("leaves face buttons Background-less", () => {
+  it("leaves face buttons unseeded", () => {
     expect(backgroundOf("xbox", "xbox-a")).toBeUndefined();
     expect(backgroundOf("playstation", "ps-cross")).toBeUndefined();
+  });
+
+  it("seeds every stick with no Background at all", () => {
+    // `null` seeds a bare stick; `undefined` would fall through.
+    for (const id of ["xbox-left-stick", "xbox-right-stick"])
+      expect(backgroundOf("xbox", id), id).toBeNull();
+    for (const id of ["ps-left-stick", "ps-right-stick"])
+      expect(backgroundOf("playstation", id), id).toBeNull();
+  });
+
+  it("never mirrors an Input that seeds no tile", () => {
+    // `mirrored` orients a seeded tile and means nothing without one, so the two
+    // fields must not drift apart into a flag that points at nothing.
+    for (const catalog of DEVICE_CATALOGS) {
+      for (const input of catalog.inputs) {
+        if (input.mirrored)
+          expect(typeof input.backgroundId, input.id).toBe("string");
+      }
+    }
   });
 
   it("only references Authored Background ids the manifest actually ships", () => {
     const shipped = new Set(AUTHORED_BACKGROUNDS.map((b) => b.id));
     for (const catalog of DEVICE_CATALOGS) {
       for (const input of catalog.inputs) {
-        const source = input.defaultStyle?.background?.source;
-        if (source?.kind === "authored")
-          expect(shipped.has(source.backgroundId)).toBe(true);
+        // `null` names no tile to look up — it is the seeded absence of one.
+        if (typeof input.backgroundId === "string")
+          expect(shipped.has(input.backgroundId), input.id).toBe(true);
       }
     }
   });

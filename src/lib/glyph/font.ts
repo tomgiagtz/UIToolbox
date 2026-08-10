@@ -1,4 +1,4 @@
-import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/presets";
+import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/defaults";
 
 /** Public URL of the bundled default font (Inter, SIL OFL 1.1). See #13. */
 export const DEFAULT_FONT_URL = "/fonts/Inter-Regular.woff2";

@@ -1,4 +1,4 @@
-import { DEFAULT_PROJECT_NAME } from "@/lib/glyph/presets";
+import { DEFAULT_PROJECT_NAME } from "@/lib/glyph/defaults";
 import type { CaseStyle } from "@/lib/glyph/types";
 
 export interface NameTokens {

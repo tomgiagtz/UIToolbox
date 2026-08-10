@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { GlyphStylePanel, type SelectedGlyph } from "./style-controls";
-import { createDefaultProject } from "@/lib/glyph/presets";
+import {
+  GlyphStylePanel,
+  StyleControls,
+  type SelectedGlyph,
+} from "./style-controls";
+import { createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
-import type { StyleOverride } from "@/lib/glyph/style";
+import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
 import type { BackgroundSource, ImageAsset, Project } from "@/lib/glyph/types";
 
@@ -34,8 +38,7 @@ const uploaded: ImageAsset = {
 
 /**
  * Render the panel at Glyph scope. `source` puts tile art on the resolved style,
- * standing in for one inherited from the Catalog per-Input tier (as an Xbox
- * bumper has).
+ * standing in for one an Input's Catalog seed supplies (as an Xbox bumper has).
  */
 function renderPanel({
   onClose = vi.fn(),
@@ -109,8 +112,8 @@ describe("GlyphStylePanel", () => {
   });
 
   it("writes an explicit shape source when the tile is turned off", () => {
-    // A Glyph that inherits a tile from the Catalog per-Input tier, the way an
-    // Xbox bumper does — the case where omitting the field would be a no-op.
+    // A Glyph whose Catalog seed gives it a tile, the way an Xbox bumper has —
+    // the case where omitting the field would be a no-op.
     const { dispatch } = renderPanel({
       source: { kind: "authored", backgroundId: "bumper" },
     });
@@ -384,5 +387,48 @@ describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
       patch: { renderSource: { kind: "image", imageId: "img-2.png" } },
     });
+  });
+});
+
+describe("StyleControls — the Background source at each scope (ADR-0012 §2)", () => {
+  /** Render the shared Style controls at one scope, over a given base source. */
+  function renderAt(scope: StyleScope, source?: BackgroundSource) {
+    const project = xboxProject();
+    const style = source
+      ? {
+          ...project.style,
+          background: { ...project.style.background, source },
+        }
+      : project.style;
+    render(
+      <StyleControls
+        project={project}
+        dispatch={vi.fn()}
+        scope={scope}
+        style={style}
+        override={{}}
+        onUploadImage={vi.fn(async () => uploaded)}
+      />,
+    );
+  }
+
+  it("offers the Background source control at Device scope", () => {
+    // A device-wide source is a real capability.
+    renderAt({ tier: "device", deviceIndex: 0 });
+    expect(screen.getByLabelText("Background source")).toBeInTheDocument();
+  });
+
+  it("offers it at Project scope too", () => {
+    renderAt({ tier: "project" });
+    expect(screen.getByLabelText("Background source")).toBeInTheDocument();
+  });
+
+  it("hides the shape controls under a tile at Glyph scope", () => {
+    // The source shown really is the one drawn, so a tile supplies the shape.
+    renderAt(
+      { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+      { kind: "authored", backgroundId: "bumper" },
+    );
+    expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
   });
 });
