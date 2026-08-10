@@ -294,8 +294,13 @@ export function resolveStyle(
  * ```
  *
  * A seed is a presence fact about *that control*, so only a statement about that
- * control may overrule it. The accepted cost: a device-wide source no-ops on the
- * seeded shoulders, escapable only per-Glyph.
+ * control may overrule it. Because the seed outranks the Device tier, a
+ * device-wide source no-ops on the eight seeded shoulder Inputs, and the only
+ * escape is a per-Glyph override.
+ *
+ * The seed rides in as a pseudo-tier rather than a second pass: `applyBackground`
+ * replaces `source` wholesale, so a tier carrying only that field leaves the
+ * Device tier's `fill` and border intact.
  */
 export function resolveGlyphStyle(
   base: GlyphStyle,
@@ -303,13 +308,12 @@ export function resolveGlyphStyle(
   device: StyleOverride | undefined,
   glyph: StyleOverride | undefined,
 ): GlyphStyle {
-  const style = resolveStyle(base, device, glyph);
-  const source =
-    glyph?.background?.source ??
-    seed ??
-    device?.background?.source ??
-    base.background.source;
-  return { ...style, background: { ...style.background, source } };
+  return resolveStyle(
+    base,
+    device,
+    seed && { background: { source: seed } },
+    glyph,
+  );
 }
 
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */
