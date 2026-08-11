@@ -130,13 +130,14 @@ square grid, each painted in **Paint Role** sentinels. Cell ids are **bare**: th
 Set a cell lives in is what scopes it to a **Device**, so the Xbox and
 PlayStation Sets both author `bumper` and `dpad-right` and each resolves to its
 own art. A Set of genuinely cross-device art is the fallback for any Device that
-ships none of its own. The tool ships a default
-Set (e.g. the Xbox pad); users can **author and import** their own. On import,
-each cell `id` is matched against the base **Catalog** first, and an
-unrecognized id becomes a new **custom Input**. By the _structure-only
-invariant_, the SVG carries only ids + role sentinels — never labels, kind,
-rotation, or appearance; those live in configuration, so an imported Set's
-default colours travel in the ZIP project save file, not the bare `.svg`.
+ships none of its own. Today every Set is authored in the repo
+(`src/lib/glyph/symbols/`) and compiled in at build time by `npm run symbols`, so
+there is no Set to pick or add at runtime. By the _structure-only invariant_, the
+SVG carries only ids + role sentinels — never labels, kind, rotation, or
+appearance; all of those are configuration.
+
+_(Authoring and importing your own Set, and a Set carrying its own default role
+colours in the project save file, are ADR-0007 §4–§5, decided and not yet built.)_
 
 _Avoid:_ "sprite sheet" (that's the exported **Sprite Atlas**), "icon pack".
 
@@ -348,8 +349,10 @@ See `docs/adr/`:
 - **ADR-0006** — Glyph style resolves through a Project → Device → Glyph cascade
   (extended by ADR-0007; amended by ADR-0012, which cuts it to three tiers and
   brings the font in).
-- **ADR-0007** — Sentinel paint roles and importable Symbol Sets (§3's tier count
-  and its brand-palette tier amended by ADR-0012).
+- **ADR-0007** — _Accepted, partly built._ Sentinel paint roles and importable
+  Symbol Sets (§3's tier count and its brand-palette tier amended by ADR-0012).
+  §4–§5 — import, review, refresh-from-path, and the Symbols sub-tool — are not
+  built.
 - **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
   content scale joins the Style Cascade (content scale replaced by a Transform in
   ADR-0012).

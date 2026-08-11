@@ -1,6 +1,8 @@
 # ADR-0007: Sentinel paint roles and importable Symbol Sets
 
-- **Status:** Accepted
+- **Status:** Accepted — partly built. §1, §2 and §3's `symbolPaints` cascade group
+  are in the code; §4, §4a and §5 are decided and not yet built. See _Status of
+  implementation_ below for what landed and what is still filed.
 - **Date:** 2026-07-23, §4 extended with refresh reconciliation 2026-08-07
 - **Amends:** ADR-0004 (Symbol colour model), ADR-0006 (adds a Style Cascade group)
 - **Amended by:** ADR-0012 — §3's four tiers become three (the Catalog per-Input
@@ -181,9 +183,14 @@ UI isn't forked.
 ## Status of implementation
 
 The asset pipeline, the sentinel palette, and the three-outcome classifier +
-flagging landed with the issue #14 slice. The `symbolPaints` cascade extension,
-the browser windowing + import review + refresh-from-path, and the Symbols
-sub-tool UI are tracked as follow-up work.
+flagging landed with the issue #14 slice; the `symbolPaints` cascade extension
+has since landed too (`src/lib/glyph/style.ts`, `symbol-render.ts`, and the Style
+panel in `src/app/tools/glyph-creator/style-controls.tsx`) — though not §3's brand
+palette, which ADR-0012 moved out of the Catalog tier and into Preset payload, and
+which nothing ships yet. What remains is §4 and §4a — the browser windowing,
+import review, and refresh-from-path (#38) — and §5, the Symbols sub-tool UI
+(#39). Until those land there is no Symbol Set import: the shipped Sets are
+authored in the repo and compiled in by `npm run symbols`.
 
 §4a was settled ahead of implementation by a prototype (issue #38, branch
 `proto/38-symbol-set-import`) that drove the reconciliation through the awkward
