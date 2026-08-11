@@ -27,6 +27,10 @@ next-env.d.ts
 .vercel
 *.tsbuildinfo
 
+# run-uitoolbox skill artifacts
+/dev.log
+/shot.png
+
 # debug logs
 npm-debug.log*
 yarn-debug.log*
