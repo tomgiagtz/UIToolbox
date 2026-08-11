@@ -53,4 +53,20 @@ export const LAYOUT_MAPPINGS = {
     DPad_Left: "ps-dpad-left",
     DPad_Right: "ps-dpad-right",
   },
+  // The mouse is not a pad — its Inputs are on the *keyboard* Catalog, and
+  // `layout.ts` exposes the parsed result as MOUSE_LAYOUT rather than through
+  // PAD_LAYOUTS. It rides this pipeline because `mouse.svg` is authored art like
+  // any other Layout. `Body` is the blank-mouse Input, not decoration, so the
+  // whole silhouette stays clickable; the buttons draw on top of it.
+  //
+  // Unused until `mouse.svg` lands (the codegen iterates the SVGs it finds, not
+  // this table); rename these keys to whatever the exported layers are called.
+  mouse: {
+    Body: "mouse",
+    Left: "mouse-left",
+    Right: "mouse-right",
+    Middle: "mouse-middle",
+    Mouse4: "mouse-4",
+    Mouse5: "mouse-5",
+  },
 };

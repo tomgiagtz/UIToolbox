@@ -4,9 +4,12 @@ import { type Dispatch, type KeyboardEvent, type SVGProps } from "react";
 import { catalogIndex, getCatalog } from "@/lib/glyph/catalog";
 import {
   KEYBOARD_LAYOUT,
+  MOUSE_LAYOUT,
+  MOUSE_PLACEMENT,
   getPadLayout,
   keyboardExtent,
   type PadButtonShape,
+  type PadLayout,
 } from "@/lib/glyph/layout";
 import type { ProjectAction } from "@/lib/glyph/project";
 import {
@@ -48,9 +51,10 @@ interface DeviceView {
  * - `symbol` — the Input's Symbol Render Source, recoloured to `currentColor`.
  * - `label` — the short text placeholder, for Inputs with no Symbol art.
  * - `none` — nothing, because the Layout's own geometry already depicts the
- *   Input. That is the d-pad: its Symbols are cluster art (all four arms), so
- *   drawing one inside a single arm would nest a whole d-pad in a quarter of
- *   itself, and an arrow would only repeat what the arm's shape already says.
+ *   Input. That is the d-pad and the mouse: their Symbols are cluster art (all
+ *   four arms; the whole mouse body), so drawing one inside a single node would
+ *   nest a whole d-pad in a quarter of itself, or a whole mouse inside one of
+ *   its buttons — and it would only repeat what the node's shape already says.
  */
 type NodeContent =
   | { kind: "symbol"; symbol: SymbolInner }
@@ -60,9 +64,10 @@ type NodeContent =
 /**
  * The code-drawn **Device Layout** (ADR-0005): a Device's Catalog rendered as a
  * clickable schematic for enabling Inputs. The keyboard is a US-staggered
- * rounded-rect keycap board; the pads are clustered nodes over a prototype
- * controller outline. Enabled Inputs read filled/pressed, disabled ones dimmed;
- * clicking one toggles it, which the live preview reflects.
+ * rounded-rect keycap board with a mouse schematic beside it; the pads are
+ * clustered nodes over a prototype controller outline. Enabled Inputs read
+ * filled/pressed, disabled ones dimmed; clicking one toggles it, which the live
+ * preview reflects.
  *
  * This is editor chrome only — the geometry (see `layout.ts`) never reaches an
  * exported Sprite Atlas. Pad nodes draw their Symbol where they have one and a
@@ -206,38 +211,63 @@ function KeyboardDiagram({ view }: { view: DeviceView }) {
           </g>
         );
       })}
+      {/*
+        The mouse: its own Layout, scaled from its coordinate space into the
+        key-unit slot beside the board. Nesting an `<svg>` is what lets the two
+        coordinate systems coexist — the keycaps stay in key-units and the mouse
+        keeps whatever units its authored art was drawn in.
+      */}
+      <svg
+        role="group"
+        aria-label="Mouse buttons"
+        x={MOUSE_PLACEMENT.x}
+        y={MOUSE_PLACEMENT.y}
+        width={MOUSE_PLACEMENT.w}
+        height={MOUSE_PLACEMENT.h}
+        viewBox={`0 0 ${MOUSE_LAYOUT.viewBox.width} ${MOUSE_LAYOUT.viewBox.height}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <PadNodes layout={MOUSE_LAYOUT} view={view} />
+      </svg>
     </svg>
   );
 }
 
 // --- Pads ------------------------------------------------------------------
 
-function PadDiagram({
-  pad,
-  view,
-}: {
-  pad: ReturnType<typeof getPadLayout> & object;
-  view: DeviceView;
-}) {
-  const { deviceName, label, isEnabled, onToggle } = view;
+function PadDiagram({ pad, view }: { pad: PadLayout; view: DeviceView }) {
   return (
     <svg
       role="group"
-      aria-label={`${deviceName} Layout`}
+      aria-label={`${view.deviceName} Layout`}
       viewBox={`0 0 ${pad.viewBox.width} ${pad.viewBox.height}`}
       className="w-full select-none"
     >
+      <PadNodes layout={pad} view={view} />
+    </svg>
+  );
+}
+
+/**
+ * A {@link PadLayout}'s contents in its own coordinate space — the decoration
+ * blob and the clickable buttons — without an outer `<svg>`, so the same nodes
+ * serve a pad's whole diagram and the mouse nested inside the keyboard's.
+ */
+function PadNodes({ layout, view }: { layout: PadLayout; view: DeviceView }) {
+  const { label, isEnabled, onToggle } = view;
+  return (
+    <>
       {/*
-        The controller outline and any non-interactive backer shapes, drawn behind
-        the buttons and painted verbatim from the authored (or code-drawn) source.
+        The outline and any non-interactive backer shapes, drawn behind the
+        buttons and painted verbatim from the authored (or code-drawn) source.
         Trusted, committed markup; `pointer-events-none` lets clicks reach buttons.
       */}
       <g
         data-decoration
         className="[&_*]:pointer-events-none"
-        dangerouslySetInnerHTML={{ __html: pad.decoration }}
+        dangerouslySetInnerHTML={{ __html: layout.decoration }}
       />
-      {pad.buttons.map((shape) => (
+      {layout.buttons.map((shape) => (
         <PadButton
           key={shape.id}
           shape={shape}
@@ -247,7 +277,7 @@ function PadDiagram({
           onToggle={() => onToggle(shape.id)}
         />
       ))}
-    </svg>
+    </>
   );
 }
 

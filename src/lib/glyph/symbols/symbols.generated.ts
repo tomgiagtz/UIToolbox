@@ -167,6 +167,137 @@ export const SYMBOL_ASSETS: SymbolAsset[] = [
     "rotateOf": "dpad-right",
     "rotate": 270,
     "depicts": "cluster"
+  },
+  {
+    "id": "mouse",
+    "label": "Mouse",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ],
+    "depicts": "cluster"
+  },
+  {
+    "id": "mouse-left",
+    "label": "Mouse Left",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ],
+    "depicts": "cluster"
+  },
+  {
+    "id": "mouse-right",
+    "label": "Mouse Right",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ],
+    "depicts": "cluster"
+  },
+  {
+    "id": "mouse-middle",
+    "label": "Mouse Middle",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ],
+    "depicts": "cluster"
+  },
+  {
+    "id": "mouse-4",
+    "label": "Mouse 4",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ],
+    "depicts": "cluster"
+  },
+  {
+    "id": "mouse-5",
+    "label": "Mouse 5",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ],
+    "depicts": "cluster"
+  },
+  {
+    "id": "key-space",
+    "label": "Space",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-tab",
+    "label": "Tab",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-enter",
+    "label": "Enter",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-backspace",
+    "label": "Backspace",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-windows",
+    "label": "Windows",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-command",
+    "label": "Command",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-arrow-right",
+    "label": "Arrow Right",
+    "kind": "symbol",
+    "atlases": [
+      "keyboard"
+    ]
+  },
+  {
+    "id": "key-arrow-down",
+    "label": "Arrow Down",
+    "kind": "symbol",
+    "rotateOf": "key-arrow-right",
+    "rotate": 90
+  },
+  {
+    "id": "key-arrow-left",
+    "label": "Arrow Left",
+    "kind": "symbol",
+    "rotateOf": "key-arrow-right",
+    "rotate": 180
+  },
+  {
+    "id": "key-arrow-up",
+    "label": "Arrow Up",
+    "kind": "symbol",
+    "rotateOf": "key-arrow-right",
+    "rotate": 270
   }
 ];
 

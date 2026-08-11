@@ -46,6 +46,44 @@ describe("DeviceLayout", () => {
     });
   });
 
+  it("draws the mouse as a mouse, not as three more keycaps", () => {
+    const device = keyboardDevice();
+    render(<DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />);
+    // Every mouse Input is a node on the nested mouse schematic — including the
+    // blank body and the two side buttons, which the keycap row never had.
+    for (const name of ["Mouse", "LMB", "RMB", "MMB", "Mouse 4", "Mouse 5"])
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    // A keycap is a <rect>; these are the authored/placeholder shapes instead.
+    expect(
+      screen.getByRole("group", { name: "Mouse buttons" }),
+    ).toBeInTheDocument();
+  });
+
+  it("dispatches a toggle for a clicked mouse button", async () => {
+    const dispatch = vi.fn();
+    const device = keyboardDevice();
+    render(
+      <DeviceLayout device={device} deviceIndex={1} dispatch={dispatch} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Mouse 4" }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "toggle-input",
+      deviceIndex: 1,
+      inputId: "mouse-4",
+    });
+  });
+
+  it("draws nothing inside a mouse node, whose Symbol depicts the whole mouse", () => {
+    const device = keyboardDevice();
+    render(<DeviceLayout device={device} deviceIndex={0} dispatch={vi.fn()} />);
+    // Same argument as the d-pad: every mouse Symbol draws the whole silhouette
+    // and emphasises one part, so nesting one inside a button would put a mouse
+    // inside a mouse. The node's position on the schematic already says which.
+    const lmb = screen.getByRole("button", { name: "LMB" });
+    expect(lmb.querySelector("svg")).not.toBeInTheDocument();
+    expect(lmb.querySelector("text")).not.toBeInTheDocument();
+  });
+
   it("renders clickable pad buttons over a decoration layer", () => {
     const device = createDeviceFromCatalog(getCatalog("xbox")!);
     const { container } = render(

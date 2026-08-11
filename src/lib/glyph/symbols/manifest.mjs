@@ -138,4 +138,113 @@ export const SYMBOL_MANIFEST = [
     rotate: 270,
     depicts: "cluster",
   },
+
+  // --- Mouse — one silhouette, drawn six times with a different part emphasised
+  // Mouse buttons live on the Keyboard Catalog, so mouse and keyboard art share
+  // the one `keyboard` atlas. Like the d-pads these draw the whole cluster and
+  // emphasise one part, so they are `cluster`: right in an exported Glyph,
+  // skipped by the Device Layout, which now draws a real mouse of its own and
+  // would otherwise nest a whole mouse inside one of its buttons.
+  //
+  // A mouse body is not rotationally symmetric, so unlike the d-pad none of
+  // these is a rotation of another — all six are source cells.
+  {
+    id: "mouse",
+    label: "Mouse",
+    kind: "symbol",
+    atlases: ["keyboard"],
+    depicts: "cluster",
+  },
+  {
+    id: "mouse-left",
+    label: "Mouse Left",
+    kind: "symbol",
+    atlases: ["keyboard"],
+    depicts: "cluster",
+  },
+  {
+    id: "mouse-right",
+    label: "Mouse Right",
+    kind: "symbol",
+    atlases: ["keyboard"],
+    depicts: "cluster",
+  },
+  {
+    id: "mouse-middle",
+    label: "Mouse Middle",
+    kind: "symbol",
+    atlases: ["keyboard"],
+    depicts: "cluster",
+  },
+  {
+    id: "mouse-4",
+    label: "Mouse 4",
+    kind: "symbol",
+    atlases: ["keyboard"],
+    depicts: "cluster",
+  },
+  {
+    id: "mouse-5",
+    label: "Mouse 5",
+    kind: "symbol",
+    atlases: ["keyboard"],
+    depicts: "cluster",
+  },
+
+  // --- Keyboard — the keys whose identity is a glyph, not a word --------------
+  // Ids match their Catalog ids: the keyboard's Inputs carry no device prefix,
+  // so the bare manifest id and the Catalog id are the same string.
+  { id: "key-space", label: "Space", kind: "symbol", atlases: ["keyboard"] },
+  { id: "key-tab", label: "Tab", kind: "symbol", atlases: ["keyboard"] },
+  { id: "key-enter", label: "Enter", kind: "symbol", atlases: ["keyboard"] },
+  {
+    id: "key-backspace",
+    label: "Backspace",
+    kind: "symbol",
+    atlases: ["keyboard"],
+  },
+  {
+    id: "key-windows",
+    label: "Windows",
+    kind: "symbol",
+    atlases: ["keyboard"],
+  },
+  {
+    id: "key-command",
+    label: "Command",
+    kind: "symbol",
+    atlases: ["keyboard"],
+  },
+
+  // --- Arrow keys — "right" is drawn; the rest are rotations of it ------------
+  // Same source and same rotation order as the d-pad, so the two directional
+  // sets stay identical in shape. These are single Inputs, not clusters: the
+  // art is one arrow, so a Layout keycap can draw it directly.
+  {
+    id: "key-arrow-right",
+    label: "Arrow Right",
+    kind: "symbol",
+    atlases: ["keyboard"],
+  },
+  {
+    id: "key-arrow-down",
+    label: "Arrow Down",
+    kind: "symbol",
+    rotateOf: "key-arrow-right",
+    rotate: 90,
+  },
+  {
+    id: "key-arrow-left",
+    label: "Arrow Left",
+    kind: "symbol",
+    rotateOf: "key-arrow-right",
+    rotate: 180,
+  },
+  {
+    id: "key-arrow-up",
+    label: "Arrow Up",
+    kind: "symbol",
+    rotateOf: "key-arrow-right",
+    rotate: 270,
+  },
 ];
