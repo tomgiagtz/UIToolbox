@@ -252,7 +252,10 @@ describe("project-file — the whole configured project (issue #23)", () => {
       {
         type: "patch-style",
         scope: { tier: "glyph", deviceIndex: 0, glyphId: disabledByDefault },
-        patch: { textColor: "#00ff00", contentScale: 1.5 },
+        patch: {
+          textColor: "#00ff00",
+          content: { transform: { rotation: 90, scale: { x: -1 } } },
+        },
       } as const,
       {
         type: "patch-style",

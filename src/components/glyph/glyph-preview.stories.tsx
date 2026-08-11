@@ -1,13 +1,26 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { GlyphPreview } from "./glyph-preview";
+import type { Foreground } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
+import {
+  DEFAULT_SYMBOL_PAINTS,
+  DEFAULT_TEXT_COLOR,
+  identityTransform,
+} from "@/lib/glyph/defaults";
 
 const roundedRect: Background = {
   source: { kind: "shape" },
+  transform: identityTransform(),
   shape: "rounded-rect",
   fill: "#1e293b",
   cornerRadius: 18,
   border: { width: 4, color: "#475569" },
+};
+
+const foreground: Foreground = {
+  transform: identityTransform(),
+  textColor: DEFAULT_TEXT_COLOR,
+  symbolPaints: DEFAULT_SYMBOL_PAINTS,
 };
 
 const meta = {
@@ -17,8 +30,8 @@ const meta = {
   args: {
     label: "Space",
     cellSize: 128,
-    textColor: "#f8fafc",
     background: roundedRect,
+    foreground,
     fontFamily: "sans-serif",
   },
 } satisfies Meta<typeof GlyphPreview>;
@@ -45,7 +58,7 @@ export const Circle: Story = {
 export const NoBackground: Story = {
   args: {
     label: "→",
-    textColor: "#0f172a",
+    foreground: { ...foreground, textColor: "#0f172a" },
     background: { ...roundedRect, source: { kind: "none" } },
   },
 };
@@ -68,7 +81,7 @@ export const LongLabelAutoShrinks: Story = {
 export const CustomColors: Story = {
   args: {
     label: "X",
-    textColor: "#022c22",
+    foreground: { ...foreground, textColor: "#022c22" },
     background: {
       ...roundedRect,
       fill: "#34d399",

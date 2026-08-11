@@ -42,7 +42,7 @@ Device.
 How an Input's Glyph content is drawn: its font-rendered **label** (default for
 arbitrary Inputs), a bundled **Symbol** (default for well-known Inputs), or a
 user-uploaded **custom image**. Whichever source is chosen is composited onto the
-same Background tile, sized and oriented by its **content transform**.
+same Background tile, sized and oriented by its **foreground transform**.
 
 The default comes from the Catalog — a well-known Input draws its Symbol, anything
 else its label — and any Glyph can override it through the **Style Cascade**. An
@@ -78,19 +78,24 @@ _(ADR-0012, decided and not yet built. Today a project has exactly one font.)_
 ### Transform
 
 A rotation in degrees plus a **signed per-axis scale**, applied to one whole
-drawing layer. A Glyph has two independent ones — a **background transform** on
-the tile and a **content transform** on whichever Render Source is drawn — and
-both resolve through the **Style Cascade** at every tier. A negative scale
-component mirrors that axis, which is how a left-side bumper faces the other way;
-that reads unambiguously only because rotation sits beside it. The content
-transform scales whichever Render Source a Glyph happens to use, so switching
-sources never discards the sizing. Above `1` a layer is clipped to its own cell,
-so a large or rotated Glyph can't paint its neighbour in the atlas.
+drawing layer, **rotating before scaling and about the cell's centre**. A Glyph
+has two independent ones — a **background transform** on the tile and a
+**foreground transform** on whichever Render Source is drawn — and both resolve
+through the **Style Cascade** at every tier, component by component. A negative
+scale component mirrors that axis, which is how a left-side bumper faces the
+other way; that reads unambiguously only because rotation sits beside it, and it
+keeps meaning "the other way" under any rotation only because rotation is applied
+first. The foreground transform scales whichever Render Source a Glyph happens to
+use, so switching sources never discards the sizing.
 
-_Avoid:_ "content scale", "flipX" — both are folded into a Transform (ADR-0012).
+Degrees are canonicalised into **−180…180** where a rotation is written, not
+during resolution. Each layer is clipped to its own cell, so a large or rotated
+Glyph can't paint its neighbour in the atlas — which means a rotated layer loses
+whatever falls outside the cell: empty corners on square full-bleed tile art, cut
+corners on a drawn square.
 
-_(ADR-0012, decided and not yet built. Today there is a uniform `contentScale`
-property and a `flipX` flag inside the authored Background source.)_
+_Avoid:_ "content scale", "content transform", "flipX" — the drawn content is
+the **foreground** layer, and its sizing folded into a Transform (ADR-0012).
 
 ### Symbol
 
@@ -234,6 +239,20 @@ corner radius, shape and the **background transform** all cascade normally; fill
 and border paint a shape or recolour an authored tile, while an uploaded image
 draws as authored, fitted to the cell and never recoloured.
 
+### Foreground
+
+The other drawing layer: whichever **Render Source** a Glyph draws, and how it is
+placed and painted — its **Transform**, the label's colour, and the Symbol's
+**Paint Role** colours. A resolved style is exactly these two layers, Background
+and Foreground, and nothing else (ADR-0012 §2).
+
+The resolved Foreground does not name _which_ source is drawn, though a cascade
+override does: resolving that needs the **Catalog** and the image manifest as well
+as the cascade, so it has a resolver of its own.
+
+_Avoid:_ "the content layer" — the layer is the Foreground; "content" is what it
+happens to be drawing.
+
 ### Authored Background
 
 A shipped SVG tile graphic the project owner authors (a growing gallery),
@@ -255,25 +274,31 @@ tier. The Project base always carries a source, being a full style rather than a
 sparse override.
 
 Three tiers **plus seeded values**: a Catalog **Seed** ranks between the Glyph
-and Device tiers for `background.source` alone, so a bumper keeps its authored
-tile against a project- or device-wide source, and only a per-Glyph override
-replaces it. Deleting ADR-0006's Catalog per-Input tier removed a style tier, not
-a precedence position — what survives is an ordering fact about one field.
+and Device tiers, so a bumper keeps its authored tile against a project- or
+device-wide source, and only a per-Glyph override replaces it. Deleting
+ADR-0006's Catalog per-Input tier removed a style tier, not a precedence
+position — what survives is an ordering fact about the fields a Catalog seeds.
 
 The grid **cell size** is the one exception: it stays Project-global for a
 uniform grid, and lives in the project's export settings.
 
-_(The font and the layer **transforms** are ADR-0012, decided and not yet built:
-today the font stays Project-global and neither transform exists.)_
+_(The font is ADR-0012, decided and not yet built: today it stays
+Project-global.)_
 
 ### Seed
 
-A Catalog-supplied starting value for one Background property, ranked above the
-**Device** tier and below a **Glyph** override (ADR-0012 §2). A seed is **not** a
-cascade tier and not a selectable scope: it is not a style override, it is not
-user-editable, and it covers one field. It says what a control _is_ — a bumper is
-bumper-shaped under any look — which is the same kind of statement `symbolId`
-makes.
+A Catalog-supplied starting value, ranked above the **Device** tier and below a
+**Glyph** override (ADR-0012 §2). A seed is **not** a cascade tier and not a
+selectable scope: it is not a style override, it is not user-editable, and it
+supplies only what it seeds. It says what a control _is_ — a bumper is
+bumper-shaped under any look, and a left-side one faces the other way — which is
+the same kind of statement `symbolId` makes.
+
+Two facts are seeded, each on its own: the Background **source**, and for the
+four left-side shoulders a `scale.x` of −1 on the tile's **Transform**. The
+Catalog stores the second as a bare `mirrored` boolean and never a transform
+fragment, so the one file that may only say what is _present_ cannot grow a
+`rotation: 15`.
 
 A seed is tri-state: an Input may name a tile, may seed _no_ background at all
 (the sticks, whose Symbol draws its own ring), or may be unseeded and fall
@@ -336,7 +361,7 @@ See `docs/adr/`:
 - **ADR-0011** — Loading a project replaces the custom-image set outright, and a
   save reads bytes from the runtime registry rather than IndexedDB (amends
   ADR-0008).
-- **ADR-0012** — _Accepted, not yet built._ A **Catalog** says what is present; a
+- **ADR-0012** — _Accepted, partly built._ A **Catalog** says what is present; a
   **Preset** says what it looks like. Catalogs stay code-maintained registries and
   absorb the shipped tile art as seeds; the Style Cascade drops to three tiers,
   gains the font and two layer Transforms, and loses `contentScale`. A Preset is

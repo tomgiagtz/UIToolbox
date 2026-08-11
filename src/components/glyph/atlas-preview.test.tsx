@@ -3,18 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import { gridPack } from "@/lib/glyph/packer";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { AtlasPreview, type PreviewGlyph } from "./atlas-preview";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 const style: GlyphStyle = {
-  textColor: "#ffffff",
   background: {
     source: { kind: "shape" },
+    transform: identityTransform(),
     shape: "rounded-rect",
     fill: "#222222",
     cornerRadius: 16,
     border: { width: 0, color: "#000000" },
   },
-  symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-  contentScale: 1,
+  foreground: {
+    transform: identityTransform(),
+    textColor: "#ffffff",
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+  },
 };
 
 /** Build preview Glyphs from labels, all sharing the one test style. */

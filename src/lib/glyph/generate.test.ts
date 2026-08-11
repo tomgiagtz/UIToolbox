@@ -3,6 +3,7 @@ import {
   generateTilesets,
   resolveDeviceInputs,
   resolveScopeRenderSource,
+  seedStyle,
   resolveScopeStyle,
 } from "@/lib/glyph/generate";
 import { isPowerOfTwo } from "@/lib/glyph/packer";
@@ -16,6 +17,7 @@ import type {
   NamingConfig,
   Project,
 } from "@/lib/glyph/types";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 /**
  * A Device whose Inputs are supplied as custom (off-catalog) labels, so a test
@@ -39,16 +41,19 @@ function device(
 
 /** The Project tier every test project starts from. */
 const BASE_STYLE: GlyphStyle = {
-  textColor: "#ffffff",
   background: {
     source: { kind: "shape" },
+    transform: identityTransform(),
     shape: "rounded-rect",
     fill: "#000000",
     cornerRadius: 12,
     border: { width: 2, color: "#333333" },
   },
-  symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-  contentScale: 1,
+  foreground: {
+    transform: identityTransform(),
+    textColor: "#ffffff",
+    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
+  },
 };
 
 const BASE_NAMING: NamingConfig = {
@@ -100,6 +105,42 @@ function xboxProject(): Project {
   });
 }
 
+/** The tile the Catalog seeds both shoulders with; orientation is no part of it. */
+const BUMPER = { kind: "authored", backgroundId: "bumper" };
+
+describe("seedStyle — the Catalog's presence facts as style (ADR-0012 §2)", () => {
+  it("seeds nothing for an entry that names no art", () => {
+    expect(seedStyle({ id: "key-w", label: "W" })).toBeUndefined();
+    expect(seedStyle(undefined)).toBeUndefined();
+  });
+
+  it("seeds an explicit absence from a null backgroundId", () => {
+    const seed = seedStyle({ id: "s", label: "Stick", backgroundId: null });
+    expect(seed).toEqual({ background: { source: { kind: "none" } } });
+  });
+
+  it("projects `mirrored` into the tile layer's scale, and only that", () => {
+    const seed = seedStyle({
+      id: "xbox-lb",
+      label: "LB",
+      backgroundId: "bumper",
+      mirrored: true,
+    });
+    expect(seed).toEqual({
+      background: { source: BUMPER, transform: { scale: { x: -1 } } },
+    });
+  });
+
+  it("seeds each fact on its own, neither depending on the other", () => {
+    // The Catalog's own invariant keeps this pair from arising (`mirrored` is
+    // meaningless without a tile), but a seed supplies only what it seeds — so
+    // one fact going missing must not take the other with it.
+    expect(seedStyle({ id: "x", label: "X", mirrored: true })).toEqual({
+      background: { transform: { scale: { x: -1 } } },
+    });
+  });
+});
+
 describe("Symbol Render Source threads through the cascade (issue #17)", () => {
   const xbox: DeviceConfig = {
     name: "Xbox",
@@ -130,11 +171,12 @@ describe("Symbol Render Source threads through the cascade (issue #17)", () => {
     const [a, lb, paddle] = resolveDeviceInputs(xbox, project());
     // The Catalog per-Input default rides in the resolved Background, not on a
     // separate field like symbolId, so it flows to the compositor for free.
-    expect(lb.style.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-      flipX: true,
-    });
+    expect(lb.style.background.source).toEqual(BUMPER);
+    // A left-side shoulder faces the other way, which is now the tile layer's
+    // transform rather than a flag inside the source (ADR-0012 §2).
+    expect(lb.style.background.transform.scale.x).toBe(-1);
+    // ...and only the tile: what's drawn on it stays upright.
+    expect(lb.style.foreground.transform.scale.x).toBe(1);
     expect(a.style.background.source).toEqual({ kind: "shape" });
     expect(paddle.style.background.source).toEqual({ kind: "shape" });
 
@@ -167,7 +209,9 @@ describe("Render Source per Input (issue #20)", () => {
   };
 
   it("renders the label when a Glyph override picks it over the Symbol", () => {
-    const device = xbox({ "xbox-a": { renderSource: { kind: "label" } } });
+    const device = xbox({
+      "xbox-a": { foreground: { renderSource: { kind: "label" } } },
+    });
     const [a] = resolveDeviceInputs(device, project({ devices: [device] }));
     expect(a.symbolId).toBeUndefined();
     expect(a.imageId).toBeUndefined();
@@ -177,7 +221,9 @@ describe("Render Source per Input (issue #20)", () => {
 
   it("renders a custom image when a Glyph override picks one", () => {
     const device = xbox({
-      "xbox-a": { renderSource: { kind: "image", imageId: image.id } },
+      "xbox-a": {
+        foreground: { renderSource: { kind: "image", imageId: image.id } },
+      },
     });
     const [a] = resolveDeviceInputs(
       device,
@@ -190,8 +236,12 @@ describe("Render Source per Input (issue #20)", () => {
   it("falls back to the default when the chosen image isn't in the project", () => {
     // ADR-0004: a config can outlive its image bytes, and must degrade, not break.
     const device = xbox({
-      "xbox-a": { renderSource: { kind: "image", imageId: "gone.png" } },
-      c0: { renderSource: { kind: "image", imageId: "gone.png" } },
+      "xbox-a": {
+        foreground: { renderSource: { kind: "image", imageId: "gone.png" } },
+      },
+      c0: {
+        foreground: { renderSource: { kind: "image", imageId: "gone.png" } },
+      },
     });
     const [a, , paddle] = resolveDeviceInputs(
       device,
@@ -204,7 +254,9 @@ describe("Render Source per Input (issue #20)", () => {
   });
 
   it("falls back to the label when an Input has no Symbol to switch to", () => {
-    const device = xbox({ c0: { renderSource: { kind: "symbol" } } });
+    const device = xbox({
+      c0: { foreground: { renderSource: { kind: "symbol" } } },
+    });
     const [, , paddle] = resolveDeviceInputs(
       device,
       project({ devices: [device] }),
@@ -213,7 +265,9 @@ describe("Render Source per Input (issue #20)", () => {
   });
 
   it("lets a Glyph override switch a label-rendered Input back to its Symbol", () => {
-    const device = xbox({ "xbox-lb": { renderSource: { kind: "symbol" } } });
+    const device = xbox({
+      "xbox-lb": { foreground: { renderSource: { kind: "symbol" } } },
+    });
     const [, lb] = resolveDeviceInputs(device, project({ devices: [device] }));
     // The bumper has no Symbol of its own — its identity is the tile — so it
     // stays label-rendered rather than borrowing another Input's art.
@@ -222,7 +276,9 @@ describe("Render Source per Input (issue #20)", () => {
 
   it("carries a custom image id onto the packed placements for the compositor", () => {
     const device = xbox({
-      "xbox-a": { renderSource: { kind: "image", imageId: image.id } },
+      "xbox-a": {
+        foreground: { renderSource: { kind: "image", imageId: image.id } },
+      },
     });
     const [out] = generateTilesets(
       project({ devices: [device], images: [image] }),
@@ -236,15 +292,25 @@ describe("Render Source per Input (issue #20)", () => {
     expect(out.placements[0].spriteName).toBe("xbox_a");
   });
 
-  it("resolves the content scale onto every placement's style", () => {
-    const device = xbox({ "xbox-a": { contentScale: 1.5 } });
+  it("resolves the content transform onto every placement's style", () => {
+    const device = xbox({
+      "xbox-a": { foreground: { transform: { scale: { x: 1.5, y: 1.5 } } } },
+    });
     const [out] = generateTilesets(
       project({
         devices: [device],
-        style: { ...BASE_STYLE, contentScale: 0.8 },
+        style: {
+          ...BASE_STYLE,
+          foreground: {
+            ...BASE_STYLE.foreground,
+            transform: { rotation: 0, scale: { x: 0.8, y: 0.8 } },
+          },
+        },
       }),
     );
-    expect(out.placements.map((p) => p.style.contentScale)).toEqual([
+    expect(
+      out.placements.map((p) => p.style.foreground.transform.scale.x),
+    ).toEqual([
       1.5, // Glyph tier
       0.8, // falls up to the Project tier
       0.8,
@@ -252,7 +318,9 @@ describe("Render Source per Input (issue #20)", () => {
   });
 
   it("resolves the Render Source for a scope, for the editor's controls", () => {
-    const device = xbox({ "xbox-a": { renderSource: { kind: "label" } } });
+    const device = xbox({
+      "xbox-a": { foreground: { renderSource: { kind: "label" } } },
+    });
     const proj = project({ devices: [device] });
     expect(
       resolveScopeRenderSource(proj, {
@@ -486,10 +554,14 @@ describe("resolveScopeStyle", () => {
         scope: { tier: "device", deviceIndex: 0 },
         patch: { background: { shape: "circle" } },
       } as const,
-      { type: "patch-style", scope, patch: { textColor: "#0f0" } } as const,
+      {
+        type: "patch-style",
+        scope,
+        patch: { foreground: { textColor: "#0f0" } },
+      } as const,
     ].reduce(projectReducer, createDefaultProject("TestFont"));
     const style = resolveScopeStyle(proj, scope);
-    expect(style.textColor).toBe("#0f0"); // Glyph tier
+    expect(style.foreground.textColor).toBe("#0f0"); // Glyph tier
     expect(style.background.shape).toBe("circle"); // Device tier
   });
 
@@ -505,11 +577,7 @@ describe("resolveScopeStyle", () => {
     const inputs = resolveDeviceInputs(proj.devices[0], proj);
     const lb = inputs.find((i) => i.id === "xbox-lb");
     const a = inputs.find((i) => i.id === "xbox-a");
-    expect(lb?.style.background.source).toEqual({
-      kind: "authored",
-      backgroundId: "bumper",
-      flipX: true,
-    });
+    expect(lb?.style.background.source).toEqual(BUMPER);
     // A face button has no backer, so it does take the device-wide circle.
     expect(a?.style.background.shape).toBe("circle");
   });
@@ -536,8 +604,6 @@ describe("resolveScopeStyle", () => {
 });
 
 describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
-  const BUMPER = { kind: "authored", backgroundId: "bumper", flipX: true };
-
   function resolved(proj: Project) {
     const inputs = resolveDeviceInputs(proj.devices[0], proj);
     return {

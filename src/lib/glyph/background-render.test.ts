@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import type { BackgroundSource } from "@/lib/glyph/types";
+import { identityTransform } from "@/lib/glyph/defaults";
 
 // The two bitmap caches a tile can come from. Rasterizing needs a browser, so the
 // caches are stubbed and what's asserted is the routing: an Authored Background
@@ -24,16 +25,23 @@ const { getImageBitmap, ensureImageBitmap } =
 
 function styleWith(source: BackgroundSource): GlyphStyle {
   return {
-    textColor: "#ffffff",
     background: {
       source,
+      transform: identityTransform(),
       shape: "rounded-rect",
       fill: "#1e293b",
       cornerRadius: 18,
       border: { width: 4, color: "#475569" },
     },
-    symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
-    contentScale: 1,
+    foreground: {
+      transform: identityTransform(),
+      textColor: "#ffffff",
+      symbolPaints: {
+        fill: "#ffffff",
+        border: "#ffffff",
+        secondary: "#ffffff",
+      },
+    },
   };
 }
 

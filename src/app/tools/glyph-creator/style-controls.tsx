@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type Dispatch } from "react";
+import { useEffect, type Dispatch, type ReactNode } from "react";
 import { Button, Tooltip, TooltipTrigger } from "react-aria-components";
 import { X } from "lucide-react";
 import { resolveScopeRenderSource } from "@/lib/glyph/generate";
@@ -23,19 +23,13 @@ import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 import { ImageUploadField } from "./image-upload-field";
 import { RenderSourceControls } from "./render-source-controls";
+import { TransformField } from "./transform-field";
 
 const SHAPES: { value: BackgroundShape; label: string }[] = [
   { value: "rounded-rect", label: "Rounded rect" },
   { value: "square", label: "Square" },
   { value: "circle", label: "Circle" },
 ];
-
-/**
- * Range of the content scale slider. It runs past 1 so art can be pushed to the
- * cell edge (and beyond — the renderer clips to the cell), and stops well above
- * zero since a Render Source scaled to nothing is just an empty tile.
- */
-const CONTENT_SCALE_RANGE = { min: 0.1, max: 2, step: 0.05 };
 
 /** Stable option value for a {@link BackgroundSource} in the source picker. */
 function sourceValue(source: BackgroundSource): string {
@@ -46,21 +40,15 @@ function sourceValue(source: BackgroundSource): string {
 }
 
 /**
- * Read a picked option value back into a {@link BackgroundSource}. An Authored
- * Background keeps the mirror flag the Catalog gave it (`flipX`), so re-picking
- * a bumper's own tile doesn't quietly un-mirror it.
+ * Read a picked option value back into a {@link BackgroundSource}.
+ *
+ * Nothing is carried over from the current source: a source says only where the
+ * art comes from, and orientation left the union for the tile layer's transform
+ * (ADR-0012 §2), so replacing one wholesale can't disturb it.
  */
-function sourceFromValue(
-  value: string,
-  current: BackgroundSource,
-): BackgroundSource {
+function sourceFromValue(value: string): BackgroundSource {
   if (value.startsWith("authored:")) {
-    const backgroundId = value.slice("authored:".length);
-    const flipX =
-      current.kind === "authored" && current.backgroundId === backgroundId
-        ? current.flipX
-        : undefined;
-    return { kind: "authored", backgroundId, ...(flipX ? { flipX } : {}) };
+    return { kind: "authored", backgroundId: value.slice("authored:".length) };
   }
   if (value.startsWith("image:")) {
     return { kind: "image", imageId: value.slice("image:".length) };
@@ -104,7 +92,7 @@ function BackgroundSourceField({
             id={id}
             className={inputClass}
             value={sourceValue(source)}
-            onChange={(e) => onChange(sourceFromValue(e.target.value, source))}
+            onChange={(e) => onChange(sourceFromValue(e.target.value))}
           >
             <option value="none">None (content only)</option>
             <option value="shape">Shape</option>
@@ -246,6 +234,7 @@ export function StyleControls({
   style,
   override,
   showCellSize = true,
+  showRenderSource = false,
   onUploadImage,
 }: {
   project: Project;
@@ -260,10 +249,21 @@ export function StyleControls({
    * popover hides it since cell size never cascades (ADR-0006).
    */
   showCellSize?: boolean;
+  /**
+   * Show the Render Source picker in the Foreground group. Off by default: a
+   * Render Source is per-Input, so only a Glyph-tier scope can edit one, while
+   * the sidebar addresses whole tiers.
+   */
+  showRenderSource?: boolean;
   /** Hand an uploaded tile image to the editor; resolves to its manifest entry. */
   onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
   const bg = style.background;
+  const fg = style.foreground;
+  const renderSource =
+    showRenderSource && scope.tier === "glyph"
+      ? resolveScopeRenderSource(project, scope)
+      : undefined;
   const showsShapeFields = bg.source.kind === "shape";
   /**
    * Show the fill and border controls: they paint an Authored tile's sentinel
@@ -283,166 +283,213 @@ export function StyleControls({
     dispatch({ type: "patch-style", scope, patch: styleFields });
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      <ColorField
-        label="Text color"
-        value={style.textColor}
-        onChange={(textColor) => patch({ textColor })}
-        onReset={resetFor("textColor")}
-      />
+    <div className="flex flex-col gap-6">
+      {/* One group per drawing layer, in the order they are painted. Every
+          control in a group writes one property of that layer's object, so the
+          panel reads as the shape the cascade resolves (ADR-0012 §2). */}
+      <LayerGroup title="Background">
+        <BackgroundSourceField
+          source={bg.source}
+          images={project.images}
+          onChange={(source) => patch({ background: { source } })}
+          onReset={resetFor("backgroundSource")}
+          onUploadImage={onUploadImage}
+        />
 
-      <BackgroundSourceField
-        source={bg.source}
-        images={project.images}
-        onChange={(source) => patch({ background: { source } })}
-        onReset={resetFor("backgroundSource")}
-        onUploadImage={onUploadImage}
-      />
-
-      {/* A tile carries its own shape and corner treatment, and "none" draws no
+        {/* A tile carries its own shape and corner treatment, and "none" draws no
           primitive at all, so the shape and radius controls would be inert under
           either. Fill and border survive a tile — they tint it through its
           sentinel paint roles. */}
-      {showsShapeFields && (
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-            <span>Background shape</span>
-            {resetFor("shape") && (
-              <ResetButton
-                label="Background shape"
-                onReset={resetFor("shape")!}
-              />
-            )}
-          </legend>
-          <div className="flex flex-wrap gap-3">
-            {SHAPES.map((s) => (
-              <label
-                key={s.value}
-                className="flex items-center gap-1.5 text-sm"
-              >
-                <input
-                  type="radio"
-                  name="bg-shape"
-                  value={s.value}
-                  checked={bg.shape === s.value}
-                  onChange={() => patch({ background: { shape: s.value } })}
-                  className="size-4"
+        {showsShapeFields && (
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+              <span>Background shape</span>
+              {resetFor("shape") && (
+                <ResetButton
+                  label="Background shape"
+                  onReset={resetFor("shape")!}
                 />
-                {s.label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      )}
+              )}
+            </legend>
+            <div className="flex flex-wrap gap-3">
+              {SHAPES.map((s) => (
+                <label
+                  key={s.value}
+                  className="flex items-center gap-1.5 text-sm"
+                >
+                  <input
+                    type="radio"
+                    name="bg-shape"
+                    value={s.value}
+                    checked={bg.shape === s.value}
+                    onChange={() => patch({ background: { shape: s.value } })}
+                    className="size-4"
+                  />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
-      {showCellSize && <CellSizeField project={project} dispatch={dispatch} />}
+        <TransformField
+          label="Background transform"
+          hint="Rotates and scales the whole tile — art or drawn shape alike."
+          transform={bg.transform}
+          onChange={(transform) => patch({ background: { transform } })}
+          onResetRotation={resetFor("backgroundRotation")}
+          onResetScale={resetFor("backgroundScale")}
+        />
 
-      {/* Sizes whichever Render Source the Glyph draws, so it lives with the
-          rest of the cascade rather than beside the image picker (issue #20). */}
-      <Field
-        label={`Content scale (${Math.round(style.contentScale * 100)}%)`}
-        hint="How large the label, Symbol, or image is drawn inside the tile."
-        onReset={resetFor("contentScale")}
-      >
-        {(id) => (
-          <input
-            id={id}
-            type="range"
-            min={CONTENT_SCALE_RANGE.min}
-            max={CONTENT_SCALE_RANGE.max}
-            step={CONTENT_SCALE_RANGE.step}
-            value={style.contentScale}
-            onChange={(e) => patch({ contentScale: Number(e.target.value) })}
-            className="w-full"
+        {showsPaintFields && (
+          <ColorField
+            label="Background fill"
+            value={bg.fill}
+            onChange={(fill) => patch({ background: { fill } })}
+            onReset={resetFor("fill")}
           />
         )}
-      </Field>
 
-      {showsPaintFields && (
-        <ColorField
-          label="Background fill"
-          value={bg.fill}
-          onChange={(fill) => patch({ background: { fill } })}
-          onReset={resetFor("fill")}
-        />
-      )}
-
-      {showsShapeFields && bg.shape === "rounded-rect" && (
-        <Field
-          label={`Corner radius (${bg.cornerRadius}px)`}
-          onReset={resetFor("cornerRadius")}
-        >
-          {(id) => (
-            <input
-              id={id}
-              type="range"
-              min={0}
-              max={64}
-              value={bg.cornerRadius}
-              onChange={(e) =>
-                patch({ background: { cornerRadius: Number(e.target.value) } })
-              }
-              className="w-full"
-            />
-          )}
-        </Field>
-      )}
-
-      {showsPaintFields && (
-        <>
+        {showsShapeFields && bg.shape === "rounded-rect" && (
           <Field
-            label={`Border width (${bg.border.width}px)`}
-            onReset={resetFor("borderWidth")}
+            label={`Corner radius (${bg.cornerRadius}px)`}
+            onReset={resetFor("cornerRadius")}
           >
             {(id) => (
               <input
                 id={id}
                 type="range"
                 min={0}
-                max={20}
-                value={bg.border.width}
+                max={64}
+                value={bg.cornerRadius}
                 onChange={(e) =>
                   patch({
-                    background: { border: { width: Number(e.target.value) } },
+                    background: { cornerRadius: Number(e.target.value) },
                   })
                 }
                 className="w-full"
               />
             )}
           </Field>
+        )}
 
-          <ColorField
-            label="Border color"
-            value={bg.border.color}
-            onChange={(color) => patch({ background: { border: { color } } })}
-            onReset={resetFor("borderColor")}
+        {showsPaintFields && (
+          <>
+            <Field
+              label={`Border width (${bg.border.width}px)`}
+              onReset={resetFor("borderWidth")}
+            >
+              {(id) => (
+                <input
+                  id={id}
+                  type="range"
+                  min={0}
+                  max={20}
+                  value={bg.border.width}
+                  onChange={(e) =>
+                    patch({
+                      background: { border: { width: Number(e.target.value) } },
+                    })
+                  }
+                  className="w-full"
+                />
+              )}
+            </Field>
+
+            <ColorField
+              label="Border color"
+              value={bg.border.color}
+              onChange={(color) => patch({ background: { border: { color } } })}
+              onReset={resetFor("borderColor")}
+            />
+          </>
+        )}
+      </LayerGroup>
+
+      <LayerGroup title="Foreground">
+        {/* Which source is drawn is per-Input, so it appears only where a single
+            Glyph is being edited — but it is a foreground property, and belongs
+            with the rest of the layer rather than floating above the panel. */}
+        {renderSource && (
+          <RenderSourceControls
+            dispatch={dispatch}
+            scope={scope}
+            source={renderSource.source}
+            hasSymbol={renderSource.hasSymbol}
+            images={project.images}
+            override={override}
+            onUploadImage={onUploadImage}
           />
-        </>
-      )}
+        )}
 
-      {/* Symbol Paint Role colours (ADR-0007): fill / border / secondary recolour
-          a Symbol's sentinel shapes independently. They apply only to Glyphs that
-          render a Symbol, but live in the shared Style panel so the cascade UI
-          isn't forked. */}
-      <ColorField
-        label="Symbol fill"
-        value={style.symbolPaints.fill}
-        onChange={(fill) => patch({ symbolPaints: { fill } })}
-        onReset={resetFor("symbolFill")}
-      />
-      <ColorField
-        label="Symbol border"
-        value={style.symbolPaints.border}
-        onChange={(color) => patch({ symbolPaints: { border: color } })}
-        onReset={resetFor("symbolBorder")}
-      />
-      <ColorField
-        label="Symbol secondary"
-        value={style.symbolPaints.secondary}
-        onChange={(secondary) => patch({ symbolPaints: { secondary } })}
-        onReset={resetFor("symbolSecondary")}
-      />
+        <ColorField
+          label="Text color"
+          value={fg.textColor}
+          onChange={(textColor) => patch({ foreground: { textColor } })}
+          onReset={resetFor("textColor")}
+        />
+
+        <TransformField
+          label="Foreground transform"
+          hint="Rotates and scales the label, Symbol, or image drawn on the tile. A negative scale mirrors that axis."
+          transform={fg.transform}
+          onChange={(transform) => patch({ foreground: { transform } })}
+          onResetRotation={resetFor("foregroundRotation")}
+          onResetScale={resetFor("foregroundScale")}
+        />
+
+        {/* Symbol Paint Role colours (ADR-0007): fill / border / secondary
+            recolour a Symbol's sentinel shapes independently. They apply only to
+            Glyphs that render a Symbol, but live in the shared Style panel so the
+            cascade UI isn't forked. */}
+        <ColorField
+          label="Symbol fill"
+          value={fg.symbolPaints.fill}
+          onChange={(fill) => patch({ foreground: { symbolPaints: { fill } } })}
+          onReset={resetFor("symbolFill")}
+        />
+        <ColorField
+          label="Symbol border"
+          value={fg.symbolPaints.border}
+          onChange={(color) =>
+            patch({ foreground: { symbolPaints: { border: color } } })
+          }
+          onReset={resetFor("symbolBorder")}
+        />
+        <ColorField
+          label="Symbol secondary"
+          value={fg.symbolPaints.secondary}
+          onChange={(secondary) =>
+            patch({ foreground: { symbolPaints: { secondary } } })
+          }
+          onReset={resetFor("symbolSecondary")}
+        />
+      </LayerGroup>
+
+      {/* Neither layer's: an atlas output value that never cascades (ADR-0006),
+          so it sits outside both groups rather than inside whichever is nearer. */}
+      {showCellSize && <CellSizeField project={project} dispatch={dispatch} />}
     </div>
+  );
+}
+
+/**
+ * One drawing layer's controls, under a heading naming the layer. The grouping is
+ * the payoff of the layer split: a reader can see which object each control
+ * writes without reading the handler.
+ */
+function LayerGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-3 text-sm font-semibold">{title}</legend>
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </fieldset>
   );
 }
 
@@ -482,10 +529,6 @@ export function GlyphStylePanel({
     deviceIndex: glyph.deviceIndex,
     glyphId: glyph.glyphId,
   };
-  // Render Source is per-Input, so this panel is the only place it's editable —
-  // the sidebar's Style controls address whole tiers.
-  const renderSource = resolveScopeRenderSource(project, scope);
-
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -515,17 +558,8 @@ export function GlyphStylePanel({
         </button>
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-        {renderSource && (
-          <RenderSourceControls
-            dispatch={dispatch}
-            scope={scope}
-            source={renderSource.source}
-            hasSymbol={renderSource.hasSymbol}
-            images={project.images}
-            override={override}
-            onUploadImage={onUploadImage}
-          />
-        )}
+        {/* Render Source is per-Input, so this panel is the only place it's
+            editable — the sidebar's Style controls address whole tiers. */}
         <StyleControls
           project={project}
           dispatch={dispatch}
@@ -533,6 +567,7 @@ export function GlyphStylePanel({
           style={style}
           override={override}
           showCellSize={false}
+          showRenderSource
           onUploadImage={onUploadImage}
         />
       </div>

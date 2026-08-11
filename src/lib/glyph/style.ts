@@ -13,7 +13,8 @@
  * number of overrides into one effective {@link GlyphStyle}.
  *
  * Every property is settable at every tier. A Catalog's art **seed** ranks
- * between the Glyph and Device tiers for `background.source` alone: see
+ * between the Glyph and Device tiers, and supplies only what it seeds — the
+ * Background source and, for a mirrored control, that layer's `scale.x`: see
  * {@link resolveGlyphStyle}.
  *
  * The font is deliberately **not** part of this cascade, and neither is
@@ -21,12 +22,17 @@
  * output value, so it lives in `project.exportSettings` (ADR-0012 §6) rather
  * than anywhere near a style.
  */
-import type { Background, BackgroundSource } from "@/lib/glyph/types";
+import type {
+  Background,
+  BackgroundSource,
+  LayerTransform,
+} from "@/lib/glyph/types";
 
 /**
  * The three **Paint Role** colours a Symbol's sentinel shapes resolve to
  * (ADR-0007): `fill` (primary ink, `#f00`), `border` (outline, `#00f`), and
- * `secondary` (highlight, `#0f0`). Independent of the label `textColor`.
+ * `secondary` (highlight, `#0f0`). Independent of the label `textColor` — they
+ * paint different Render Sources, and neither paints a custom image.
  */
 export interface SymbolPaints {
   fill: string;
@@ -40,31 +46,71 @@ export interface SymbolPaints {
  * `image` naming an asset the project doesn't carry, both fall back to the
  * default — see `resolveRenderSource`.
  *
- * Sizing is deliberately **not** part of this union: {@link StyleOverride.contentScale}
- * scales whichever source is drawn, so switching an Input from its Symbol to its
- * label can't silently discard the sizing the user set.
+ * Sizing and orientation are deliberately **not** part of this union: the
+ * foreground's {@link LayerTransform} paints whichever source is drawn, so
+ * switching an Input from its Symbol to its label can't silently discard either.
  */
 export type RenderSourceOverride =
   { kind: "label" } | { kind: "symbol" } | { kind: "image"; imageId: string };
 
 /**
- * A fully-resolved Glyph style: the effective text color, Background, the Symbol
- * Paint Role colours (ADR-0007 §3), and the content scale.
+ * The **foreground layer** of a Glyph: whichever Render Source is drawn, and how
+ * it is painted — the transform that places it, the label's colour, and the
+ * Symbol's Paint Roles.
+ *
+ * A layer object rather than fields at the top level so the two layers are the
+ * same shape: {@link Background} says where the tile art comes from and how the
+ * tile is painted, and this says the same two things about the content drawn on
+ * it (ADR-0012 §2). Every control in the Style panel's Foreground group writes
+ * one property of this object.
+ *
+ * Which source it draws is missing here for the reason it is missing from
+ * {@link GlyphStyle}: resolving that needs the Catalog and the image manifest,
+ * not just the cascade. The *override* does carry `renderSource`, so the layer
+ * the user edits is whole even though the resolved one can't be.
+ */
+export interface Foreground {
+  transform: LayerTransform;
+  textColor: string;
+  symbolPaints: SymbolPaints;
+}
+
+/**
+ * A fully-resolved Glyph style: the two drawing layers, and nothing else.
  *
  * The Render Source itself is **not** here: resolving it also needs the Catalog
  * entry's Symbol and the project's image manifest, so it has its own resolver
  * (`resolveRenderSource`) over the same {@link StyleOverride} tiers.
  */
 export interface GlyphStyle {
-  textColor: string;
   background: Background;
-  symbolPaints: SymbolPaints;
-  /**
-   * Multiplier on the tile's content box — the square a label, Symbol, or custom
-   * image is drawn in. `1` is the default fit; above 1 the content is clipped to
-   * its cell (issue #20).
-   */
-  contentScale: number;
+  foreground: Foreground;
+}
+
+/**
+ * A sparse patch of a {@link LayerTransform}. Each component falls up the cascade
+ * on its own, so a Device rotation and a Glyph mirror both survive — but a
+ * component that *is* set **replaces** the one below rather than composing with
+ * it, exactly as every other field in the cascade does.
+ *
+ * Sparse to the leaf, and that is load-bearing rather than tidy: a Catalog seed
+ * supplies `scale.x` alone, and the seed outranks the Device tier, so a transform
+ * replaced wholesale would silently erase a device-wide rotation on exactly the
+ * four mirrored shoulders and nowhere else.
+ */
+export interface TransformOverride {
+  rotation?: number;
+  scale?: { x?: number; y?: number };
+}
+
+/** A sparse patch of the foreground layer; unset fields fall up the cascade. */
+export interface ForegroundOverride {
+  transform?: TransformOverride;
+  textColor?: string;
+  /** A sparse patch of the Symbol Paint Role colours; unset roles fall up (ADR-0007). */
+  symbolPaints?: Partial<SymbolPaints>;
+  /** Which Render Source this tier draws; replaces wholesale, never merged (#20). */
+  renderSource?: RenderSourceOverride;
 }
 
 /** A sparse patch of a {@link Background}; unset fields fall up the cascade. */
@@ -78,6 +124,8 @@ export interface BackgroundOverride {
    * seeded tile off, `{ kind: "none" }` without putting a shape back.
    */
   source?: BackgroundSource;
+  /** How the tile layer is painted; see {@link TransformOverride}. */
+  transform?: TransformOverride;
   /** Read only where the resolved source is `{ kind: "shape" }`. */
   shape?: Background["shape"];
   fill?: string;
@@ -91,14 +139,8 @@ export interface BackgroundOverride {
  * tier above Project — so a fresh project resolves to its Project style untouched.
  */
 export interface StyleOverride {
-  textColor?: string;
   background?: BackgroundOverride;
-  /** A sparse patch of the Symbol Paint Role colours; unset roles fall up (ADR-0007). */
-  symbolPaints?: Partial<SymbolPaints>;
-  /** Which Render Source this tier draws; replaces wholesale, never merged (#20). */
-  renderSource?: RenderSourceOverride;
-  /** Scale of whatever Render Source is drawn; see {@link GlyphStyle.contentScale}. */
-  contentScale?: number;
+  foreground?: ForegroundOverride;
 }
 
 /** An override that changes nothing — the default at every non-Project tier. */
@@ -116,8 +158,14 @@ export type StyleScope =
 
 /**
  * One cascade-editable property, as addressed by the reset ("fall back up")
- * control. Background sub-properties are flattened so a single field names
- * exactly one setting the user can override or clear.
+ * control. Layer sub-properties are flattened so a single field names exactly
+ * one setting the user can override or clear — which is why `borderWidth` and
+ * `borderColor` are two entries and not one `border`.
+ *
+ * A transform is two entries per layer for the same reason: rotation and scale
+ * are separate controls, and one reset button over a pair of them would have no
+ * honest home in the panel. `x` and `y` stay together under `…Scale`, because
+ * mirroring is one gesture and the two numbers are one control.
  */
 export type StyleField =
   | "textColor"
@@ -127,38 +175,124 @@ export type StyleField =
   | "borderWidth"
   | "borderColor"
   | "backgroundSource"
+  | "backgroundRotation"
+  | "backgroundScale"
+  | "foregroundRotation"
+  | "foregroundScale"
   | "symbolFill"
   | "symbolBorder"
   | "symbolSecondary"
-  | "renderSource"
-  | "contentScale";
+  | "renderSource";
 
 /**
- * Deep-merge two sparse overrides, `patch` winning. Background and its border are
- * merged property-by-property so a patch can set just one setting without dropping
- * the rest of an existing override. Never mutates its inputs.
+ * Fold degrees into −180…180, the canonical spelling of an angle here: the range
+ * the control spans, centred on 0 so a quarter-turn anticlockwise reads `-90`
+ * rather than `270`.
+ *
+ * A value **already** in range is returned untouched, which is the whole reason
+ * this isn't the usual one-liner: `((d + 180) % 360 + 360) % 360 - 180` maps
+ * `180` to `-180`, so dragging the slider to one end would snap the thumb to the
+ * other. Both ends are legal and stable.
+ *
+ * Call it where a rotation is **written** — the control's commit, and the Preset
+ * build gate. Not in {@link resolveStyle}: any finite value draws correctly
+ * (`deg * π / 180` is right for `-90`, `450` and `0` alike), so normalising
+ * during resolution would make a pure fold over plain data do arithmetic on
+ * every render for no observable gain. Finiteness is likewise not this function's
+ * job — `NaN` is caught at the boundary it can enter by, `isLayerTransform`.
+ */
+export function normalizeRotation(degrees: number): number {
+  if (degrees >= -180 && degrees <= 180) return degrees;
+  return ((((degrees + 180) % 360) + 360) % 360) - 180;
+}
+
+/**
+ * Drop one component from a sparse transform, returning `undefined` once nothing
+ * is left — so clearing a layer's rotation when it set no scale collapses the
+ * whole override rather than leaving an empty `transform: {}` behind, which
+ * `isOverrideFieldSet` would then report as "set" for neither component and the
+ * reset button would offer forever.
+ */
+function clearTransformComponent(
+  transform: TransformOverride | undefined,
+  part: "rotation" | "scale",
+): TransformOverride | undefined {
+  if (!transform) return undefined;
+  const next: TransformOverride = { ...transform };
+  delete next[part];
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/** Set or drop a layer override's `transform`, keeping the layer collapsible. */
+function setTransform(
+  layer: BackgroundOverride | ForegroundOverride,
+  transform: TransformOverride | undefined,
+): void {
+  if (transform) layer.transform = transform;
+  else delete layer.transform;
+}
+
+/**
+ * Merge two sparse {@link TransformOverride}s component-by-component, `patch`
+ * winning. `scale` is merged per axis rather than replaced, so mirroring X at one
+ * tier doesn't silently drop a Y scale set at the same one.
+ */
+function mergeTransform(
+  base: TransformOverride | undefined,
+  patch: TransformOverride,
+): TransformOverride {
+  const next: TransformOverride = { ...base, ...patch };
+  const scale = { ...base?.scale, ...patch.scale };
+  if (Object.keys(scale).length > 0) next.scale = scale;
+  return next;
+}
+
+/**
+ * Deep-merge two sparse overrides, `patch` winning. Background, its border, and
+ * both layer transforms are merged property-by-property so a patch can set just
+ * one setting without dropping the rest of an existing override. Never mutates
+ * its inputs.
  */
 export function mergeOverride(
   base: StyleOverride,
   patch: StyleOverride,
 ): StyleOverride {
   const next: StyleOverride = { ...base };
-  if (patch.textColor !== undefined) next.textColor = patch.textColor;
   if (patch.background) {
     const border = { ...base.background?.border, ...patch.background.border };
     next.background = {
       ...base.background,
       ...patch.background,
       ...(Object.keys(border).length > 0 ? { border } : {}),
+      ...(patch.background.transform
+        ? {
+            transform: mergeTransform(
+              base.background?.transform,
+              patch.background.transform,
+            ),
+          }
+        : {}),
     };
   }
-  if (patch.symbolPaints) {
-    next.symbolPaints = { ...base.symbolPaints, ...patch.symbolPaints };
+  if (patch.foreground) {
+    const symbolPaints = {
+      ...base.foreground?.symbolPaints,
+      ...patch.foreground.symbolPaints,
+    };
+    next.foreground = {
+      ...base.foreground,
+      ...patch.foreground,
+      ...(Object.keys(symbolPaints).length > 0 ? { symbolPaints } : {}),
+      ...(patch.foreground.transform
+        ? {
+            transform: mergeTransform(
+              base.foreground?.transform,
+              patch.foreground.transform,
+            ),
+          }
+        : {}),
+    };
   }
-  // A Render Source is one choice, not a bag of properties: merging an `image`
-  // patch into a `label` base would leave a half-and-half override.
-  if (patch.renderSource !== undefined) next.renderSource = patch.renderSource;
-  if (patch.contentScale !== undefined) next.contentScale = patch.contentScale;
   return next;
 }
 
@@ -169,7 +303,7 @@ export function isOverrideFieldSet(
 ): boolean {
   switch (field) {
     case "textColor":
-      return override.textColor !== undefined;
+      return override.foreground?.textColor !== undefined;
     case "shape":
       return override.background?.shape !== undefined;
     case "fill":
@@ -182,16 +316,22 @@ export function isOverrideFieldSet(
       return override.background?.border?.color !== undefined;
     case "backgroundSource":
       return override.background?.source !== undefined;
+    case "backgroundRotation":
+      return override.background?.transform?.rotation !== undefined;
+    case "backgroundScale":
+      return override.background?.transform?.scale !== undefined;
+    case "foregroundRotation":
+      return override.foreground?.transform?.rotation !== undefined;
+    case "foregroundScale":
+      return override.foreground?.transform?.scale !== undefined;
     case "symbolFill":
-      return override.symbolPaints?.fill !== undefined;
+      return override.foreground?.symbolPaints?.fill !== undefined;
     case "symbolBorder":
-      return override.symbolPaints?.border !== undefined;
+      return override.foreground?.symbolPaints?.border !== undefined;
     case "symbolSecondary":
-      return override.symbolPaints?.secondary !== undefined;
+      return override.foreground?.symbolPaints?.secondary !== undefined;
     case "renderSource":
-      return override.renderSource !== undefined;
-    case "contentScale":
-      return override.contentScale !== undefined;
+      return override.foreground?.renderSource !== undefined;
   }
 }
 
@@ -205,37 +345,52 @@ export function clearOverrideField(
   field: StyleField,
 ): StyleOverride {
   const next: StyleOverride = { ...override };
-  if (field === "textColor") {
-    delete next.textColor;
-    return next;
-  }
-  if (field === "renderSource") {
-    delete next.renderSource;
-    return next;
-  }
-  if (field === "contentScale") {
-    delete next.contentScale;
-    return next;
-  }
   if (
+    field === "textColor" ||
+    field === "renderSource" ||
+    field === "foregroundRotation" ||
+    field === "foregroundScale" ||
     field === "symbolFill" ||
     field === "symbolBorder" ||
     field === "symbolSecondary"
   ) {
-    if (!next.symbolPaints) return next;
-    const sp: Partial<SymbolPaints> = { ...next.symbolPaints };
-    if (field === "symbolFill") delete sp.fill;
-    else if (field === "symbolBorder") delete sp.border;
-    else delete sp.secondary;
-    if (Object.keys(sp).length > 0) next.symbolPaints = sp;
-    else delete next.symbolPaints;
+    if (!next.foreground) return next;
+    const fg: ForegroundOverride = { ...next.foreground };
+    if (field === "textColor") delete fg.textColor;
+    else if (field === "renderSource") delete fg.renderSource;
+    else if (field === "foregroundRotation" || field === "foregroundScale") {
+      setTransform(
+        fg,
+        clearTransformComponent(
+          fg.transform,
+          field === "foregroundRotation" ? "rotation" : "scale",
+        ),
+      );
+    } else if (fg.symbolPaints) {
+      const sp: Partial<SymbolPaints> = { ...fg.symbolPaints };
+      if (field === "symbolFill") delete sp.fill;
+      else if (field === "symbolBorder") delete sp.border;
+      else delete sp.secondary;
+      if (Object.keys(sp).length > 0) fg.symbolPaints = sp;
+      else delete fg.symbolPaints;
+    }
+    if (Object.keys(fg).length > 0) next.foreground = fg;
+    else delete next.foreground;
     return next;
   }
   if (!next.background) return next;
   const bg: BackgroundOverride = { ...next.background };
   if (field === "shape") delete bg.shape;
   else if (field === "backgroundSource") delete bg.source;
-  else if (field === "fill") delete bg.fill;
+  else if (field === "backgroundRotation" || field === "backgroundScale") {
+    setTransform(
+      bg,
+      clearTransformComponent(
+        bg.transform,
+        field === "backgroundRotation" ? "rotation" : "scale",
+      ),
+    );
+  } else if (field === "fill") delete bg.fill;
   else if (field === "cornerRadius") delete bg.cornerRadius;
   else if (field === "borderWidth" || field === "borderColor") {
     if (bg.border) {
@@ -261,28 +416,37 @@ export function resolveStyle(
   base: GlyphStyle,
   ...overrides: (StyleOverride | undefined)[]
 ): GlyphStyle {
-  let textColor = base.textColor;
   let background: Background = {
     ...base.background,
     border: { ...base.background.border },
+    transform: copyTransform(base.background.transform),
   };
-  const symbolPaints: SymbolPaints = { ...base.symbolPaints };
-  let contentScale = base.contentScale;
+  const foreground: Foreground = {
+    transform: copyTransform(base.foreground.transform),
+    textColor: base.foreground.textColor,
+    symbolPaints: { ...base.foreground.symbolPaints },
+  };
 
   for (const override of overrides) {
     if (!override) continue;
-    if (override.textColor !== undefined) textColor = override.textColor;
     if (override.background) {
       background = applyBackground(background, override.background);
     }
-    if (override.symbolPaints) {
-      Object.assign(symbolPaints, override.symbolPaints);
+    const fg = override.foreground;
+    if (fg) {
+      if (fg.transform) {
+        foreground.transform = applyTransform(
+          foreground.transform,
+          fg.transform,
+        );
+      }
+      if (fg.textColor !== undefined) foreground.textColor = fg.textColor;
+      if (fg.symbolPaints)
+        Object.assign(foreground.symbolPaints, fg.symbolPaints);
     }
-    if (override.contentScale !== undefined)
-      contentScale = override.contentScale;
   }
 
-  return { textColor, background, symbolPaints, contentScale };
+  return { background, foreground };
 }
 
 /**
@@ -290,7 +454,7 @@ export function resolveStyle(
  * **seed** (ADR-0012 §2), which ranks between the Glyph and Device tiers:
  *
  * ```
- * source = Glyph override → Catalog seed → Device tier → Project base
+ * Glyph override → Catalog seed → Device tier → Project base
  * ```
  *
  * A seed is a presence fact about *that control*, so only a statement about that
@@ -298,22 +462,40 @@ export function resolveStyle(
  * device-wide source no-ops on the eight seeded shoulder Inputs, and the only
  * escape is a per-Glyph override.
  *
- * The seed rides in as a pseudo-tier rather than a second pass: `applyBackground`
- * replaces `source` wholesale, so a tier carrying only that field leaves the
- * Device tier's `fill` and border intact.
+ * The seed rides in as a pseudo-tier rather than a second pass, and is sparse
+ * like any other: it names a source and — on the four left-side shoulders — that
+ * layer's `scale.x`, leaving every other field of the Device tier intact. The
+ * projection from the Catalog's presence facts to those values is
+ * `seedStyle`'s job, not this one's.
  */
 export function resolveGlyphStyle(
   base: GlyphStyle,
-  seed: BackgroundSource | undefined,
+  seed: StyleOverride | undefined,
   device: StyleOverride | undefined,
   glyph: StyleOverride | undefined,
 ): GlyphStyle {
-  return resolveStyle(
-    base,
-    device,
-    seed && { background: { source: seed } },
-    glyph,
-  );
+  return resolveStyle(base, device, seed, glyph);
+}
+
+/** A detached copy of a resolved transform, safe to hand back to a caller. */
+function copyTransform(transform: LayerTransform): LayerTransform {
+  return { rotation: transform.rotation, scale: { ...transform.scale } };
+}
+
+/**
+ * Return `transform` patched with the set components of `patch`. Each component
+ * **replaces** the one below rather than composing with it: a Glyph asking for
+ * `rotation: 0` means upright, not "turn back by the Device's 90".
+ */
+function applyTransform(
+  transform: LayerTransform,
+  patch: TransformOverride,
+): LayerTransform {
+  const next = copyTransform(transform);
+  if (patch.rotation !== undefined) next.rotation = patch.rotation;
+  if (patch.scale?.x !== undefined) next.scale.x = patch.scale.x;
+  if (patch.scale?.y !== undefined) next.scale.y = patch.scale.y;
+  return next;
 }
 
 /** Return `bg` patched with the set fields of `patch` (border merged deeply). */
@@ -324,8 +506,12 @@ function applyBackground(
   const next: Background = { ...bg, border: { ...bg.border } };
   if (patch.shape !== undefined) next.shape = patch.shape;
   // One choice, replaced whole: a tier that names a source says everything about
-  // where the tile comes from, including its mirror flag.
+  // where the tile art comes from. How that art is *painted* is the layer's
+  // transform, which this deliberately leaves alone.
   if (patch.source !== undefined) next.source = patch.source;
+  if (patch.transform) {
+    next.transform = applyTransform(bg.transform, patch.transform);
+  }
   if (patch.fill !== undefined) next.fill = patch.fill;
   if (patch.cornerRadius !== undefined) next.cornerRadius = patch.cornerRadius;
   if (patch.border) {

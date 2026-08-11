@@ -14,7 +14,7 @@
  * to "start fresh" rather than throwing.
  */
 import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/defaults";
-import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
+import type { Foreground, GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
 import type {
   Background,
   BackgroundShape,
@@ -25,6 +25,7 @@ import type {
   ImageAsset,
   NamingConfig,
   Project,
+  LayerTransform,
 } from "@/lib/glyph/types";
 
 const CONFIG_KEY = "uitoolbox.glyph-creator.project";
@@ -300,10 +301,32 @@ function isBackgroundSource(value: unknown): value is BackgroundSource {
   return value.kind === "image" && typeof value.imageId === "string";
 }
 
+/**
+ * A resolved {@link LayerTransform} is **total** — a persisted one with a
+ * component missing is not a transform that falls up, it's a broken file. Finite,
+ * too: `NaN` survives `typeof x === "number"` and, while the canvas ignores a
+ * non-finite matrix rather than breaking on it, ADR-0010 would rather discard the
+ * file than silently draw something the numbers don't describe.
+ */
+function isLayerTransform(value: unknown): value is LayerTransform {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.rotation) &&
+    isRecord(value.scale) &&
+    isFiniteNumber(value.scale.x) &&
+    isFiniteNumber(value.scale.y)
+  );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isBackground(value: unknown): value is Background {
   if (!isRecord(value)) return false;
   return (
     SHAPES.includes(value.shape as BackgroundShape) &&
+    isLayerTransform(value.transform) &&
     typeof value.fill === "string" &&
     typeof value.cornerRadius === "number" &&
     isRecord(value.border) &&
@@ -331,10 +354,18 @@ function isSymbolPaints(value: unknown): value is SymbolPaints {
 function isGlyphStyle(value: unknown): value is GlyphStyle {
   return (
     isRecord(value) &&
-    typeof value.textColor === "string" &&
     isBackground(value.background) &&
-    isSymbolPaints(value.symbolPaints) &&
-    typeof value.contentScale === "number"
+    isForeground(value.foreground)
+  );
+}
+
+/** The foreground layer of a resolved style — total, like its Background twin. */
+function isForeground(value: unknown): value is Foreground {
+  return (
+    isRecord(value) &&
+    isLayerTransform(value.transform) &&
+    typeof value.textColor === "string" &&
+    isSymbolPaints(value.symbolPaints)
   );
 }
 

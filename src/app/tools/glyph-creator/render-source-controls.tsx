@@ -4,7 +4,11 @@ import { useId, type Dispatch } from "react";
 import type { ResolvedRenderSource } from "@/lib/glyph/generate";
 import type { ProjectAction } from "@/lib/glyph/project";
 import { isOverrideFieldSet } from "@/lib/glyph/style";
-import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
+import type {
+  RenderSourceOverride,
+  StyleOverride,
+  StyleScope,
+} from "@/lib/glyph/style";
 import type { ImageAsset } from "@/lib/glyph/types";
 import { ResetButton, inputClass } from "./controls-ui";
 import { ImageUploadField } from "./image-upload-field";
@@ -55,7 +59,7 @@ export function RenderSourceControls({
       // Coming back to Image restores the Glyph's own picture, not the first
       // upload — the id survives on the override while another source is shown,
       // so switching away and back mustn't silently repoint it.
-      const previous = override.renderSource;
+      const previous = override.foreground?.renderSource;
       const imageId =
         previous?.kind === "image" &&
         images.some((i) => i.id === previous.imageId)
@@ -69,8 +73,12 @@ export function RenderSourceControls({
     patch({ kind });
   }
 
-  function patch(renderSource: StyleOverride["renderSource"]) {
-    dispatch({ type: "patch-style", scope, patch: { renderSource } });
+  function patch(renderSource: RenderSourceOverride) {
+    dispatch({
+      type: "patch-style",
+      scope,
+      patch: { foreground: { renderSource } },
+    });
   }
 
   return (

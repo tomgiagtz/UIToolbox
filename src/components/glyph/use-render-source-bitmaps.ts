@@ -55,14 +55,14 @@ export function useRenderSourceBitmaps(
   const key =
     withSymbols
       .map((s) => {
-        const p = s.style.symbolPaints;
+        const p = s.style.foreground.symbolPaints;
         return `${s.symbolId}:${p.fill}:${p.border}:${p.secondary}`;
       })
       .join("|") +
     "~" +
     withTiles.map((s) => tileKey(s.style)).join("|") +
     // A custom image draws as authored, so only its id varies the bitmap — not
-    // any resolved colour, and not the content scale (applied at draw time).
+    // any resolved colour, and not its transform (applied at draw time).
     "~" +
     withImages.map((s) => s.imageId).join("|") +
     `@${size}#${device ?? ""}`;

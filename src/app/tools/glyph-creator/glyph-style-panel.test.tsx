@@ -107,7 +107,7 @@ describe("GlyphStylePanel", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { textColor: "#00ff00ff" },
+      patch: { foreground: { textColor: "#00ff00ff" } },
     });
   });
 
@@ -146,14 +146,67 @@ describe("GlyphStylePanel", () => {
     expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
   });
 
-  it("scales the Render Source through the cascade", () => {
+  it("scales both axes together while they are linked", () => {
     const { dispatch } = renderPanel();
-    const slider = screen.getByLabelText(/content scale \(100%\)/i);
-    fireEvent.change(slider, { target: { value: "0.5" } });
+    // The box, not the slider: the value arrives unrounded, as typed. The axes
+    // start linked because they agree, so one number moves both — scaling a
+    // Symbol up is one gesture, as it was under the old uniform control.
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /foreground transform scale X/i }),
+      { target: { value: "0.5" } },
+    );
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { contentScale: 0.5 },
+      patch: { foreground: { transform: { scale: { x: 0.5, y: 0.5 } } } },
+    });
+  });
+
+  it("scales one axis alone once the link is off", () => {
+    const { dispatch } = renderPanel();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /link foreground transform scale axes/i,
+      }),
+    );
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /foreground transform scale X/i }),
+      { target: { value: "0.5" } },
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      // One axis, so the other keeps falling up the cascade.
+      patch: { foreground: { transform: { scale: { x: 0.5 } } } },
+    });
+  });
+
+  it("rotates a layer in degrees, and only that layer", () => {
+    const { dispatch } = renderPanel();
+    fireEvent.change(screen.getByLabelText(/background transform rotation/i), {
+      target: { value: "90" },
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { background: { transform: { rotation: 90 } } },
+    });
+  });
+
+  it("lets the scale slider pass through zero", () => {
+    // Zero is not degenerate enough to guard against: the canvas draws nothing
+    // through a non-invertible matrix, the number stays visible in the box, and
+    // one reset undoes it. Skipping it would need a custom control that broke
+    // keyboard stepping.
+    const { dispatch } = renderPanel();
+    const slider = screen.getAllByRole("slider", {
+      name: /foreground transform scale X/i,
+    })[0];
+    fireEvent.change(slider, { target: { value: "0" } });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { foreground: { transform: { scale: { x: 0, y: 0 } } } },
     });
   });
 
@@ -202,21 +255,20 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     });
   });
 
-  it("keeps a mirrored tile mirrored when it is re-picked", () => {
-    // Re-picking a bumper's own tile must not quietly un-flip it.
+  it("carries nothing over from the source it replaces", () => {
+    // Orientation left the source union, so a re-pick names the tile and only
+    // the tile — there is no flag left for it to preserve or to drop.
     const { dispatch } = renderPanel({
-      source: { kind: "authored", backgroundId: "bumper", flipX: true },
+      source: { kind: "authored", backgroundId: "bumper" },
     });
     fireEvent.change(screen.getByLabelText("Background source"), {
-      target: { value: "authored:bumper" },
+      target: { value: "authored:trigger" },
     });
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
       patch: {
-        background: {
-          source: { kind: "authored", backgroundId: "bumper", flipX: true },
-        },
+        background: { source: { kind: "authored", backgroundId: "trigger" } },
       },
     });
   });
@@ -305,7 +357,7 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
-      patch: { renderSource: { kind: "label" } },
+      patch: { foreground: { renderSource: { kind: "label" } } },
     });
   });
 
@@ -329,7 +381,9 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { renderSource: { kind: "image", imageId: image.id } },
+      patch: {
+        foreground: { renderSource: { kind: "image", imageId: image.id } },
+      },
     });
   });
 
@@ -355,7 +409,7 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     const { dispatch } = renderPanel({
       project: xboxProject(),
       glyph: xboxA,
-      override: { renderSource: { kind: "label" } },
+      override: { foreground: { renderSource: { kind: "label" } } },
     });
     fireEvent.click(
       screen.getByRole("button", { name: /reset render source/i }),
@@ -379,13 +433,17 @@ describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
     // back must not silently repoint the Glyph at someone else's picture.
     const { dispatch } = renderPanel({
       project: { ...createDefaultProject(), images },
-      override: { renderSource: { kind: "image", imageId: "img-2.png" } },
+      override: {
+        foreground: { renderSource: { kind: "image", imageId: "img-2.png" } },
+      },
     });
     fireEvent.click(screen.getByLabelText("Image"));
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: { renderSource: { kind: "image", imageId: "img-2.png" } },
+      patch: {
+        foreground: { renderSource: { kind: "image", imageId: "img-2.png" } },
+      },
     });
   });
 });

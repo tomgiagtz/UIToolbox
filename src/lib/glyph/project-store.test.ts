@@ -49,11 +49,17 @@ describe("ProjectStore — config (localStorage)", () => {
     expect(loadConfig()).toEqual({ kind: "ok", project });
   });
 
-  it("round-trips an image manifest and a scaled Glyph", () => {
+  it("round-trips an image manifest and a transformed Glyph", () => {
     const base = createDefaultProject();
     const project: Project = {
       ...base,
-      style: { ...base.style, contentScale: 0.75 },
+      style: {
+        ...base.style,
+        foreground: {
+          ...base.style.foreground,
+          transform: { rotation: 90, scale: { x: -1, y: 0.75 } },
+        },
+      },
       images: [{ id: "img-1.png", fileName: "art.png", type: "image/png" }],
     };
     saveConfig(project);

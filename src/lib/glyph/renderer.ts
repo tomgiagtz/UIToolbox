@@ -1,5 +1,5 @@
 import type { GlyphStyle } from "@/lib/glyph/style";
-import type { Background } from "@/lib/glyph/types";
+import type { Background, LayerTransform } from "@/lib/glyph/types";
 
 /**
  * The subset of the 2D canvas context shared by the on-screen preview
@@ -62,83 +62,113 @@ export function renderGlyph(
 ): void {
   const { cellSize, style, fontFamily, label, symbol, image, backgroundImage } =
     opts;
-  const { background, textColor } = style;
+  const { background, foreground } = style;
 
   ctx.save();
   ctx.translate(ox, oy);
   ctx.clearRect(0, 0, cellSize, cellSize);
+
+  // Both layers are clipped to the cell. Either transform can reach past it — a
+  // rotated tile, an upscaled Symbol — and cells are packed edge-to-edge, so an
+  // unclipped layer would paint its neighbour.
+  //
+  // A rotated layer therefore loses what falls outside, and what that looks like
+  // depends on the art: square full-bleed tile art shows empty corners, while a
+  // drawn primitive has its corners cut off. Both are the transform doing what
+  // was asked; the escape is to scale down, which is the user's call to make and
+  // not one to make for them by shrinking the layer to fit its rotated bounds.
+  ctx.beginPath();
+  ctx.rect(0, 0, cellSize, cellSize);
+  ctx.clip();
 
   // A "none" source draws nothing behind the content at all — no primitive and
   // no tile art. Otherwise a tile (Authored or uploaded) replaces the plain shape
   // and carries its own outline; until its bitmap warms, fall back to the plain
   // shape so there's no blank flash.
   if (background.source.kind !== "none") {
-    if (backgroundImage) {
-      drawTile(ctx, cellSize, backgroundImage, background.source);
-    } else {
-      drawBackground(ctx, cellSize, background);
-    }
+    withTransform(ctx, cellSize, background.transform, () => {
+      if (backgroundImage) {
+        drawTile(ctx, cellSize, backgroundImage, background.source);
+      } else {
+        drawBackground(ctx, cellSize, background);
+      }
+    });
   }
   // Exactly one Render Source is drawn, in the same content box: a custom image,
   // else a Symbol, else the label. The order is also the fallback chain — a source
   // whose bitmap hasn't loaded (or never will) shows the next one down rather
   // than an empty cell.
-  const box = contentBox(cellSize, background.border.width, style.contentScale);
+  const box = contentBox(cellSize, background.border.width);
   if (box.size > 0) {
-    // A content scale above 1 can reach past the cell, and cells are packed
-    // edge-to-edge, so clip before drawing or a big Glyph paints its neighbour.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, cellSize, cellSize);
-    ctx.clip();
-    if (image) {
-      drawImage(ctx, cellSize, image, box.size);
-    } else if (symbol) {
-      drawSymbol(ctx, cellSize, symbol, box.size);
-    } else {
-      drawLabel(
-        ctx,
-        cellSize,
-        label,
-        textColor,
-        fontFamily,
-        box.size,
-        style.contentScale,
-      );
-    }
-    ctx.restore();
+    withTransform(ctx, cellSize, foreground.transform, () => {
+      if (image) {
+        drawImage(ctx, cellSize, image, box.size);
+      } else if (symbol) {
+        drawSymbol(ctx, cellSize, symbol, box.size);
+      } else {
+        drawLabel(
+          ctx,
+          cellSize,
+          label,
+          foreground.textColor,
+          fontFamily,
+          box.size,
+        );
+      }
+    });
   }
 
   ctx.restore();
 }
 
 /**
- * The inner box a Render Source draws in: an unscaled padding that keeps the
- * content clear of the border and cell edge, then the user's `contentScale` on the
- * resulting square. Shared by all three sources so a Symbol, a custom image, and
- * the fallback label occupy the exact same footprint.
+ * Run `draw` with one layer's {@link LayerTransform} applied about the centre of the
+ * cell, then restore.
  *
- * The scale is applied to the box rather than the padding so the box stays centred
- * on the cell — every source re-centres from {@link size} alone.
+ * Both scale and rotation are canvas operations, and deliberately so: the layer
+ * is drawn exactly as it would be at identity and the transform then paints it.
+ * Folding the scale into each source's own geometry instead would leave rotation
+ * as the only part of a transform the sources didn't know about, which is the
+ * split that made `flipX` a per-source concern in the first place.
  */
-function contentBox(
+function withTransform(
+  ctx: Canvas2DContext,
   cellSize: number,
-  borderWidth: number,
-  contentScale: number,
-): { size: number } {
+  transform: LayerTransform,
+  draw: () => void,
+): void {
+  ctx.save();
+  const centre = cellSize / 2;
+  ctx.translate(centre, centre);
+  ctx.rotate((transform.rotation * Math.PI) / 180);
+  ctx.scale(transform.scale.x, transform.scale.y);
+  ctx.translate(-centre, -centre);
+  draw();
+  ctx.restore();
+}
+
+/**
+ * The inner box a Render Source draws in: a padding that keeps the content clear
+ * of the border and cell edge. Shared by all three sources so a Symbol, a custom
+ * image, and the fallback label occupy the exact same footprint — the content
+ * layer's transform then paints that footprint wherever the user asked.
+ */
+function contentBox(cellSize: number, borderWidth: number): { size: number } {
   const padding = Math.max(borderWidth + 4, cellSize * 0.12);
-  return { size: (cellSize - padding * 2) * contentScale };
+  return { size: cellSize - padding * 2 };
 }
 
 /**
  * Draw the Background tile art across the whole cell.
  *
  * The two kinds of art get the treatment their authorship earns. An **Authored
- * Background** is square, tool-owned tile art, so it fills the cell exactly and
- * honours the mirror flag that faces left-side bumpers/triggers the other way
- * (issue #18) — the flip wraps only the tile, so the content drawn on top stays
- * upright. An **uploaded image** is the user's own graphic of unknown aspect, so
- * it is fitted and centred rather than stretched (issue #22).
+ * Background** is square, tool-owned tile art, so it fills the cell exactly. An
+ * **uploaded image** is the user's own graphic of unknown aspect, so it is fitted
+ * and centred rather than stretched (issue #22) — the layer's transform is where
+ * a user who *wants* it stretched says so.
+ *
+ * Orientation is no part of this: it belongs to the layer, not to where the art
+ * came from (ADR-0012 §2).
  */
 function drawTile(
   ctx: Canvas2DContext,
@@ -148,14 +178,6 @@ function drawTile(
 ): void {
   if (source.kind === "image") {
     drawImage(ctx, cellSize, tile, cellSize);
-    return;
-  }
-  if (source.kind === "authored" && source.flipX) {
-    ctx.save();
-    ctx.translate(cellSize, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(tile, 0, 0, cellSize, cellSize);
-    ctx.restore();
     return;
   }
   ctx.drawImage(tile, 0, 0, cellSize, cellSize);
@@ -261,7 +283,6 @@ function drawLabel(
   color: string,
   fontFamily: string,
   available: number,
-  contentScale: number,
 ): void {
   if (!label) return;
 
@@ -269,10 +290,7 @@ function drawLabel(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // The content scale widens the box the label must fit, but it also has to move
-  // the starting size — otherwise scaling up would only loosen the fit for a
-  // long label and do nothing at all for a short one.
-  let fontPx = Math.floor(cellSize * MAX_FONT_FRACTION * contentScale);
+  let fontPx = Math.floor(cellSize * MAX_FONT_FRACTION);
   const font = (px: number) => `${px}px "${fontFamily}"`;
 
   ctx.font = font(fontPx);
