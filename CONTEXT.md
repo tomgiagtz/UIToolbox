@@ -114,11 +114,12 @@ _Avoid:_ "icon", "default image" — use Symbol for artwork; "tintable" /
 
 A Symbol whose artwork depicts a whole group of Inputs and emphasises one of
 them, rather than depicting its own Input alone — the d-pad Symbols draw all four
-arms with one highlighted. Correct in an exported **Glyph**, where the cell
-stands on its own, but a **Device Layout** skips it: the Layout already draws the
-cluster as separate nodes, so nesting the art inside one of them would show a
-whole d-pad inside a quarter of itself. Marked as cluster art in the Symbol Set
-manifest.
+arms with one highlighted, and the mouse Symbols draw the whole mouse and
+emphasise one button. Correct in an exported **Glyph**, where the cell stands on
+its own, but a **Device Layout** skips it: the Layout already draws the cluster
+as separate nodes, so nesting the art inside one of them would show a whole d-pad
+inside a quarter of itself, or a whole mouse inside one of its buttons. Marked as
+cluster art in the Symbol Set manifest.
 
 _Avoid:_ "composite Symbol", "group icon" — cluster art is about what the art
 _depicts_, not how it is built.
@@ -176,12 +177,18 @@ generate Glyphs. Inputs the Catalog lacks are added as **custom Inputs**.
 
 ### Device Layout
 
-The **code-drawn schematic** used to render a Device's Catalog for selection:
-a standard US-staggered rounded-rect keycap board for the Keyboard, and clustered
-**Symbol nodes** (d-pad, face-button diamond, bumpers/triggers) for the pads.
-It is **editor chrome only** — a picker for enabling Inputs — and is never part
-of an exported Sprite Atlas. No layout art is authored; the only authored assets
-are the Symbols.
+The **schematic** used to render a Device's Catalog for selection: a standard
+US-staggered rounded-rect keycap board for the Keyboard, with a mouse schematic
+beside it, and clustered nodes over a controller outline for the pads. It is
+**editor chrome only** — a picker for enabling Inputs — and is never part of an
+exported Sprite Atlas.
+
+The pads and the mouse are **authored** SVGs (`glyph/layouts/`), parsed by
+codegen into shaped, clickable nodes; the keycap board is code-drawn from row
+metadata. The mouse is a Layout of its own rather than a row of keycaps — three
+1u caps read as three keys — but it is not a Device: its Inputs sit on the
+Keyboard Catalog, so the Keyboard draws through two Layouts, and the
+Catalog↔Layout bijection spans both.
 
 _Avoid:_ "silhouette", "controller art" — the Layout is schematic, not artwork.
 

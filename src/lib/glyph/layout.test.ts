@@ -7,14 +7,11 @@ import {
   PAD_LAYOUTS,
   getPadLayout,
   keyboardExtent,
-  type KeycapKey,
+  type KeyUnitRect,
 } from "@/lib/glyph/layout";
 
-/** A rectangle in key-units — a keycap, or the mouse's slot beside the board. */
-type Rect = Pick<KeycapKey, "x" | "y" | "w" | "h">;
-
 /** Do two unit rectangles overlap (share positive area)? Touching edges is fine. */
-function overlaps(a: Rect, b: Rect): boolean {
+function overlaps(a: KeyUnitRect, b: KeyUnitRect): boolean {
   return (
     a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
   );

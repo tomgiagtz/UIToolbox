@@ -53,7 +53,7 @@ describe("DeviceLayout", () => {
     // blank body and the two side buttons, which the keycap row never had.
     for (const name of ["Mouse", "LMB", "RMB", "MMB", "Mouse 4", "Mouse 5"])
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
-    // A keycap is a <rect>; these are the authored/placeholder shapes instead.
+    // And they hang off a schematic of their own, not the keycap board.
     expect(
       screen.getByRole("group", { name: "Mouse buttons" }),
     ).toBeInTheDocument();

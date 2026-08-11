@@ -10,8 +10,8 @@
  *
  * The keyboard Device draws through **two** Layouts: {@link KEYBOARD_LAYOUT}
  * for the keycap board and {@link MOUSE_LAYOUT} for the mouse it places beside
- * it. The mouse buttons are keyboard Catalog Inputs, but three 1u caps in a row
- * read as three keys, so they get a schematic of their own.
+ * it. The mouse buttons are keyboard Catalog Inputs, but a row of 1u caps reads
+ * as a row of keys, so they get a schematic of their own.
  *
  * Every id below must be a real Catalog id (see `catalog.ts`); `layout.test.ts`
  * pins the two into a bijection — spanning both keyboard Layouts — so a Catalog
@@ -23,14 +23,18 @@ import { AUTHORED_PAD_LAYOUTS } from "@/lib/glyph/layouts/pad-layouts.generated"
 
 // --- Keyboard --------------------------------------------------------------
 
-/** One keycap on the keyboard Layout, in key-units (1u = one standard key). */
-export interface KeycapKey {
-  /** Catalog id this cap toggles, e.g. "key-space". */
-  id: string;
+/** A rectangle on the keyboard Layout, in key-units (1u = one standard key). */
+export interface KeyUnitRect {
   x: number;
   y: number;
   w: number;
   h: number;
+}
+
+/** One keycap on the keyboard Layout. */
+export interface KeycapKey extends KeyUnitRect {
+  /** Catalog id this cap toggles, e.g. "key-space". */
+  id: string;
 }
 
 /** A row entry: a keycap of `w` units (default 1), or a horizontal `gap`. */
@@ -197,7 +201,7 @@ export const KEYBOARD_LAYOUT: KeycapKey[] = [
  * the board. The mouse's Inputs are drawn from {@link MOUSE_LAYOUT}, which has
  * its own coordinate space; this is only the box that space is scaled into.
  */
-export const MOUSE_PLACEMENT = { x: 19.25, y: 1.75, w: 3, h: 4.5 } as const;
+export const MOUSE_PLACEMENT: KeyUnitRect = { x: 19.25, y: 1.75, w: 3, h: 4.5 };
 
 /**
  * The bounding box (in key-units) that contains the whole keyboard Layout —
