@@ -35,6 +35,21 @@ export const LAYOUT_MAPPINGS = {
     DPad_Left: "xbox-dpad-left",
     DPad_Right: "xbox-dpad-right",
   },
+  // The mouse is not a pad and `mouse` is not a Catalog id — these keys map onto
+  // *keyboard* Inputs. See ./README.md.
+  //
+  // `mouse1` is the body: an unused full-bleed guide rect holds `id="mouse"`, so
+  // Affinity suffixed the real shape (its true name survives on `serif:id`, which
+  // the codegen doesn't read). Rename or drop the guide rect and this becomes an
+  // identity map.
+  mouse: {
+    mouse1: "mouse",
+    "mouse-left": "mouse-left",
+    "mouse-right": "mouse-right",
+    "mouse-middle": "mouse-middle",
+    "mouse-4": "mouse-4",
+    "mouse-5": "mouse-5",
+  },
   playstation: {
     Cross: "ps-cross",
     Circle: "ps-circle",
