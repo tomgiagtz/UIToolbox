@@ -69,6 +69,17 @@ function key(name: string, label: string): CatalogInput {
   return { id: `key-${name}`, label };
 }
 
+/**
+ * A key whose identity is a glyph rather than a word (⇥, ↵, ⌫, ⊞, ⌘, the
+ * arrows), so it defaults to its Symbol. Symbol ids are bare — the atlas file
+ * supplies the Device scope — and the keyboard's Catalog ids carry no device
+ * prefix either, so the two names coincide. The `label` stays the Input's
+ * identity and its Sprite Name source; only the drawing changes.
+ */
+function glyphKey(name: string, label: string): CatalogInput {
+  return { ...key(name, label), symbolId: `key-${name}` };
+}
+
 /** Letters A–Z as individual keys (id `key-a`, label "A", …). */
 const LETTERS: CatalogInput[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   .split("")
@@ -89,23 +100,30 @@ const KEYBOARD_INPUTS: CatalogInput[] = [
   ...DIGITS,
   key("minus", "-"),
   key("equals", "="),
-  key("backspace", "Backspace"),
-  key("tab", "Tab"),
+  glyphKey("backspace", "Backspace"),
+  glyphKey("tab", "Tab"),
   key("bracket-left", "["),
   key("bracket-right", "]"),
   key("backslash", "\\"),
   key("caps-lock", "Caps"),
   key("semicolon", ";"),
   key("quote", "'"),
-  key("enter", "Enter"),
+  glyphKey("enter", "Enter"),
   key("shift", "Shift"),
   key("comma", ","),
   key("period", "."),
   key("slash", "/"),
   key("ctrl", "Ctrl"),
-  key("super", "Win"),
+  // Windows and Command are separate Inputs, not one key with two faces: the
+  // output is a sprite atlas, and ⊞ and ⌘ are different glyphs with different
+  // labels and therefore different Sprite Names. An alias could never render
+  // both, since `catalogNameIndex` maps a name onto one id. No physical board
+  // carries both, which is fine — a Catalog says what is *present* across the
+  // device class (ADR-0012 §1), and Command is not in the Default Selection.
+  glyphKey("windows", "Win"),
+  glyphKey("command", "Cmd"),
   key("alt", "Alt"),
-  key("space", "Space"),
+  glyphKey("space", "Space"),
   key("menu", "Menu"),
   key("insert", "Insert"),
   key("delete", "Delete"),
@@ -113,14 +131,22 @@ const KEYBOARD_INPUTS: CatalogInput[] = [
   key("end", "End"),
   key("page-up", "Page Up"),
   key("page-down", "Page Down"),
-  key("arrow-up", "↑"),
-  key("arrow-down", "↓"),
-  key("arrow-left", "←"),
-  key("arrow-right", "→"),
-  // Mouse buttons live on the Keyboard Catalog as common PC Inputs.
-  { id: "mouse-left", label: "LMB" },
-  { id: "mouse-right", label: "RMB" },
-  { id: "mouse-middle", label: "MMB" },
+  // The Unicode labels stay each arrow's identity and Sprite Name source; the
+  // Symbol just becomes what gets drawn.
+  glyphKey("arrow-up", "↑"),
+  glyphKey("arrow-down", "↓"),
+  glyphKey("arrow-left", "←"),
+  glyphKey("arrow-right", "→"),
+  // Mouse buttons live on the Keyboard Catalog as common PC Inputs. Every mouse
+  // Symbol draws the same silhouette and emphasises one part, so the blank body
+  // is an Input in its own right rather than Layout decoration — an asset no
+  // Input can reach could never be exported.
+  { id: "mouse", label: "Mouse", symbolId: "mouse" },
+  { id: "mouse-left", label: "LMB", symbolId: "mouse-left" },
+  { id: "mouse-right", label: "RMB", symbolId: "mouse-right" },
+  { id: "mouse-middle", label: "MMB", symbolId: "mouse-middle" },
+  { id: "mouse-4", label: "Mouse 4", symbolId: "mouse-4" },
+  { id: "mouse-5", label: "Mouse 5", symbolId: "mouse-5" },
   ...LETTERS,
 ];
 

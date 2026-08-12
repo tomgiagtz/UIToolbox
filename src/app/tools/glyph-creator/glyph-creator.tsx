@@ -26,7 +26,11 @@ import {
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
 import type { ImageAsset, Project } from "@/lib/glyph/types";
-import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
+import {
+  exportProjectFile,
+  importProjectFile,
+  withAvailableImages,
+} from "@/lib/glyph/project-file";
 import {
   clear as clearPersisted,
   loadConfig,
@@ -444,7 +448,14 @@ export function GlyphCreator() {
       clearImages();
       for (const image of imported.images) putImage(image.id, image.blob);
       await replaceImages(imported.images);
-      dispatch({ type: "load-project", project: imported.project });
+      // Narrowed to the bytes that came with it: a config shared without its
+      // assets still names them, and a manifest entry with nothing behind it wins
+      // the Render Source and strands the Glyph on its label (see
+      // `withAvailableImages`).
+      dispatch({
+        type: "load-project",
+        project: withAvailableImages(imported.project, imported.images),
+      });
       if (imported.font) {
         await registerFont(imported.font.family, imported.font.blob);
         await saveFont(imported.font);
