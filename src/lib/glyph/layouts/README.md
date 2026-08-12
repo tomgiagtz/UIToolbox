@@ -32,7 +32,9 @@ things about it break the "named for the Catalog id" rule in step 2:
   as `MOUSE_LAYOUT`, which the keyboard Layout nests beside its keycap board.
 
 Author the blank mouse body as an interactive shape, not decoration: it is the
-`mouse` Input, and the buttons draw on top of it.
+`mouse` Input, and the buttons draw on top of it. Name that layer `mouse-body`,
+not `mouse` — the export names its artboard rect after the file, so `mouse` is
+already taken and a collision costs the real shape its name.
 
 ## Export convention
 

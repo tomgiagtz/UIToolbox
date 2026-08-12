@@ -86,6 +86,29 @@ export async function exportProjectFile(
  * project file. ZIPs are detected by their `PK` signature, not the extension, so
  * a mislabeled file still works.
  */
+/**
+ * The imported project as the editor should *hold* it: its image manifest cut
+ * down to the assets whose bytes actually arrived.
+ *
+ * A file's manifest is config, so import returns it untouched — but an entry with
+ * no bytes behind it claims an asset the editor cannot draw, and the Render
+ * Source resolves to that image rather than falling through to the Input's
+ * Symbol (a placement carries `imageId` **or** `symbolId`, never both). Narrowing
+ * here keeps "the manifest lists what we have" true, which is what the fallback
+ * in `resolveRenderSource` reads. The dropped reference is not recoverable — the
+ * bytes were never there to begin with.
+ */
+export function withAvailableImages(
+  project: Project,
+  images: PersistedImage[],
+): Project {
+  const arrived = new Set(images.map((image) => image.id));
+  return {
+    ...project,
+    images: project.images.filter((a) => arrived.has(a.id)),
+  };
+}
+
 export async function importProjectFile(
   file: File,
 ): Promise<ImportedProject | null> {

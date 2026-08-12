@@ -38,12 +38,11 @@ export const LAYOUT_MAPPINGS = {
   // The mouse is not a pad and `mouse` is not a Catalog id — these keys map onto
   // *keyboard* Inputs. See ./README.md.
   //
-  // `mouse1` is the body: an unused full-bleed guide rect holds `id="mouse"`, so
-  // Affinity suffixed the real shape (its true name survives on `serif:id`, which
-  // the codegen doesn't read). Rename or drop the guide rect and this becomes an
-  // identity map.
+  // The body layer is `mouse-body` because the export names its artboard rect
+  // after the file, and that rect takes `id="mouse"` on every export. Naming the
+  // body anything else is what keeps the two off each other.
   mouse: {
-    mouse1: "mouse",
+    "mouse-body": "mouse",
     "mouse-left": "mouse-left",
     "mouse-right": "mouse-right",
     "mouse-middle": "mouse-middle",
