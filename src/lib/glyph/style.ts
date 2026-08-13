@@ -17,10 +17,11 @@
  * Background source and, for a mirrored control, that layer's `scale.x`: see
  * {@link resolveGlyphStyle}.
  *
- * The font is deliberately **not** part of this cascade, and neither is
- * `cellSize`: both stay Project-global (see ADR-0006). `cellSize` is an atlas
- * output value, so it lives in `project.exportSettings` (ADR-0012 §6) rather
- * than anywhere near a style.
+ * The grid `cellSize` is the one property that stays Project-global: it is an
+ * atlas output value, so it lives in `project.exportSettings` (ADR-0012 §6)
+ * rather than anywhere near a style. ADR-0006 held the font out too, which was
+ * right while a project had exactly one and stopped applying the moment it
+ * could have two (ADR-0012 §2).
  */
 import type {
   Background,
@@ -71,6 +72,35 @@ export type RenderSourceOverride =
  */
 export interface Foreground {
   transform: LayerTransform;
+  /**
+   * Registered FontFace family the **label** is drawn in (ADR-0012 §2).
+   *
+   * A family rather than an id into `project.fonts`: the draw path needs a
+   * family and nothing else (`document.fonts` is keyed by it), an id would add
+   * a lookup on every resolve whose miss has no good answer, and a family is
+   * what makes "a Preset may only name a bundled family" expressible in the
+   * type. Uploads can never collide with a bundled name because
+   * `loadFontFromFile` mints `UITBFont-<ts>-<rand>`.
+   *
+   * It sits in this layer rather than on {@link GlyphStyle} because it paints
+   * the label, which is one of the foreground's Render Sources — a resolved
+   * style is the two layers and nothing else.
+   */
+  fontFamily: string;
+  /**
+   * Weight the label is drawn at, as a CSS numeric weight.
+   *
+   * Meaningful only where the resolved family is a **variable** font: a static
+   * face has one weight, and asking a browser for another gets synthesised fake
+   * bold. Which is which is a property of the file, so it is read from the
+   * bytes at registration (`font-axes.ts`) rather than stated here — this is
+   * the request, not the promise.
+   *
+   * Separate from {@link fontFamily} rather than folded into it because they
+   * are two controls the user moves independently, and because a weight has to
+   * survive switching family for the panel to feel like one setting.
+   */
+  fontWeight: number;
   textColor: string;
   symbolPaints: SymbolPaints;
 }
@@ -106,6 +136,10 @@ export interface TransformOverride {
 /** A sparse patch of the foreground layer; unset fields fall up the cascade. */
 export interface ForegroundOverride {
   transform?: TransformOverride;
+  /** Which family this tier draws its label in; settable at every tier. */
+  fontFamily?: string;
+  /** Which weight of that family; only variable faces offer a choice. */
+  fontWeight?: number;
   textColor?: string;
   /** A sparse patch of the Symbol Paint Role colours; unset roles fall up (ADR-0007). */
   symbolPaints?: Partial<SymbolPaints>;
@@ -168,6 +202,8 @@ export type StyleScope =
  * mirroring is one gesture and the two numbers are one control.
  */
 export type StyleField =
+  | "font"
+  | "fontWeight"
   | "textColor"
   | "shape"
   | "fill"
@@ -302,6 +338,10 @@ export function isOverrideFieldSet(
   field: StyleField,
 ): boolean {
   switch (field) {
+    case "font":
+      return override.foreground?.fontFamily !== undefined;
+    case "fontWeight":
+      return override.foreground?.fontWeight !== undefined;
     case "textColor":
       return override.foreground?.textColor !== undefined;
     case "shape":
@@ -346,6 +386,8 @@ export function clearOverrideField(
 ): StyleOverride {
   const next: StyleOverride = { ...override };
   if (
+    field === "font" ||
+    field === "fontWeight" ||
     field === "textColor" ||
     field === "renderSource" ||
     field === "foregroundRotation" ||
@@ -356,7 +398,9 @@ export function clearOverrideField(
   ) {
     if (!next.foreground) return next;
     const fg: ForegroundOverride = { ...next.foreground };
-    if (field === "textColor") delete fg.textColor;
+    if (field === "font") delete fg.fontFamily;
+    else if (field === "fontWeight") delete fg.fontWeight;
+    else if (field === "textColor") delete fg.textColor;
     else if (field === "renderSource") delete fg.renderSource;
     else if (field === "foregroundRotation" || field === "foregroundScale") {
       setTransform(
@@ -423,6 +467,8 @@ export function resolveStyle(
   };
   const foreground: Foreground = {
     transform: copyTransform(base.foreground.transform),
+    fontFamily: base.foreground.fontFamily,
+    fontWeight: base.foreground.fontWeight,
     textColor: base.foreground.textColor,
     symbolPaints: { ...base.foreground.symbolPaints },
   };
@@ -440,6 +486,8 @@ export function resolveStyle(
           fg.transform,
         );
       }
+      if (fg.fontFamily !== undefined) foreground.fontFamily = fg.fontFamily;
+      if (fg.fontWeight !== undefined) foreground.fontWeight = fg.fontWeight;
       if (fg.textColor !== undefined) foreground.textColor = fg.textColor;
       if (fg.symbolPaints)
         Object.assign(foreground.symbolPaints, fg.symbolPaints);

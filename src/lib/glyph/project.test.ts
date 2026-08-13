@@ -7,17 +7,17 @@ import {
 import type { Project } from "@/lib/glyph/types";
 
 function base(): Project {
-  return createDefaultProject("TestFont");
+  return createDefaultProject();
 }
 
 describe("createDefaultProject", () => {
-  it("seeds the bundled Inter family when no font is given", () => {
-    expect(createDefaultProject().font.family).toBe(DEFAULT_FONT_FAMILY);
+  it("draws in the bundled default family, manifesting nothing", () => {
+    // The manifest lists uploads; the default was never one (ADR-0012 §6).
+    expect(createDefaultProject().style.foreground.fontFamily).toBe(
+      DEFAULT_FONT_FAMILY,
+    );
     expect(DEFAULT_FONT_FAMILY).toBe("Inter");
-  });
-
-  it("uses an explicitly provided family", () => {
-    expect(createDefaultProject("TestFont").font.family).toBe("TestFont");
+    expect(createDefaultProject().fonts).toEqual([]);
   });
 });
 
@@ -263,10 +263,29 @@ describe("projectReducer — naming (#6)", () => {
   });
 });
 
-describe("projectReducer — font", () => {
-  it("updates the registered font family", () => {
-    const next = run(base(), { type: "set-font", family: "NewFamily" });
-    expect(next.font.family).toBe("NewFamily");
+describe("projectReducer — uploaded fonts (#80)", () => {
+  const font = { family: "UITBFont-1-abc", fileName: "Comic.ttf" };
+
+  it("appends an upload to the manifest without restyling anything", () => {
+    // Adding bytes and choosing to draw in them are two acts: the family is
+    // then set through `patch-style`, at whatever scope the user is editing.
+    const next = run(base(), { type: "add-font", font });
+    expect(next.fonts).toEqual([font]);
+    expect(next.style.foreground.fontFamily).toBe(DEFAULT_FONT_FAMILY);
+  });
+
+  it("sets the family at a Device tier, leaving the Project tier alone", () => {
+    const next = run(
+      base(),
+      { type: "add-font", font },
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 0 },
+        patch: { foreground: { fontFamily: font.family } },
+      },
+    );
+    expect(next.devices[0].style.foreground?.fontFamily).toBe(font.family);
+    expect(next.style.foreground.fontFamily).toBe(DEFAULT_FONT_FAMILY);
   });
 });
 

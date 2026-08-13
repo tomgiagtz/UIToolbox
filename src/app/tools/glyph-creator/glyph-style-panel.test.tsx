@@ -9,7 +9,12 @@ import { createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
 import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
-import type { BackgroundSource, ImageAsset, Project } from "@/lib/glyph/types";
+import type {
+  BackgroundSource,
+  FontAsset,
+  ImageAsset,
+  Project,
+} from "@/lib/glyph/types";
 
 const glyph: SelectedGlyph = {
   deviceIndex: 0,
@@ -29,11 +34,17 @@ function xboxProject(images: ImageAsset[] = []): Project {
   return { ...project, images };
 }
 
-/** The manifest entry a stubbed upload resolves to. */
+/** The manifest entry a stubbed image upload resolves to. */
 const uploaded: ImageAsset = {
   id: "img-9.png",
   fileName: "tile.png",
   type: "image/png",
+};
+
+/** The manifest entry a stubbed font upload resolves to. */
+const uploadedFont: FontAsset = {
+  family: "UITBFont-9-abc",
+  fileName: "Comic.ttf",
 };
 
 /**
@@ -44,6 +55,7 @@ function renderPanel({
   onClose = vi.fn(),
   dispatch = vi.fn(),
   onUploadImage = vi.fn(async () => uploaded),
+  onUploadFont = vi.fn(async () => uploadedFont),
   source,
   project = createDefaultProject(),
   glyph: target = glyph,
@@ -52,6 +64,7 @@ function renderPanel({
   onClose?: () => void;
   dispatch?: () => void;
   onUploadImage?: (file: File) => Promise<ImageAsset>;
+  onUploadFont?: (file: File) => Promise<FontAsset>;
   source?: BackgroundSource;
   project?: Project;
   glyph?: SelectedGlyph;
@@ -69,12 +82,14 @@ function renderPanel({
     override,
     onClose,
     onUploadImage,
+    onUploadFont,
   };
   const { rerender } = render(<GlyphStylePanel {...props} />);
   return {
     dispatch,
     onClose,
     onUploadImage,
+    onUploadFont,
     /** Re-render the same panel with a tile applied. */
     withTile: (tile: BackgroundSource) =>
       rerender(
@@ -466,6 +481,7 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
         style={style}
         override={{}}
         onUploadImage={vi.fn(async () => uploaded)}
+        onUploadFont={vi.fn(async () => uploadedFont)}
       />,
     );
   }
@@ -488,5 +504,68 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
       { kind: "authored", backgroundId: "bumper" },
     );
     expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
+  });
+});
+
+describe("StyleControls — the font as a cascade field (ADR-0012 §2)", () => {
+  const font: FontAsset = { family: "UITBFont-1-abc", fileName: "Comic.ttf" };
+
+  it("picks a family at the scope being edited, with its own default weight", () => {
+    // Picking a family also sets its weight: the weight a face stays legible at
+    // is a property of that face, not a constant (#76).
+    const { dispatch } = renderPanel();
+    fireEvent.change(screen.getByLabelText("Font"), {
+      target: { value: "JetBrains Mono" },
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: { foreground: { fontFamily: "JetBrains Mono", fontWeight: 500 } },
+    });
+  });
+
+  it("offers the project's uploads beside the bundled families", () => {
+    renderPanel({ project: { ...createDefaultProject(), fonts: [font] } });
+    const picker = screen.getByLabelText("Font") as HTMLSelectElement;
+    const values = [...picker.options].map((o) => o.value);
+    expect(values).toContain("Inter");
+    // Labelled by filename: the minted family name would mean nothing to anyone.
+    expect(values).toContain(font.family);
+    expect(
+      [...picker.options].find((o) => o.value === font.family)?.textContent,
+    ).toBe("Comic.ttf");
+  });
+
+  it("shows a reset button only where the font is overridden here", () => {
+    renderPanel();
+    expect(
+      screen.queryByRole("button", { name: /reset font to inherited/i }),
+    ).not.toBeInTheDocument();
+
+    renderPanel({ override: { foreground: { fontFamily: "Titan One" } } });
+    expect(
+      screen.getAllByRole("button", { name: /reset font to inherited/i })[0],
+    ).toBeInTheDocument();
+  });
+
+  it("clears just the font when its reset is pressed", () => {
+    const { dispatch } = renderPanel({
+      override: { foreground: { fontFamily: "Titan One" } },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /reset font to inherited/i }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "clear-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      field: "font",
+    });
+  });
+
+  it("hides the weight control for a face with no weight axis", () => {
+    // Nothing is registered under jsdom, so no axis is known — and an unknown
+    // axis offers no choice, exactly as a static font doesn't.
+    renderPanel();
+    expect(screen.queryByLabelText(/Font weight/)).not.toBeInTheDocument();
   });
 });

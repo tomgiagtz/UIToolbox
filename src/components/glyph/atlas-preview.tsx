@@ -32,8 +32,6 @@ export interface AtlasPreviewProps {
   /** Ordered Glyphs packed into the atlas, each already resolved to its style. */
   glyphs: PreviewGlyph[];
   cellSize: number;
-  /** Registered FontFace family name (or any CSS family for previews). */
-  fontFamily: string;
   /** The Device's Catalog id, so a device-specific Symbol override resolves. */
   catalogId?: string;
   className?: string;
@@ -57,7 +55,6 @@ export function AtlasPreview({
   deviceName,
   glyphs,
   cellSize,
-  fontFamily,
   catalogId,
   className,
   onSelectGlyph,
@@ -132,9 +129,21 @@ export function AtlasPreview({
     );
   }
 
+  // Every face this atlas draws in. The font cascades, so one atlas can span
+  // several — each has to be loaded, at the weight it is drawn at, before any
+  // cell measures its label.
+  const faces = Array.from(
+    new Map(
+      glyphs.map(({ style: { foreground } }) => [
+        `${foreground.fontWeight} ${foreground.fontFamily}`,
+        { family: foreground.fontFamily, weight: foreground.fontWeight },
+      ]),
+    ).values(),
+  );
+
   useGlyphCanvas(
     canvasRef,
-    fontFamily,
+    faces,
     cellSize,
     (ctx) => {
       ctx.clearRect(0, 0, content.width, content.height);
@@ -144,7 +153,6 @@ export function AtlasPreview({
           label: glyph.label,
           cellSize,
           style: glyph.style,
-          fontFamily,
           symbol: glyph.symbolId
             ? getSymbolBitmap(glyph.symbolId, glyph.style, cellSize, catalogId)
             : undefined,
@@ -155,9 +163,10 @@ export function AtlasPreview({
         });
       }
     },
-    // `placements`/`atlasSize` derive from glyphs + cellSize, so those cover them;
-    // `bitmapsVersion` re-runs the draw once async Render Source bitmaps land.
-    [glyphs, cellSize, fontFamily, catalogId, bitmapsVersion],
+    // `placements`/`atlasSize`/`faces` all derive from glyphs + cellSize, so
+    // those cover them; `bitmapsVersion` re-runs the draw once async Render
+    // Source bitmaps land.
+    [glyphs, cellSize, catalogId, bitmapsVersion],
   );
 
   if (glyphs.length === 0) {

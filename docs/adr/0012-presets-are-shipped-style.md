@@ -1,11 +1,13 @@
 # ADR-0012: A Catalog says what is present; a Preset says what it looks like
 
 - **Status:** Accepted — partly built. §1 and §2's three-tier cascade and Catalog
-  seeds landed with #78, and §2's two layer transforms with #79; the font, §3–§7
-  and the Presets themselves are still filed as issues off this ADR.
+  seeds landed with #78, §2's two layer transforms with #79, and §2's font plus
+  §6/§7's `fonts` manifest and multi-slot storage with #80; §3–§5 and the Presets
+  themselves are still filed as issues off this ADR.
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
   land-as-one-change requirement withdrawn 2026-08-07, §2's per-Glyph-only
-  `background.source` withdrawn 2026-08-08
+  `background.source` withdrawn 2026-08-08, §2's font placement corrected and
+  weight added 2026-08-13
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
   loses `contentScale`, and `cellSize` moves without changing status), ADR-0007 §3
   (its four-tier framing of `symbolPaints`, and where the brand palette ships),
@@ -231,6 +233,30 @@ keeps a preset **source** hand-authorable: `"Inter"` means something,
 `font-2.woff2` does not. Uniqueness is already guaranteed, since uploads never
 take a user-supplied family (`loadFontFromFile` always generates
 `UITBFont-<ts>-<rand>`).
+
+> **Erratum, 2026-08-13 (with #80).** Two corrections, both from this subsection
+> having been written before the rest of §2 caught up with it.
+>
+> **The field lands on `Foreground`, not on `GlyphStyle`.** The two-transform
+> subsection below postdates this one and makes a resolved style _exactly_ the
+> two layers and nothing else. The font paints the label, which is one of the
+> foreground's Render Sources, so it belongs in that layer beside `textColor` —
+> one object, one reset row, one panel group. A third top-level field would
+> reopen the shape the layer split closed, and would leave the Style panel with
+> a control belonging to neither group. Everything else here stands: the
+> override rides on `ForegroundOverride.fontFamily?`, `StyleField` gains exactly
+> one entry `"font"`, and the field still holds a family rather than an id.
+>
+> **Weight cascades beside it, as `fontWeight`.** #76 chose static cuts
+> specifically to stop a variable file rendering its 400 default while the
+> registry claimed SemiBold, and rejected pinning the instance through
+> `FontFace` descriptors as machinery only some rows would use. Registering the
+> face with its **real axis range** turns out to be the same one-line change for
+> every row and fixes the failure properly rather than routing around it — so
+> the three families that ship variable files do, and their weight becomes a
+> control instead of a decision frozen at vendoring time. Which weights exist is
+> read from the file's `fvar` table at registration, never declared beside it,
+> so the registry cannot claim a range the bytes don't have.
 
 #### Two transforms replace `flipX` and `contentScale`
 
@@ -468,9 +494,12 @@ card ordering is reviewable in one diff.
 `images`; on `enabled` / `custom` surviving projection; on an unknown
 `catalogId`; on a `glyphStyles` key that isn't a real Catalog Input; on a
 `backgroundId` that isn't a shipped Authored Background; and on a font family not
-in the bundled registry. It imports `catalog.ts` directly and needs **no new
-dependency** — Node ≥24.18 strips types natively, and `catalog.ts`'s single
-import is an `import type`, which stripping erases.
+in the bundled registry. It imports `catalog.ts` and `bundled-fonts.ts` directly
+and needs **no new dependency** — Node ≥24.18 strips types natively, and both are
+leaf modules with no imports at all for it to resolve. (`bundled-fonts.ts` exists
+in that shape for exactly this reason, and holds `DEFAULT_FONT_FAMILY` with it;
+`defaults.ts` would not do, since it value-imports `DEVICE_CATALOGS` through the
+`@/*` alias.)
 
 **ADR-0010's discard-and-report path never applies to a Preset.** That machinery
 exists because a persisted config arrives as _untrusted text_, so something must

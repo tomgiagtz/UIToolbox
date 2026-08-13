@@ -174,7 +174,7 @@ function SaveDialog({
             <span
               className={hasUploadedFont ? undefined : "text-muted-foreground"}
             >
-              Include font
+              Include fonts
               {hasUploadedFont ? " (saves a .zip)" : " (upload a font first)"}
             </span>
           </label>

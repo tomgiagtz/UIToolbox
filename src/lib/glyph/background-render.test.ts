@@ -35,6 +35,8 @@ function styleWith(source: BackgroundSource): GlyphStyle {
     },
     foreground: {
       transform: identityTransform(),
+      fontFamily: "Inter",
+      fontWeight: 400,
       textColor: "#ffffff",
       symbolPaints: {
         fill: "#ffffff",

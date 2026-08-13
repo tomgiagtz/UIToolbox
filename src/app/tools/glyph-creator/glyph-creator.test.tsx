@@ -23,22 +23,28 @@ describe("GlyphCreator editor shell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the font upload reachable under the Style section", () => {
+  it("keeps the font picker and upload reachable under the Style section", () => {
     render(<GlyphCreator />);
-    // Present in the DOM even while the Style section is collapsed, so the
-    // "Font file" label keeps working for uploads and e2e.
-    expect(screen.getByLabelText("Font file")).toBeInTheDocument();
+    // Present in the DOM even while the Style section is collapsed, so both
+    // keep working for uploads and e2e. The font is a cascade property now, so
+    // it is a picker in the Foreground group rather than a lone file input.
+    expect(screen.getByLabelText("Font")).toBeInTheDocument();
+    expect(screen.getByLabelText("Upload a font")).toBeInTheDocument();
   });
 
   it("no longer gates the editor behind a font upload (#13)", () => {
     render(<GlyphCreator />);
     // The old "must upload a font first" preview gate is gone — the bundled
-    // Inter renders the preview with no upload.
+    // default renders the preview with no upload.
     expect(
       screen.queryByText(/Upload a font .*to see the live Sprite Atlas/i),
     ).not.toBeInTheDocument();
-    // The Style copy points at Inter as the default rather than demanding one.
-    expect(screen.getByText(/Inter is used by default/i)).toBeInTheDocument();
+    // Every bundled family is offered, with the default selected. Queried off
+    // the select rather than by role, since the collapsed Style section is
+    // hidden from the accessibility tree.
+    const picker = screen.getByLabelText("Font") as HTMLSelectElement;
+    expect(picker).toHaveValue("Inter");
+    expect([...picker.options].map((o) => o.value)).toContain("Titan One");
   });
 });
 
@@ -61,7 +67,7 @@ describe("GlyphCreator — discarded config (ADR-0010)", () => {
 
   it("says nothing when there was no saved project", async () => {
     render(<GlyphCreator />);
-    await screen.findByLabelText("Font file");
+    await screen.findByLabelText("Font");
     expect(
       screen.queryByText(/saved project couldn't be read/i),
     ).not.toBeInTheDocument();

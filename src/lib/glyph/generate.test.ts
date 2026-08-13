@@ -52,6 +52,8 @@ const BASE_STYLE: GlyphStyle = {
   foreground: {
     transform: identityTransform(),
     textColor: "#ffffff",
+    fontFamily: "Inter",
+    fontWeight: 400,
     symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
   },
 };
@@ -70,8 +72,8 @@ const BASE_EXPORT_SETTINGS: ExportSettings = {
 function project(over: Partial<Project> = {}): Project {
   return {
     name: "test-glyphs",
-    font: { family: "TestFont" },
     style: BASE_STYLE,
+    fonts: [],
     images: [],
     devices: [device(["A", "Right Stick", "→"])],
     exportSettings: BASE_EXPORT_SETTINGS,
@@ -512,12 +514,12 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
   ];
 
   it("emits the legacy Keyboard Inputs, in order, for the default project", () => {
-    const [kb] = generateTilesets(createDefaultProject("TestFont"));
+    const [kb] = generateTilesets(createDefaultProject());
     expect(kb.placements.map((p) => p.label)).toEqual(LEGACY_KEYBOARD);
   });
 
   it("resolves every Glyph to the untouched Project style", () => {
-    const proj = createDefaultProject("TestFont");
+    const proj = createDefaultProject();
     const base = proj.style;
     const [kb] = generateTilesets(proj);
     for (const placement of kb.placements) {
@@ -530,12 +532,12 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
 
 describe("resolveScopeStyle", () => {
   it("returns the Project base at Project scope", () => {
-    const proj = createDefaultProject("TestFont");
+    const proj = createDefaultProject();
     expect(resolveScopeStyle(proj, { tier: "project" })).toEqual(proj.style);
   });
 
   it("folds the Device override in at Device scope", () => {
-    const proj = projectReducer(createDefaultProject("TestFont"), {
+    const proj = projectReducer(createDefaultProject(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 0 },
       patch: { background: { shape: "circle" } },
@@ -559,7 +561,7 @@ describe("resolveScopeStyle", () => {
         scope,
         patch: { foreground: { textColor: "#0f0" } },
       } as const,
-    ].reduce(projectReducer, createDefaultProject("TestFont"));
+    ].reduce(projectReducer, createDefaultProject());
     const style = resolveScopeStyle(proj, scope);
     expect(style.foreground.textColor).toBe("#0f0"); // Glyph tier
     expect(style.background.shape).toBe("circle"); // Device tier
@@ -596,7 +598,7 @@ describe("resolveScopeStyle", () => {
   });
 
   it("falls back to the Project base for a missing Device", () => {
-    const proj = createDefaultProject("TestFont");
+    const proj = createDefaultProject();
     expect(resolveScopeStyle(proj, { tier: "device", deviceIndex: 9 })).toEqual(
       proj.style,
     );

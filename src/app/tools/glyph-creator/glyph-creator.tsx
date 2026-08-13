@@ -10,10 +10,12 @@ import {
   type ExportArtifact,
 } from "@/lib/glyph/exporter";
 import {
+  ensureFamiliesRegistered,
   loadDefaultFont,
   loadFontFromFile,
   registerFont,
 } from "@/lib/glyph/font";
+import { familiesInUse, fontAssetFor } from "@/lib/glyph/fonts";
 import {
   generateTilesets,
   resolveDeviceInputs,
@@ -25,13 +27,14 @@ import {
 } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
-import type { ImageAsset, Project } from "@/lib/glyph/types";
+import type { FontAsset, ImageAsset, Project } from "@/lib/glyph/types";
 import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
 import {
   clear as clearPersisted,
   loadConfig,
-  loadFont,
+  loadFonts,
   loadImages,
+  replaceFonts,
   replaceImages,
   saveConfig,
   saveFont,
@@ -54,7 +57,6 @@ import { DeviceControls, InputEditor } from "./device-controls";
 import { ExportDialog, type ExportSelection } from "./export-dialog";
 import { ProjectMenuBar } from "./project-menu-bar";
 import { PanelSection } from "./panel-section";
-import { FontUpload } from "./font-upload";
 
 type Status =
   | { kind: "idle" }
@@ -122,12 +124,9 @@ export function GlyphCreator() {
   const [project, dispatch] = useReducer(projectReducer, undefined, () =>
     createDefaultProject(),
   );
-  // A font is available for preview + generation. True once the bundled Inter
+  // A font is available for preview + generation. True once the bundled default
   // (or a restored upload) is registered.
   const [fontLoaded, setFontLoaded] = useState(false);
-  // A custom font was uploaded/imported (vs. the always-available bundled Inter).
-  // Gates only the "Include font" ZIP option, since Inter never needs bundling.
-  const [hasUploadedFont, setHasUploadedFont] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [activeDeviceIndex, setActiveDeviceIndex] = useState(0);
   // Which cascade tier the Style tab edits, plus the Glyph the user last picked
@@ -145,18 +144,20 @@ export function GlyphCreator() {
   // before the load below runs.
   const hydrated = useRef(false);
 
-  // Mark the always-available bundled Inter as the active font: preview +
-  // generation are enabled, no custom upload is bundled into saved ZIPs, and the
-  // status reflects the default. Shared by mount, config-only import, and reset
-  // so "revert to the default font" is one behavior in one place.
+  // Mark the always-available bundled default as ready: preview + generation are
+  // enabled and the status reflects it. Shared by mount, config-only import, and
+  // reset so "the editor has a font" is one behavior in one place.
   function markDefaultFontReady() {
     setFontLoaded(true);
-    setHasUploadedFont(false);
     setStatus({ kind: "ready", fontName: DEFAULT_FONT_FAMILY });
   }
 
-  // Restore persisted state on mount: config from localStorage, font blob from
-  // IndexedDB (re-registered under the same family the config carries).
+  // Whether any saved ZIP needs a `fonts/` folder: bundled families never
+  // travel, since the tool on the other end already has them.
+  const hasUploadedFont = project.fonts.length > 0;
+
+  // Restore persisted state on mount: config from localStorage, font blobs from
+  // IndexedDB (re-registered under the families the config names).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -174,8 +175,8 @@ export function GlyphCreator() {
       if (saved.kind === "ok" && !cancelled)
         dispatch({ type: "load-project", project: saved.project });
 
-      // Always register the bundled Inter so preview + generation work with no
-      // upload. It stays available even after an upload overrides it for output.
+      // Always register the bundled default so preview + generation work with no
+      // upload. It stays available even where another family overrides it.
       try {
         await loadDefaultFont();
         if (!cancelled) markDefaultFontReady();
@@ -193,19 +194,17 @@ export function GlyphCreator() {
         }
       }
 
-      // A restored upload overrides Inter for both preview and generation.
+      // Restored uploads, re-registered under the families the config names.
+      // Each is independent: one undecodable blob must not cost the others,
+      // since a style naming any of them draws in a fallback until it is back.
       try {
-        const font = await loadFont();
-        if (font && !cancelled) {
-          await registerFont(font.family, font.blob);
+        for (const font of await loadFonts()) {
           if (cancelled) return;
-          setFontLoaded(true);
-          setHasUploadedFont(true);
-          setStatus({ kind: "ready", fontName: font.fileName });
+          await registerFont(font.family, font.blob).catch(() => undefined);
         }
       } catch {
-        // A missing or undecodable persisted font just means no restore; the
-        // developer re-uploads. Config + bundled Inter still apply above.
+        // No IndexedDB at all — the developer re-uploads. Config and the
+        // bundled families still apply above.
       } finally {
         // Last, so the font steps above can't overwrite it: a discarded config is
         // the one thing here the developer actually lost (ADR-0010). A font error
@@ -232,6 +231,19 @@ export function GlyphCreator() {
   // Persist the config on every change, once hydration has completed.
   useEffect(() => {
     if (hydrated.current) saveConfig(project);
+  }, [project]);
+
+  // Fetch any bundled family the project has come to name — picking one in the
+  // Style panel is the usual way, but a loaded project or an undone edit can
+  // introduce one too. Only the default is fetched eagerly (#76), and a failure
+  // here is not surfaced: the Glyph draws in the canvas fallback, and export
+  // gates on registration separately.
+  useEffect(() => {
+    // Nothing to cancel: the only effect of finishing is that the face is
+    // registered, which the Style panel picks up by subscribing to the registry.
+    void ensureFamiliesRegistered(familiesInUse(project)).catch(
+      () => undefined,
+    );
   }, [project]);
 
   // Devices can be removed, so the stored index may fall out of range.
@@ -299,25 +311,32 @@ export function GlyphCreator() {
     );
   }
 
-  async function onFontChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /**
+   * Take an uploaded font into the project: register the face under a freshly
+   * minted family, add it to the manifest, and persist the blob so it survives a
+   * reload. Resolves to the manifest entry; the caller points whichever scope it
+   * is editing at that family (ADR-0012 §2).
+   *
+   * A failed upload is reported and nothing is added — the bundled families are
+   * still there, so the preview keeps rendering rather than being gated on a
+   * file that turned out not to be a font.
+   */
+  async function onUploadFont(file: File): Promise<FontAsset> {
     setStatus({ kind: "loading-font" });
     try {
       const family = await loadFontFromFile(file);
-      dispatch({ type: "set-font", family });
-      setFontLoaded(true);
-      setHasUploadedFont(true);
-      setStatus({ kind: "ready", fontName: file.name });
+      const asset = fontAssetFor(project.fonts, family, file.name);
+      dispatch({ type: "add-font", font: asset });
+      setStatus({ kind: "ready", fontName: asset.fileName });
       // Persist the blob so the font survives a reload (self-guards on failure).
-      await saveFont({ family, fileName: file.name, blob: file });
+      await saveFont({ ...asset, blob: file });
+      return asset;
     } catch {
-      // The upload failed, but the bundled Inter is still available — keep the
-      // preview rendering rather than gating it.
       setStatus({
         kind: "error",
         message: `Couldn't load "${file.name}". Please choose a valid font file (.ttf, .otf, .woff, .woff2).`,
       });
+      throw new Error(`Failed to load font: ${file.name}`);
     }
   }
 
@@ -382,11 +401,13 @@ export function GlyphCreator() {
     setStatus({ kind: "exporting", fontName });
     try {
       const outputs = generateTilesets(project);
+      // Before the first cell is drawn: canvas answers an unregistered family
+      // with its own fallback face and says nothing, so an atlas exported right
+      // after picking a lazily loaded font could ship in the wrong one (#76).
+      await ensureFamiliesRegistered(familiesInUse(project));
       const artifacts: ExportArtifact[] = [];
       for (const index of devices) {
-        const rendered = await exportDevice(outputs[index], {
-          fontFamily: project.font.family,
-        });
+        const rendered = await exportDevice(outputs[index]);
         artifacts.push(...fileTypes.map((type) => rendered[type]));
       }
       const bundle = await bundleArtifacts(artifacts, project.name);
@@ -400,15 +421,16 @@ export function GlyphCreator() {
     }
   }
 
-  // Save the project to a file. With the font it's a ZIP (config + font file),
-  // otherwise a config-only JSON. The font blob comes straight from IndexedDB.
-  async function onSave(includeFont: boolean) {
+  // Save the project to a file. With uploaded fonts or images it's a ZIP
+  // (config + asset files), otherwise a config-only JSON. Font blobs come
+  // straight from IndexedDB; bundled families never travel.
+  async function onSave(includeFonts: boolean) {
     try {
-      const font = includeFont ? await loadFont() : null;
-      // Images always travel: unlike the font there's no bundled fallback, so a
+      const fonts = includeFonts ? await loadFonts() : [];
+      // Images always travel: unlike a font there's no bundled fallback, so a
       // save without them couldn't reproduce the project anywhere else.
       const { images, missing } = await projectImages();
-      const artifact = await exportProjectFile(project, font, images);
+      const artifact = await exportProjectFile(project, fonts, images);
       downloadArtifact(artifact);
       // The file is still worth having — every Glyph that has art keeps it, and
       // the rest fall back — so this reports on a completed save, not a failed
@@ -425,8 +447,8 @@ export function GlyphCreator() {
     }
   }
 
-  // Load a project file (JSON or ZIP). Config is hydrated via load-project; a
-  // bundled font is re-registered and re-persisted so it also survives reloads.
+  // Load a project file (JSON or ZIP). Config is hydrated via load-project; any
+  // bundled fonts are re-registered and re-persisted so they survive reloads too.
   async function onLoadFile(file: File) {
     try {
       const imported = await importProjectFile(file);
@@ -445,20 +467,14 @@ export function GlyphCreator() {
       for (const image of imported.images) putImage(image.id, image.blob);
       await replaceImages(imported.images);
       dispatch({ type: "load-project", project: imported.project });
-      if (imported.font) {
-        await registerFont(imported.font.family, imported.font.blob);
-        await saveFont(imported.font);
-        setFontLoaded(true);
-        setHasUploadedFont(true);
-        setStatus({ kind: "ready", fontName: imported.font.fileName });
-      } else {
-        // Config-only: the referenced upload isn't present, so fall back to the
-        // always-available Inter for both preview and generation.
-        if (imported.project.font.family !== DEFAULT_FONT_FAMILY) {
-          dispatch({ type: "set-font", family: DEFAULT_FONT_FAMILY });
-        }
-        markDefaultFontReady();
+      // Fonts follow the same rule as images: the loaded project owns the set.
+      // A family whose bytes didn't travel has already been repaired out of the
+      // config by `parseConfig`, so nothing here has to notice its absence.
+      for (const font of imported.fonts) {
+        await registerFont(font.family, font.blob).catch(() => undefined);
       }
+      await replaceFonts(imported.fonts);
+      markDefaultFontReady();
     } catch {
       setStatus({
         kind: "error",
@@ -479,7 +495,7 @@ export function GlyphCreator() {
     await clearPersisted();
     clearImages();
     dispatch({ type: "load-project", project: createDefaultProject() });
-    // The bundled Inter stays registered, so the reset preview keeps rendering.
+    // The bundled families stay registered, so the reset preview keeps drawing.
     markDefaultFontReady();
     setActiveDeviceIndex(0);
     setStyleScope({ tier: "project" });
@@ -488,12 +504,6 @@ export function GlyphCreator() {
 
   const isBusy = status.kind === "loading-font" || status.kind === "exporting";
   const canExport = fontLoaded && project.devices.length > 0 && !isBusy;
-  const fontName =
-    status.kind === "ready" ||
-    status.kind === "exporting" ||
-    status.kind === "done"
-      ? status.fontName
-      : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -546,13 +556,9 @@ export function GlyphCreator() {
                 <PanelSection
                   id="style"
                   title="Style"
-                  help="Set the font (Inter by default) and the tile background, colors, and cell size."
+                  help="Set the font, the tile background, colors, and cell size — each at the scope you pick."
                 >
                   <div className="space-y-5">
-                    <FontUpload
-                      fontName={fontName}
-                      onFontChange={onFontChange}
-                    />
                     <StyleScopeSwitcher
                       project={project}
                       scope={validScope}
@@ -566,6 +572,7 @@ export function GlyphCreator() {
                       style={scopeStyle}
                       override={scopeOverride}
                       onUploadImage={onUploadImage}
+                      onUploadFont={onUploadFont}
                     />
                   </div>
                 </PanelSection>
@@ -582,6 +589,7 @@ export function GlyphCreator() {
               override={overrideAt(project, selectedGlyphScope)}
               onClose={() => setSelectedGlyph(null)}
               onUploadImage={onUploadImage}
+              onUploadFont={onUploadFont}
             />
           )}
         </div>
@@ -621,7 +629,6 @@ export function GlyphCreator() {
                 deviceName={activeDevice.name}
                 glyphs={activeInputs}
                 cellSize={project.exportSettings.cellSize}
-                fontFamily={project.font.family}
                 catalogId={activeDevice.catalogId}
                 className="h-full w-full object-contain"
                 onSelectGlyph={onSelectGlyph}

@@ -21,6 +21,8 @@ const style: GlyphStyle = {
   },
   foreground: {
     transform: identityTransform(),
+    fontFamily: "TestFont",
+    fontWeight: 400,
     textColor: "#33cc99",
     symbolPaints: { fill: "#ff0000", border: "#0000ff", secondary: "#00ff00" },
   },
@@ -49,6 +51,8 @@ describe("backgroundRoleColors", () => {
       },
       foreground: {
         transform: identityTransform(),
+        fontFamily: "TestFont",
+        fontWeight: 400,
         textColor: "#33cc99",
         symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
       },
@@ -78,6 +82,8 @@ describe("backgroundRoleColors", () => {
         },
         foreground: {
           transform: identityTransform(),
+          fontFamily: "TestFont",
+          fontWeight: 400,
           textColor: "#000000",
           symbolPaints: { fill: "#fff", border: "#fff", secondary: "#fff" },
         },

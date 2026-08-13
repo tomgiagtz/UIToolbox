@@ -16,6 +16,7 @@ import type {
   CaseStyle,
   DeviceConfig,
   ExportSettings,
+  FontAsset,
   ImageAsset,
   NamingConfig,
   Project,
@@ -30,7 +31,6 @@ export type ProjectAction =
   // Replace the whole project — used by ProjectStore to hydrate restored state.
   | { type: "load-project"; project: Project }
   | { type: "set-name"; name: string }
-  | { type: "set-font"; family: string }
   // --- Style Cascade edits (#4, #19) ---
   // Patch/clear a sparse override at any scope; the Project tier folds the patch
   // into its full base style, Device/Glyph tiers merge into their StyleOverride.
@@ -47,10 +47,13 @@ export type ProjectAction =
       label: string;
     }
   | { type: "remove-custom-input"; deviceIndex: number; id: string }
-  // --- Custom image Render Sources (#20) ---
-  // Adds an uploaded image to the project's shared manifest, so any Glyph can
-  // then point its `renderSource` at it via `patch-style`. The bytes are handled
-  // outside the config (see `images.ts`).
+  // --- Uploaded assets (#20, #80) ---
+  // Each adds an upload to the project's shared manifest, so the cascade can
+  // then point at it via `patch-style` — a Glyph's `renderSource` at an image,
+  // any tier's `fontFamily` at a font. Neither carries bytes: those are handled
+  // outside the config (see `images.ts`, `project-store.ts`). Bundled font
+  // families are never added here; they are code (ADR-0012 §6).
+  | { type: "add-font"; font: FontAsset }
   | { type: "add-image"; image: ImageAsset }
   // --- Export settings: cell size + naming (#6, #21) ---
   // All Project-global. `cellSize` is an atlas output value rather than a cascade
@@ -74,9 +77,6 @@ export function projectReducer(
 
     case "set-name":
       return { ...project, name: action.name };
-
-    case "set-font":
-      return { ...project, font: { family: action.family } };
 
     case "patch-style":
       return patchStyle(project, action.scope, action.patch);
@@ -131,6 +131,9 @@ export function projectReducer(
           glyphStyles: omitKey(d.glyphStyles, action.id),
         })),
       };
+
+    case "add-font":
+      return { ...project, fonts: [...project.fonts, action.font] };
 
     case "add-image":
       return { ...project, images: [...project.images, action.image] };

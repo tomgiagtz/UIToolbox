@@ -3,6 +3,8 @@
 import { useEffect, type Dispatch, type ReactNode } from "react";
 import { Button, Tooltip, TooltipTrigger } from "react-aria-components";
 import { X } from "lucide-react";
+import { getWeightAxis } from "@/lib/glyph/font";
+import { defaultWeightFor } from "@/lib/glyph/fonts";
 import { resolveScopeRenderSource } from "@/lib/glyph/generate";
 import type { ProjectAction } from "@/lib/glyph/project";
 import { isOverrideFieldSet } from "@/lib/glyph/style";
@@ -16,11 +18,13 @@ import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
 import type {
   BackgroundShape,
   BackgroundSource,
+  FontAsset,
   ImageAsset,
   Project,
 } from "@/lib/glyph/types";
 import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
+import { FontField } from "./font-field";
 import { ImageUploadField } from "./image-upload-field";
 import { RenderSourceControls } from "./render-source-controls";
 import { TransformField } from "./transform-field";
@@ -236,6 +240,7 @@ export function StyleControls({
   showCellSize = true,
   showRenderSource = false,
   onUploadImage,
+  onUploadFont,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -257,6 +262,8 @@ export function StyleControls({
   showRenderSource?: boolean;
   /** Hand an uploaded tile image to the editor; resolves to its manifest entry. */
   onUploadImage: (file: File) => Promise<ImageAsset>;
+  /** Hand an uploaded font to the editor; resolves to its manifest entry. */
+  onUploadFont: (file: File) => Promise<FontAsset>;
 }) {
   const bg = style.background;
   const fg = style.foreground;
@@ -422,6 +429,32 @@ export function StyleControls({
           />
         )}
 
+        {/* The font paints the label, which is one of this layer's Render
+            Sources, so it cascades and is edited here rather than above the
+            panel (ADR-0012 §2). Picking a family also sets its weight: the
+            legible weight is a property of the face. */}
+        <FontField
+          project={project}
+          family={fg.fontFamily}
+          weight={fg.fontWeight}
+          axis={getWeightAxis(fg.fontFamily)}
+          onChange={(fontFamily) =>
+            patch({
+              foreground: {
+                fontFamily,
+                fontWeight: defaultWeightFor(
+                  fontFamily,
+                  getWeightAxis(fontFamily),
+                ),
+              },
+            })
+          }
+          onWeightChange={(fontWeight) => patch({ foreground: { fontWeight } })}
+          onReset={resetFor("font")}
+          onResetWeight={resetFor("fontWeight")}
+          onUpload={onUploadFont}
+        />
+
         <ColorField
           label="Text color"
           value={fg.textColor}
@@ -508,6 +541,7 @@ export function GlyphStylePanel({
   override,
   onClose,
   onUploadImage,
+  onUploadFont,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -523,6 +557,8 @@ export function GlyphStylePanel({
    * editing (a Render Source, a Background tile) at that id.
    */
   onUploadImage: (file: File) => Promise<ImageAsset>;
+  /** Hand an uploaded font to the editor; resolves to its manifest entry. */
+  onUploadFont: (file: File) => Promise<FontAsset>;
 }) {
   const scope: StyleScope = {
     tier: "glyph",
@@ -569,6 +605,7 @@ export function GlyphStylePanel({
           showCellSize={false}
           showRenderSource
           onUploadImage={onUploadImage}
+          onUploadFont={onUploadFont}
         />
       </div>
     </section>

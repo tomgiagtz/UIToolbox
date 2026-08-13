@@ -1,8 +1,5 @@
 import { zipSync } from "fflate";
-import {
-  renderAtlasBlob,
-  type AtlasRenderInputs,
-} from "@/lib/glyph/compositor";
+import { renderAtlasBlob } from "@/lib/glyph/compositor";
 import { safeBaseName } from "@/lib/glyph/naming";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
@@ -27,9 +24,8 @@ export function metadataArtifact(output: DeviceOutput): ExportArtifact {
  */
 export async function exportDevice(
   output: DeviceOutput,
-  inputs: AtlasRenderInputs,
 ): Promise<{ png: ExportArtifact; json: ExportArtifact }> {
-  const pngBlob = await renderAtlasBlob(output, inputs);
+  const pngBlob = await renderAtlasBlob(output);
   return {
     png: { filename: `${output.filename}.png`, blob: pngBlob },
     json: metadataArtifact(output),

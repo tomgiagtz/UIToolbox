@@ -64,7 +64,9 @@ in IndexedDB and travel inside the ZIP project save file (ADR-0008).
 A typeface a Glyph's **label** is drawn in, named by its **family** — the one
 thing the draw path needs. A project can use several: the family is a **Style
 Cascade** property, so a Device or a single Glyph can use a different face from
-the project's.
+the project's. Its **weight** cascades beside it, and is a real choice only for
+a **variable** font, which is one that carries a weight axis in its file; a
+static face has the single weight it was drawn at.
 
 Fonts come from two places. A **bundled family** ships with the tool and is
 listed in code; an **uploaded font** is the user's own file, whose family is
@@ -73,7 +75,9 @@ project the way custom images are — bytes in IndexedDB, carried in the ZIP —
 while bundled families are never manifested and never travel, since the tool
 already has them. A **Preset** may only name a bundled family, never carry bytes.
 
-_(ADR-0012, decided and not yet built. Today a project has exactly one font.)_
+Whether a family is variable, and over what range, is read from the font's own
+bytes when its face is registered — never declared alongside it, so a claim
+about a font and the font itself cannot disagree.
 
 ### Transform
 
@@ -282,9 +286,6 @@ position — what survives is an ordering fact about the fields a Catalog seeds.
 
 The grid **cell size** is the one exception: it stays Project-global for a
 uniform grid, and lives in the project's export settings.
-
-_(The font is ADR-0012, decided and not yet built: today it stays
-Project-global.)_
 
 ### Seed
 
