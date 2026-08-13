@@ -35,6 +35,20 @@ export const LAYOUT_MAPPINGS = {
     DPad_Left: "xbox-dpad-left",
     DPad_Right: "xbox-dpad-right",
   },
+  // The mouse is not a pad and `mouse` is not a Catalog id — these keys map onto
+  // *keyboard* Inputs. See ./README.md.
+  //
+  // The body layer is `mouse-body` because the export names its artboard rect
+  // after the file, and that rect takes `id="mouse"` on every export. Naming the
+  // body anything else is what keeps the two off each other.
+  mouse: {
+    "mouse-body": "mouse",
+    "mouse-left": "mouse-left",
+    "mouse-right": "mouse-right",
+    "mouse-middle": "mouse-middle",
+    "mouse-4": "mouse-4",
+    "mouse-5": "mouse-5",
+  },
   playstation: {
     Cross: "ps-cross",
     Circle: "ps-circle",

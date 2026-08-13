@@ -37,8 +37,10 @@ export async function renderAtlasBlob(output: DeviceOutput): Promise<Blob> {
         )) ?? undefined)
       : undefined;
     // A custom image Render Source rasterizes from the runtime registry, which the
-    // editor fills on upload and on restore. An image whose bytes never arrived
-    // resolves to null and the Glyph falls back to its Symbol or label.
+    // editor fills on upload and on restore. Bytes missing here resolve to null
+    // and the Glyph draws its label — only its *label*, since a placement carries
+    // `imageId` or `symbolId` and never both. Keeping that from happening is the
+    // loader's job: see `withAvailableImages`.
     const image = placement.imageId
       ? ((await ensureImageBitmap(placement.imageId, output.cellSize)) ??
         undefined)

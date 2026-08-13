@@ -6,7 +6,11 @@
 import { describe, expect, it } from "vitest";
 import { unzipSync, zipSync } from "fflate";
 import { DEVICE_CATALOGS } from "@/lib/glyph/catalog";
-import { exportProjectFile, importProjectFile } from "@/lib/glyph/project-file";
+import {
+  exportProjectFile,
+  importProjectFile,
+  withAvailableImages,
+} from "@/lib/glyph/project-file";
 import {
   DEFAULT_FONT_FAMILY,
   createDefaultProject,
@@ -306,6 +310,41 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     // The manifest is config, so it survives; only the bytes are gone.
     expect(imported!.project.images).toEqual(project.images);
     expect(imported!.images).toEqual([]);
+  });
+});
+
+describe("project-file — narrowing a loaded manifest to the bytes that came", () => {
+  const image: PersistedImage = {
+    id: "img-1.png",
+    fileName: "arrow.png",
+    type: "image/png",
+    blob: new Blob([new Uint8Array([0x89, 0x50])]),
+  };
+  const manifest = { id: image.id, fileName: image.fileName, type: image.type };
+
+  it("drops manifest entries whose bytes never arrived", () => {
+    // The e2e case: a config shared without its assets. Left in the manifest, the
+    // entry claims an asset the editor can't draw, and the Glyph pointing at it
+    // renders its label instead of falling back to its Symbol.
+    const project: Project = { ...edited(), images: [manifest] };
+    expect(withAvailableImages(project, []).images).toEqual([]);
+  });
+
+  it("keeps the entries whose bytes did arrive", () => {
+    const project: Project = { ...edited(), images: [manifest] };
+    expect(withAvailableImages(project, [image]).images).toEqual([manifest]);
+  });
+
+  it("narrows a partial restore to just the assets present", () => {
+    const other = { id: "img-2.png", fileName: "b.png", type: "image/png" };
+    const project: Project = { ...edited(), images: [manifest, other] };
+    expect(withAvailableImages(project, [image]).images).toEqual([manifest]);
+  });
+
+  it("leaves the rest of the project alone", () => {
+    const project: Project = { ...edited(), images: [manifest] };
+    const narrowed = withAvailableImages(project, []);
+    expect({ ...narrowed, images: [] }).toEqual({ ...project, images: [] });
   });
 });
 
