@@ -2,12 +2,12 @@
 
 import { useId } from "react";
 import { useFontRegistry } from "@/components/glyph/use-font-registry";
-import { isVariableWeight, type WeightAxis } from "@/lib/glyph/font-axes";
+import { getWeightAxis } from "@/lib/glyph/font";
+import { isVariableWeight } from "@/lib/glyph/font-axes";
 import { pickableFonts } from "@/lib/glyph/fonts";
 import type { Project } from "@/lib/glyph/types";
 import { Field, inputClass } from "./controls-ui";
 
-/** File types the font picker accepts. */
 const FONT_ACCEPT = ".ttf,.otf,.woff,.woff2,font/*";
 
 /**
@@ -24,7 +24,6 @@ export function FontField({
   project,
   family,
   weight,
-  axis,
   onChange,
   onWeightChange,
   onReset,
@@ -36,11 +35,6 @@ export function FontField({
   family: string;
   /** The effective weight at the current scope. */
   weight: number;
-  /**
-   * The weight axis of the resolved family, once its face is registered. Absent
-   * while a lazily loaded family is still arriving, or if its bytes are gone.
-   */
-  axis: WeightAxis | undefined;
   onChange: (family: string) => void;
   onWeightChange: (weight: number) => void;
   onReset?: () => void;
@@ -48,10 +42,12 @@ export function FontField({
   /** Hand an uploaded file to the editor; resolves to its manifest entry. */
   onUpload: (file: File) => Promise<{ family: string }>;
 }) {
-  // The axis comes from the runtime registry, which fills in as faces register.
-  // Subscribing here rather than in the parent keeps the one control that cares
-  // about registration the one that re-renders on it.
+  // The axis is read here rather than passed in, because this is the component
+  // that subscribes: a lazily loaded family registers *after* the render that
+  // selected it, and a parent that doesn't subscribe would keep handing down
+  // the `undefined` it computed before the face arrived.
   useFontRegistry();
+  const axis = getWeightAxis(family);
   const uploadId = useId();
   const fonts = pickableFonts(project);
   const bundled = fonts.filter((f) => f.bundled);
@@ -103,8 +99,8 @@ export function FontField({
               type="range"
               min={axis.min}
               max={axis.max}
-              // The axis is continuous, but a weight is conventionally read in
-              // hundreds and a slider that lands on 437 invites nothing good.
+              // The axis is continuous; snapping to tens keeps the number
+              // readable without pinning it to the nine named weights.
               step={10}
               value={weight}
               onChange={(e) => onWeightChange(Number(e.target.value))}
@@ -126,9 +122,13 @@ export function FontField({
             const file = e.target.files?.[0];
             // The upload becomes this scope's font straight away: picking a file
             // and then having to pick its name out of a list would be a step
-            // with no decision in it.
-            if (file)
-              void onUpload(file).then((asset) => onChange(asset.family));
+            // with no decision in it. A rejection is already on screen as a
+            // status message, so it is swallowed rather than left unhandled.
+            if (file) {
+              void onUpload(file)
+                .then((asset) => onChange(asset.family))
+                .catch(() => undefined);
+            }
             // Clear the input so re-picking the same file still fires a change.
             e.target.value = "";
           }}

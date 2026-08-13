@@ -437,7 +437,6 @@ export function StyleControls({
           project={project}
           family={fg.fontFamily}
           weight={fg.fontWeight}
-          axis={getWeightAxis(fg.fontFamily)}
           onChange={(fontFamily) =>
             patch({
               foreground: {

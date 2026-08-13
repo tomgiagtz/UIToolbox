@@ -25,11 +25,12 @@ export interface BundledFont {
    */
   family: string;
   /**
-   * Filename under `public/fonts/`, kept **verbatim from upstream** and
-   * therefore not derivable from {@link family} (`JetBrainsMono-Medium.ttf`
-   * pairs with `"JetBrains Mono"`). The name is the only clue to which
-   * *instance* a file is, and the model has no weight axis to recover it from,
-   * so the pairing is carried as data rather than guessed (#76).
+   * Filename under `public/fonts/`, named `<FamilyNoSpaces>-<cut>.ttf` where
+   * the cut is `Variable` or the single weight a static face ships.
+   *
+   * Carried as data rather than derived: the family alone doesn't say which
+   * cut a file is, and that is the one thing the name has to record —
+   * `JetBrainsMono-Variable.ttf` pairs with `"JetBrains Mono"` (#76).
    */
   file: string;
   /**
@@ -63,15 +64,15 @@ export interface BundledFont {
  * a frozen cut could never be.
  */
 export const BUNDLED_FONTS: readonly BundledFont[] = [
-  { family: "Inter", file: "InterVariable.ttf", defaultWeight: 400 },
+  { family: "Inter", file: "Inter-Variable.ttf", defaultWeight: 400 },
   {
     family: "JetBrains Mono",
-    file: "JetBrainsMono[wght].ttf",
+    file: "JetBrainsMono-Variable.ttf",
     defaultWeight: 500,
   },
   {
     family: "Source Serif 4",
-    file: "SourceSerif4Variable-Roman.ttf",
+    file: "SourceSerif4-Variable.ttf",
     defaultWeight: 600,
   },
   {
@@ -107,10 +108,9 @@ export function bundledFontUrl(font: BundledFont): string {
  * Filename of the licence shipped beside a font, on the existing
  * `Inter-LICENSE.txt` pattern.
  *
- * Derived from the family with its spaces closed up rather than from the file,
- * because the file names an *instance* and a licence covers the family — and
- * because upstream filenames are kept verbatim, so they are not a stable stem
- * to build on (`JetBrainsMono[wght].ttf`, `SourceSerif4Variable-Roman.ttf`).
+ * Derived from the family rather than from the file, because a licence covers
+ * the family while the file names one cut of it — so the two would part company
+ * the moment a family shipped a second file.
  */
 export function bundledLicenseFile(font: BundledFont): string {
   return `${font.family.replaceAll(" ", "")}-LICENSE.txt`;

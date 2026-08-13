@@ -167,22 +167,28 @@ export function loadDefaultFont(): Promise<void> {
  * preview-only await doesn't cover it, since export doesn't go through the
  * preview.
  *
- * Uploaded families are already registered by the upload or the restore that
- * introduced them; only bundled ones can still need fetching, and a family that
- * is neither is left to the caller's repair path rather than failing the whole
- * export.
+ * Only a bundled family can be fetched here — an upload's bytes live in
+ * IndexedDB or a project ZIP, and whatever introduced it has already tried.
  *
- * Returns how many families it had to load, so a caller can tell "everything
- * was already here" from "something arrived" without diffing the registry.
+ * Returns the families still **not** registered once that is done, which is the
+ * answer the export path actually needs: an upload whose blob failed to decode
+ * stays in the manifest, so it survives `repairFontFamilies` and would
+ * otherwise reach canvas and be drawn in the fallback face with nothing said.
+ * Names, not a count, so the caller can tell the user which ones.
  */
 export async function ensureFamiliesRegistered(
   families: Iterable<string>,
-): Promise<number> {
-  const missing = [...new Set(families)].filter(
-    (family) =>
-      weightAxes.get(family) === undefined &&
-      getBundledFont(family) !== undefined,
+): Promise<string[]> {
+  const wanted = [...new Set(families)];
+  await Promise.all(
+    wanted
+      .filter(
+        (family) =>
+          !weightAxes.has(family) && getBundledFont(family) !== undefined,
+      )
+      // Settle rather than reject: one unreachable family must not hide the
+      // others, and every failure is reported below by name anyway.
+      .map((family) => loadBundledFont(family).catch(() => undefined)),
   );
-  await Promise.all(missing.map((family) => loadBundledFont(family)));
-  return missing.length;
+  return wanted.filter((family) => !weightAxes.has(family));
 }

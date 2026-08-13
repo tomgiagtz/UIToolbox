@@ -15,7 +15,7 @@ import {
   loadFontFromFile,
   registerFont,
 } from "@/lib/glyph/font";
-import { familiesInUse, fontAssetFor } from "@/lib/glyph/fonts";
+import { familiesInUse, fontAssetFor, pickableFonts } from "@/lib/glyph/fonts";
 import {
   generateTilesets,
   resolveDeviceInputs,
@@ -404,7 +404,23 @@ export function GlyphCreator() {
       // Before the first cell is drawn: canvas answers an unregistered family
       // with its own fallback face and says nothing, so an atlas exported right
       // after picking a lazily loaded font could ship in the wrong one (#76).
-      await ensureFamiliesRegistered(familiesInUse(project));
+      // Refusing beats shipping an atlas that is quietly in the wrong font.
+      const unavailable = await ensureFamiliesRegistered(
+        familiesInUse(project),
+      );
+      if (unavailable.length > 0) {
+        // Named as the picker names them: an upload's family is minted, so
+        // "UITBFont-1786…" would say nothing about which file to go and find.
+        const labels = new Map(
+          pickableFonts(project).map((f) => [f.family, f.label]),
+        );
+        const named = unavailable.map((f) => labels.get(f) ?? f).join(", ");
+        setStatus({
+          kind: "error",
+          message: `Couldn't load ${unavailable.length === 1 ? "the font" : "the fonts"} ${named}. Nothing was exported — pick another font, or re-upload that one.`,
+        });
+        return;
+      }
       const artifacts: ExportArtifact[] = [];
       for (const index of devices) {
         const rendered = await exportDevice(outputs[index]);

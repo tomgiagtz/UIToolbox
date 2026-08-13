@@ -9,16 +9,16 @@ interface ProjectMenuBarProps {
   name: string;
   onNameChange: (name: string) => void;
   /**
-   * Whether a custom font was uploaded — gates the "Include font" option. The
-   * bundled default (Inter) is always available on load, so it is never bundled.
+   * Whether the project carries any uploaded font — gates the "Include fonts"
+   * option. Bundled families ship with the tool, so they never travel in a save.
    */
   hasUploadedFont: boolean;
   canExport: boolean;
-  /** Save the current project to a file; `includeFont` picks ZIP vs JSON. */
-  onSave: (includeFont: boolean) => void;
+  /** Save the current project to a file; `includeFonts` picks ZIP vs JSON. */
+  onSave: (includeFonts: boolean) => void;
   /** A project file the user chose to load. */
   onLoadFile: (file: File) => void;
-  /** Reset everything (config + persisted font). Parent confirms first. */
+  /** Reset everything (config + persisted fonts). Parent confirms first. */
   onDelete: () => void;
   /** Open the Export modal; the parent owns it and the download it triggers. */
   onExport: () => void;
@@ -44,7 +44,7 @@ export function ProjectMenuBar({
   const [includeFont, setIncludeFont] = useState(false);
 
   function openSaveDialog() {
-    // Default to bundling the font whenever one is available.
+    // Default to bundling the fonts whenever there are any to bundle.
     setIncludeFont(hasUploadedFont);
     dialogRef.current?.showModal();
   }

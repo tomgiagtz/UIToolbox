@@ -1,5 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { BUNDLED_FONTS, DEFAULT_FONT_FAMILY } from "@/lib/glyph/bundled-fonts";
+import { registerFont } from "@/lib/glyph/font";
 import {
   GlyphStylePanel,
   StyleControls,
@@ -567,5 +571,65 @@ describe("StyleControls — the font as a cascade field (ADR-0012 §2)", () => {
     // axis offers no choice, exactly as a static font doesn't.
     renderPanel();
     expect(screen.queryByLabelText(/Font weight/)).not.toBeInTheDocument();
+  });
+});
+
+describe("StyleControls — the weight control follows registration (#80)", () => {
+  /**
+   * Stand in for the browser's FontFace, which jsdom has no implementation of.
+   * `registerFont` only needs the constructor to accept the bytes and `load()`
+   * to resolve; the axis it records comes from reading those bytes, not from
+   * anything the face reports back.
+   */
+  function stubFontFace() {
+    const faces = new Set<unknown>();
+    vi.stubGlobal(
+      "FontFace",
+      class {
+        constructor(
+          public family: string,
+          public data: ArrayBuffer,
+        ) {}
+        load() {
+          return Promise.resolve(this);
+        }
+      },
+    );
+    vi.stubGlobal("document", document);
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { add: (f: unknown) => faces.add(f) },
+    });
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("appears once a family registers after the first render", async () => {
+    // The regression: the axis is read from a registry that fills in
+    // asynchronously, so the component that *subscribes* has to be the one that
+    // *reads*. A parent computing it into a prop hands down the `undefined` it
+    // captured before the face arrived, and the control never appears.
+    stubFontFace();
+    const bytes = readFileSync(
+      join(process.cwd(), "public", "fonts", BUNDLED_FONTS[0].file),
+    );
+
+    renderPanel();
+    // Settle every effect the first render queued, so the re-render below can
+    // only have come from the registration — without this the tree re-renders
+    // on its own and the assertion proves nothing.
+    await act(async () => {});
+    expect(screen.queryByLabelText(/Font weight/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      await registerFont(
+        DEFAULT_FONT_FAMILY,
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) as ArrayBuffer,
+      );
+    });
+    expect(screen.getByLabelText(/Font weight/)).toBeInTheDocument();
   });
 });

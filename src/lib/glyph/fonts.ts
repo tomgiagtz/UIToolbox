@@ -90,7 +90,8 @@ export function pickableFonts(project: Project): PickableFont[] {
  * A bundled family brings its own: the weight it stays legible at under
  * `drawLabel`'s shrink, which is not the same number for every face (#76). An
  * upload has no such judgement behind it, so it takes whatever its file calls
- * default — which for a static font is its only weight.
+ * default — which for a static font is its only weight. The final fallback is
+ * CSS `normal`, for a face registered before its axis could be read.
  *
  * Applied on *picking* a family rather than at resolve time, so the value the
  * cascade holds is always the one the user can see in the control.
@@ -100,22 +101,6 @@ export function defaultWeightFor(
   axis: WeightAxis | undefined,
 ): number {
   return getBundledFont(family)?.defaultWeight ?? axis?.default ?? 400;
-}
-
-/**
- * Fold a weight into what `axis` actually offers.
- *
- * Switching family keeps the weight — it would be strange for the number to
- * jump when only the face changed — but the new face may not go that far, and
- * a browser answers an out-of-range request by synthesising rather than
- * refusing.
- */
-export function clampWeight(
-  weight: number,
-  axis: WeightAxis | undefined,
-): number {
-  if (!axis) return weight;
-  return Math.min(axis.max, Math.max(axis.min, weight));
 }
 
 /**
