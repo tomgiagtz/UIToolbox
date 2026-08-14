@@ -20,8 +20,6 @@ export interface GlyphPreviewProps {
    * specified exactly as a resolved {@link GlyphStyle} is.
    */
   foreground: Foreground;
-  /** Registered FontFace family name (or any CSS family for previews). */
-  fontFamily: string;
   /** Symbol id to draw as this Glyph's Render Source, or unset for the label. */
   symbolId?: string;
   /** The Device's Catalog id, so a device-specific Symbol override resolves. */
@@ -38,15 +36,14 @@ export interface GlyphPreviewProps {
 /**
  * Renders a single Glyph to a `<canvas>` via the shared {@link renderGlyph}
  * renderer — the same code path the atlas compositor uses, so preview and
- * output match. Waits for the font to be ready before drawing so label
- * auto-shrink measures against the real font.
+ * output match. Waits for the foreground's font to be ready before drawing so
+ * label auto-shrink measures against the real font.
  */
 export function GlyphPreview({
   label,
   cellSize = 128,
   background,
   foreground,
-  fontFamily,
   symbolId,
   device,
   className,
@@ -66,29 +63,19 @@ export function GlyphPreview({
 
   useGlyphCanvas(
     canvasRef,
-    fontFamily,
+    [{ family: foreground.fontFamily, weight: foreground.fontWeight }],
     cellSize,
     (ctx) =>
       renderGlyph(ctx, 0, 0, {
         label,
         cellSize,
         style: glyphStyle,
-        fontFamily,
         symbol: symbolId
           ? getSymbolBitmap(symbolId, glyphStyle, cellSize, device)
           : undefined,
         backgroundImage: getTileBitmap(glyphStyle, cellSize, device),
       }),
-    [
-      label,
-      cellSize,
-      background,
-      foreground,
-      fontFamily,
-      symbolId,
-      device,
-      bitmapsVersion,
-    ],
+    [label, cellSize, background, foreground, symbolId, device, bitmapsVersion],
   );
 
   return (

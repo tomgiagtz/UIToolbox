@@ -44,6 +44,8 @@ const style: GlyphStyle = {
   },
   foreground: {
     transform: identityTransform(),
+    fontFamily: "TestFont",
+    fontWeight: 400,
     textColor: "#ffffff",
     symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
   },
@@ -410,7 +412,7 @@ describe("renderGlyph — scaling the content layer", () => {
     const { ctx, spies } = fakeCtx();
     renderGlyph(ctx, 0, 0, { ...base, style: squashed });
 
-    expect(spies.font).toBe(`${Math.floor(128 * 0.5)}px "TestFont"`);
+    expect(spies.font).toBe(`400 ${Math.floor(128 * 0.5)}px "TestFont"`);
     expect(spies.fillText).toHaveBeenCalledWith("RB", 64, 64);
     expect(spies.scale).toHaveBeenCalledWith(0.5, 1);
   });

@@ -13,11 +13,17 @@ function edited(): Project {
   // A project that differs from the default across every persisted axis, so a
   // faithful round-trip has to carry each one.
   return [
-    { type: "set-font", family: "UITBFont-restored" } as const,
+    {
+      type: "add-font",
+      font: { family: "UITBFont-restored", fileName: "Restored.ttf" },
+    } as const,
     {
       type: "patch-style",
       scope: { tier: "project" },
-      patch: { textColor: "#ff0000", background: { shape: "circle" } },
+      patch: {
+        foreground: { textColor: "#ff0000", fontFamily: "UITBFont-restored" },
+        background: { shape: "circle" },
+      },
     } as const,
     { type: "set-cell-size", size: 256 } as const,
     { type: "toggle-device", catalogId: "xbox" } as const,
@@ -25,7 +31,7 @@ function edited(): Project {
     { type: "set-naming-template", template: "btn_{input}" } as const,
     { type: "set-naming-case", case: "kebab" } as const,
     { type: "set-filename-template", template: "atlas_{device}" } as const,
-  ].reduce(projectReducer, createDefaultProject());
+  ].reduce<Project>(projectReducer, createDefaultProject());
 }
 
 describe("ProjectStore — config (localStorage)", () => {
@@ -43,7 +49,7 @@ describe("ProjectStore — config (localStorage)", () => {
   });
 
   it("overwrites the previous save", () => {
-    saveConfig(createDefaultProject("first"));
+    saveConfig(createDefaultProject());
     const project = edited();
     saveConfig(project);
     expect(loadConfig()).toEqual({ kind: "ok", project });
@@ -108,6 +114,9 @@ describe("ProjectStore — config validation", () => {
     return { ...createDefaultProject().style, ...over };
   }
 
+  /** The default Project tier's foreground, to spread when swapping one field. */
+  const FOREGROUND = createDefaultProject().style.foreground;
+
   /** The default export settings with `naming` replaced wholesale. */
   function settings(naming: Record<string, unknown>): Record<string, unknown> {
     return { ...createDefaultProject().exportSettings, naming };
@@ -168,8 +177,8 @@ describe("ProjectStore — config validation", () => {
     // `config`, which would leave the new blocks in place and so pass.
     const {
       name,
-      font,
       style: base,
+      fonts,
       images,
       devices,
       exportSettings,
@@ -178,7 +187,7 @@ describe("ProjectStore — config validation", () => {
       parseConfig(
         JSON.stringify({
           name,
-          font,
+          fonts,
           images,
           devices,
           ...base,
@@ -207,17 +216,111 @@ describe("ProjectStore — config validation", () => {
     expect(parseConfig(config({ images: [{ id: 7 }] }))).toBeNull();
   });
 
-  it("normalizes an empty font family to the bundled default", () => {
-    // `family` reaches the canvas unresolved, where "" is an invalid font string
-    // that silently draws in the browser default — so it is repaired on read and
-    // the next save persists the real name (ADR-0010). Asserted through
-    // `loadConfig`, since that is the arm the editor actually takes on mount.
-    localStorage.setItem(CONFIG_KEY, config({ font: { family: "" } }));
-    const loaded = loadConfig();
-    expect(loaded).toMatchObject({
-      kind: "ok",
-      project: { font: { family: DEFAULT_FONT_FAMILY } },
+  it("rejects a config whose font manifest is malformed", () => {
+    expect(parseConfig(config({ fonts: [{ family: 7 }] }))).toBeNull();
+  });
+
+  it("rejects a config from before the font joined the cascade", () => {
+    // The old shape carried `font: { family }` beside `style`, and a foreground
+    // with no `fontFamily`. ADR-0012's Migration section asks each shape change
+    // to keep a test that the previous shape is refused, not half-read.
+    const { fonts, style: base, ...rest } = createDefaultProject();
+    void fonts;
+    const { fontFamily, fontWeight, ...foreground } = base.foreground;
+    void fontFamily;
+    void fontWeight;
+    expect(
+      parseConfig(
+        JSON.stringify({
+          ...rest,
+          font: { family: "Inter" },
+          style: { ...base, foreground },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  describe("repairs an unusable font family (ADR-0012 §6)", () => {
+    /** A config whose Project tier names `family`. */
+    function namingFamily(family: string): string {
+      return config({
+        style: style({ foreground: { ...FOREGROUND, fontFamily: family } }),
+      });
+    }
+
+    it("rewrites an empty family at the Project tier", () => {
+      // The family reaches the canvas unresolved, where "" is an invalid font
+      // string that silently draws in the browser default — so it is repaired on
+      // read and the next save persists it (ADR-0010). Asserted through
+      // `loadConfig`, the arm the editor actually takes on mount.
+      localStorage.setItem(CONFIG_KEY, namingFamily(""));
+      expect(loadConfig()).toMatchObject({
+        kind: "ok",
+        project: { style: { foreground: { fontFamily: DEFAULT_FONT_FAMILY } } },
+      });
+      localStorage.clear();
     });
-    localStorage.clear();
+
+    it("rewrites a family in neither the bundled set nor the manifest", () => {
+      // Hand-edited, or trimmed by an older build: there is no asset to offer
+      // back, so the Project tier takes the default rather than drawing wrong.
+      const parsed = parseConfig(namingFamily("Wingdings"));
+      expect(parsed!.style.foreground.fontFamily).toBe(DEFAULT_FONT_FAMILY);
+    });
+
+    it("keeps a family the manifest carries", () => {
+      const parsed = parseConfig(
+        config({
+          fonts: [{ family: "UITBFont-1-abc", fileName: "Comic.ttf" }],
+          style: style({
+            foreground: { ...FOREGROUND, fontFamily: "UITBFont-1-abc" },
+          }),
+        }),
+      );
+      expect(parsed!.style.foreground.fontFamily).toBe("UITBFont-1-abc");
+    });
+
+    it("keeps a bundled family other than the default", () => {
+      const parsed = parseConfig(namingFamily("Titan One"));
+      expect(parsed!.style.foreground.fontFamily).toBe("Titan One");
+    });
+
+    it("deletes an unknown family from a Device override, so it falls up", () => {
+      // A sparse tier has somewhere to fall to, unlike the Project base — so the
+      // repair is a deletion, and the Device goes back to inheriting.
+      const project = createDefaultProject();
+      const parsed = parseConfig(
+        config({
+          devices: [
+            {
+              ...project.devices[0],
+              style: {
+                foreground: { fontFamily: "Wingdings", textColor: "#f00" },
+              },
+            },
+          ],
+        }),
+      );
+      expect(parsed!.devices[0].style).toEqual({
+        foreground: { textColor: "#f00" },
+      });
+    });
+
+    it("deletes an unknown family from a Glyph override too", () => {
+      const project = createDefaultProject();
+      const parsed = parseConfig(
+        config({
+          devices: [
+            {
+              ...project.devices[0],
+              glyphStyles: {
+                "key-a": { foreground: { fontFamily: "Wingdings" } },
+              },
+            },
+          ],
+        }),
+      );
+      expect(parsed!.devices[0].glyphStyles).toEqual({ "key-a": {} });
+    });
   });
 });

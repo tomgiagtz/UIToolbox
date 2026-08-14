@@ -4,10 +4,11 @@
  * A saved project is either:
  *
  * - a **JSON** file (`{name}.json`) carrying just the config, or
- * - a **ZIP** file (`{name}.zip`) bundling that same `config.json` alongside the
- *   original uploaded font file and any uploaded custom images under `images/`
+ * - a **ZIP** file (`{name}.zip`) bundling that same `config.json` alongside any
+ *   uploaded fonts under `fonts/` and uploaded custom images under `images/`
  *   (unmodified bytes, not base64-blobbed), so a project is portable between
- *   machines without re-uploading its assets.
+ *   machines without re-uploading its assets. Bundled font families never
+ *   travel — the tool on the other end already has them.
  *
  * The config inside both is the exact format ProjectStore persists to
  * `localStorage` — a bare {@link Project} (see {@link serializeConfig} /
@@ -26,35 +27,41 @@ import type { Project } from "@/lib/glyph/types";
 
 /** The config's entry name inside a project ZIP. */
 const CONFIG_ENTRY = "config.json";
+/** Folder every uploaded font's bytes live under, keyed by its file name. */
+const FONT_PREFIX = "fonts/";
 /** Folder every custom image's bytes live under, keyed by its image id. */
 const IMAGE_PREFIX = "images/";
 
 /**
  * A project restored from a file: its config, plus whichever assets the file
- * bundled — the font and the custom images (issue #20).
+ * bundled — the uploaded fonts and custom images (issue #20).
  */
 export interface ImportedProject {
   project: Project;
-  font: PersistedFont | null;
+  fonts: PersistedFont[];
   images: PersistedImage[];
 }
 
 /**
- * Build a downloadable project file. With a font or any custom images, produces a
- * ZIP of `config.json` + those asset files; with neither, a plain config JSON.
+ * Build a downloadable project file. With any uploaded fonts or custom images,
+ * produces a ZIP of `config.json` + those asset files; with neither, a plain
+ * config JSON — which is what a project styled entirely in bundled families
+ * still saves as.
  *
- * Only the bytes go in the ZIP — an image's filename and MIME type already ride in
- * the config's manifest, so there is one place they can disagree: none.
+ * Only the bytes go in the ZIP — an asset's filename and (for an image) MIME
+ * type already ride in the config's manifest, so there is one place they can
+ * disagree: none. A font's entry name *is* its manifest `fileName`, made unique
+ * back at upload, so nothing is renamed here.
  */
 export async function exportProjectFile(
   project: Project,
-  font: PersistedFont | null,
+  fonts: PersistedFont[] = [],
   images: PersistedImage[] = [],
 ): Promise<ExportArtifact> {
   const base = safeBaseName(project.name);
   const configJson = serializeConfig(project);
 
-  if (!font && images.length === 0) {
+  if (fonts.length === 0 && images.length === 0) {
     return {
       filename: `${base}.json`,
       blob: new Blob([configJson], { type: "application/json" }),
@@ -64,8 +71,10 @@ export async function exportProjectFile(
   const entries: Record<string, Uint8Array> = {
     [CONFIG_ENTRY]: strToU8(configJson),
   };
-  if (font) {
-    entries[font.fileName] = new Uint8Array(await font.blob.arrayBuffer());
+  for (const font of fonts) {
+    entries[`${FONT_PREFIX}${font.fileName}`] = new Uint8Array(
+      await font.blob.arrayBuffer(),
+    );
   }
   for (const image of images) {
     entries[`${IMAGE_PREFIX}${image.id}`] = new Uint8Array(
@@ -81,11 +90,6 @@ export async function exportProjectFile(
   };
 }
 
-/**
- * Parse an uploaded project file (either format), or `null` if it is not a valid
- * project file. ZIPs are detected by their `PK` signature, not the extension, so
- * a mislabeled file still works.
- */
 /**
  * The imported project as the editor should *hold* it: its image manifest cut
  * down to the assets whose bytes actually arrived.
@@ -109,6 +113,11 @@ export function withAvailableImages(
   };
 }
 
+/**
+ * Parse an uploaded project file (either format), or `null` if it is not a valid
+ * project file. ZIPs are detected by their `PK` signature, not the extension, so
+ * a mislabeled file still works.
+ */
 export async function importProjectFile(
   file: File,
 ): Promise<ImportedProject | null> {
@@ -118,7 +127,7 @@ export async function importProjectFile(
 
 function importJson(bytes: Uint8Array): ImportedProject | null {
   const project = parseConfig(strFromU8(bytes));
-  return project ? { project, font: null, images: [] } : null;
+  return project ? { project, fonts: [], images: [] } : null;
 }
 
 function importZip(bytes: Uint8Array): ImportedProject | null {
@@ -148,21 +157,17 @@ function importZip(bytes: Uint8Array): ImportedProject | null {
     }
   }
 
-  // The font is whatever entry is left: it keeps its original filename (which the
-  // config doesn't record), so it can't be looked up by name the way images are.
-  // Re-registered under the family the config already carries (see font.ts).
-  const fontEntry = Object.entries(entries).find(
-    ([name]) => name !== CONFIG_ENTRY && !name.startsWith(IMAGE_PREFIX),
-  );
-  const font: PersistedFont | null = fontEntry
-    ? {
-        family: project.font.family,
-        fileName: fontEntry[0],
-        blob: new Blob([fontEntry[1].slice()]),
-      }
-    : null;
+  // Fonts walk their manifest exactly as images do. (This replaced a "the font
+  // is whatever entry is left over" heuristic, which read the family off the
+  // config and could not survive a second font.) The blob is deliberately
+  // untyped: `FontFace` sniffs the bytes, so there is no MIME to preserve.
+  const fonts: PersistedFont[] = [];
+  for (const asset of project.fonts) {
+    const bytes = entries[`${FONT_PREFIX}${asset.fileName}`];
+    if (bytes) fonts.push({ ...asset, blob: new Blob([bytes.slice()]) });
+  }
 
-  return { project, font, images };
+  return { project, fonts, images };
 }
 
 /** ZIP local-file-header magic: the ASCII bytes "PK". */

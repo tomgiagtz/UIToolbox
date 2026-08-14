@@ -14,10 +14,12 @@ export interface RenderGlyphOptions {
   label: string;
   /** Square cell edge length in px. */
   cellSize: number;
-  /** Effective per-Glyph style (text color + Background) from the Style Cascade. */
+  /**
+   * Effective per-Glyph style from the Style Cascade — both drawing layers, the
+   * label's font among them (ADR-0012 §2), so nothing about how a Glyph looks
+   * arrives beside the style any more.
+   */
   style: GlyphStyle;
-  /** Registered FontFace family name. */
-  fontFamily: string;
   /**
    * The Glyph's **Symbol** Render Source, already rasterized to its resolved
    * appearance (see `symbol-render.ts`). When present it is drawn on the tile in
@@ -60,8 +62,7 @@ export function renderGlyph(
   oy: number,
   opts: RenderGlyphOptions,
 ): void {
-  const { cellSize, style, fontFamily, label, symbol, image, backgroundImage } =
-    opts;
+  const { cellSize, style, label, symbol, image, backgroundImage } = opts;
   const { background, foreground } = style;
 
   ctx.save();
@@ -111,7 +112,8 @@ export function renderGlyph(
           cellSize,
           label,
           foreground.textColor,
-          fontFamily,
+          foreground.fontFamily,
+          foreground.fontWeight,
           box.size,
         );
       }
@@ -282,6 +284,7 @@ function drawLabel(
   label: string,
   color: string,
   fontFamily: string,
+  fontWeight: number,
   available: number,
 ): void {
   if (!label) return;
@@ -291,7 +294,10 @@ function drawLabel(
   ctx.textBaseline = "middle";
 
   let fontPx = Math.floor(cellSize * MAX_FONT_FRACTION);
-  const font = (px: number) => `${px}px "${fontFamily}"`;
+  // The weight leads the shorthand, which is where CSS wants it. It picks a
+  // real instance of a variable face registered with its axis, and is what a
+  // static face quietly ignores.
+  const font = (px: number) => `${fontWeight} ${px}px "${fontFamily}"`;
 
   ctx.font = font(fontPx);
   let width = ctx.measureText(label).width;

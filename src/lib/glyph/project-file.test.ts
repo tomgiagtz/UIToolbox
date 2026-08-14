@@ -22,16 +22,16 @@ import type { Project } from "@/lib/glyph/types";
 function edited(): Project {
   return [
     { type: "set-name", name: "My Cool Glyphs" } as const,
-    { type: "set-font", family: "UITBFont-abc" } as const,
     {
       type: "patch-style",
       scope: { tier: "project" },
-      patch: { textColor: "#ff0000", background: { shape: "circle" } },
+      patch: {
+        foreground: { textColor: "#ff0000" },
+        background: { shape: "circle" },
+      },
     } as const,
     { type: "toggle-device", catalogId: "xbox" } as const,
-    // Not `createDefaultProject("")`: an empty family is repaired on read now
-    // (ADR-0010), so it would not survive a round-trip unchanged.
-  ].reduce(projectReducer, createDefaultProject());
+  ].reduce<Project>(projectReducer, createDefaultProject());
 }
 
 /** A Catalog id the Keyboard's Default Selection leaves disabled, and one it enables. */
@@ -54,7 +54,7 @@ function asFile(blob: Blob, name: string): File {
 describe("project-file — config-only (JSON)", () => {
   it("round-trips a project through export/import with no font", async () => {
     const project = edited();
-    const artifact = await exportProjectFile(project, null);
+    const artifact = await exportProjectFile(project);
     expect(artifact.filename).toBe("My-Cool-Glyphs.json");
 
     const imported = await importProjectFile(
@@ -62,7 +62,17 @@ describe("project-file — config-only (JSON)", () => {
     );
     expect(imported).not.toBeNull();
     expect(imported!.project).toEqual(project);
-    expect(imported!.font).toBeNull();
+    expect(imported!.fonts).toEqual([]);
+  });
+
+  it("saves as plain JSON when every family is a bundled one", async () => {
+    // A project styled entirely in shipped families carries no bytes worth
+    // zipping — the tool on the other end already has them.
+    const project = edited();
+    expect(project.fonts).toEqual([]);
+    expect((await exportProjectFile(project, [], [])).filename).toBe(
+      "My-Cool-Glyphs.json",
+    );
   });
 
   it("returns null for a file that isn't a valid project", async () => {
@@ -81,47 +91,143 @@ describe("project-file — config-only (JSON)", () => {
     expect(await importProjectFile(stale)).toBeNull();
   });
 
-  it("normalizes an empty font family on the import path too", async () => {
+  it("normalizes an unusable font family on the import path too", async () => {
     // The repair lives in `parseConfig`, which both entry points share — so a
-    // file carrying a pre-#13 empty family lands in Inter, not the browser
-    // default (ADR-0010).
+    // file naming a family nothing can draw lands in the bundled default rather
+    // than in whatever the browser picks (ADR-0010).
+    const base = edited();
     const imported = await importProjectFile(
       asFile(
-        new Blob([JSON.stringify({ ...edited(), font: { family: "" } })]),
-        "pre-inter.json",
+        new Blob([
+          JSON.stringify({
+            ...base,
+            style: {
+              ...base.style,
+              foreground: { ...base.style.foreground, fontFamily: "" },
+            },
+          }),
+        ]),
+        "no-family.json",
       ),
     );
-    expect(imported!.project.font.family).toBe(DEFAULT_FONT_FAMILY);
+    expect(imported!.project.style.foreground.fontFamily).toBe(
+      DEFAULT_FONT_FAMILY,
+    );
+  });
+
+  it("rejects a config from before the font joined the cascade", async () => {
+    // The old shape carried `font: { family }` beside `style` and no `fonts`.
+    // ADR-0012's Migration section asks each shape change to keep a test that
+    // the previous shape is refused rather than half-read.
+    const { fonts, ...rest } = edited();
+    void fonts;
+    const stale = { ...rest, font: { family: "Inter" } };
+    expect(
+      await importProjectFile(
+        asFile(new Blob([JSON.stringify(stale)]), "old-shape.json"),
+      ),
+    ).toBeNull();
   });
 });
 
-describe("project-file — with font (ZIP)", () => {
-  it("round-trips config + font, preserving the font bytes and name", async () => {
-    const project = edited();
-    const fontBytes = new Uint8Array([0x00, 0x01, 0x00, 0x00, 0xde, 0xad]);
-    const font: PersistedFont = {
-      family: project.font.family,
-      fileName: "Heros.ttf",
-      blob: new Blob([fontBytes]),
-    };
+describe("project-file — uploaded fonts (ZIP, ADR-0012 §7)", () => {
+  const bytes = new Uint8Array([0x00, 0x01, 0x00, 0x00, 0xde, 0xad]);
 
-    const artifact = await exportProjectFile(project, font);
+  /** A project whose Project tier draws in one uploaded family. */
+  function withFont(): { project: Project; font: PersistedFont } {
+    const font: PersistedFont = {
+      family: "UITBFont-1-abc",
+      fileName: "Heros.ttf",
+      blob: new Blob([bytes]),
+    };
+    const base = edited();
+    const project: Project = {
+      ...base,
+      fonts: [{ family: font.family, fileName: font.fileName }],
+      style: {
+        ...base.style,
+        foreground: { ...base.style.foreground, fontFamily: font.family },
+      },
+    };
+    return { project, font };
+  }
+
+  it("round-trips config + font under fonts/, preserving bytes and name", async () => {
+    const { project, font } = withFont();
+    const artifact = await exportProjectFile(project, [font]);
     expect(artifact.filename).toBe("My-Cool-Glyphs.zip");
+
+    const entries = unzipSync(
+      new Uint8Array(await artifact.blob.arrayBuffer()),
+    );
+    expect(Object.keys(entries).sort()).toEqual([
+      "config.json",
+      "fonts/Heros.ttf",
+    ]);
 
     const imported = await importProjectFile(
       asFile(artifact.blob, artifact.filename),
     );
-    expect(imported).not.toBeNull();
     expect(imported!.project).toEqual(project);
-    expect(imported!.font?.fileName).toBe("Heros.ttf");
-    // Font family round-trips so the restored FontFace registers under the same
-    // name the config references.
-    expect(imported!.font?.family).toBe(project.font.family);
+    expect(imported!.fonts.map((f) => f.fileName)).toEqual(["Heros.ttf"]);
+    // The family round-trips so the restored FontFace registers under the same
+    // name every tier of the config references.
+    expect(imported!.fonts[0].family).toBe(font.family);
+    expect(
+      Array.from(new Uint8Array(await imported!.fonts[0].blob.arrayBuffer())),
+    ).toEqual(Array.from(bytes));
+  });
 
-    const roundTripped = new Uint8Array(
-      await imported!.font!.blob.arrayBuffer(),
+  it("carries two fonts, keyed by their manifest file names", async () => {
+    // The heuristic this replaced picked "whatever entry is left over", which
+    // could never have told these two apart.
+    const { project, font } = withFont();
+    const second: PersistedFont = {
+      family: "UITBFont-2-def",
+      fileName: "Heros-2.ttf",
+      blob: new Blob([new Uint8Array([0x99])]),
+    };
+    const twoFonts: Project = {
+      ...project,
+      fonts: [
+        ...project.fonts,
+        { family: second.family, fileName: second.fileName },
+      ],
+    };
+
+    const imported = await importProjectFile(
+      asFile(
+        (await exportProjectFile(twoFonts, [font, second])).blob,
+        "project.zip",
+      ),
     );
-    expect(Array.from(roundTripped)).toEqual(Array.from(fontBytes));
+    expect(imported!.fonts.map((f) => [f.family, f.fileName])).toEqual([
+      [font.family, "Heros.ttf"],
+      [second.family, "Heros-2.ttf"],
+    ]);
+    expect(
+      Array.from(new Uint8Array(await imported!.fonts[1].blob.arrayBuffer())),
+    ).toEqual([0x99]);
+  });
+
+  it("loads a ZIP whose font bytes are missing, keeping the manifest", async () => {
+    // Same posture as a missing image: the config still loads, and the family
+    // is repaired to a drawable one on read rather than the file failing.
+    const { project, font } = withFont();
+    const full = unzipSync(
+      new Uint8Array(
+        await (await exportProjectFile(project, [font])).blob.arrayBuffer(),
+      ),
+    );
+    const stripped = zipSync({ "config.json": full["config.json"] });
+
+    const imported = await importProjectFile(
+      asFile(new Blob([stripped.slice()]), "no-bytes.zip"),
+    );
+    expect(imported).not.toBeNull();
+    expect(imported!.fonts).toEqual([]);
+    // The manifest is config, so it survives — the bytes are what is gone.
+    expect(imported!.project.fonts).toEqual(project.fonts);
   });
 });
 
@@ -144,7 +250,7 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
 
   it("bundles images even when there's no font to bundle", async () => {
     const { project, image } = withImage();
-    const artifact = await exportProjectFile(project, null, [image]);
+    const artifact = await exportProjectFile(project, [], [image]);
     // Bytes can't ride in the config JSON, so any image forces the ZIP format.
     expect(artifact.filename).toBe("My-Cool-Glyphs.zip");
 
@@ -152,7 +258,7 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
       asFile(artifact.blob, artifact.filename),
     );
     expect(imported!.project).toEqual(project);
-    expect(imported!.font).toBeNull();
+    expect(imported!.fonts).toEqual([]);
     expect(imported!.images.map((i) => i.id)).toEqual(["img-1.png"]);
     expect(imported!.images[0].fileName).toBe("arrow.png");
     expect(imported!.images[0].type).toBe("image/png");
@@ -161,23 +267,25 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     ).toEqual(Array.from(bytes));
   });
 
-  it("bundles images alongside the font", async () => {
+  it("bundles images alongside fonts, each under its own folder", async () => {
     const { project, image } = withImage();
     const font: PersistedFont = {
-      family: project.font.family,
+      family: "UITBFont-1-abc",
       fileName: "Heros.ttf",
       blob: new Blob([new Uint8Array([0x00, 0x01])]),
     };
+    const withBoth: Project = {
+      ...project,
+      fonts: [{ family: font.family, fileName: font.fileName }],
+    };
 
-    const imported = await importProjectFile(
-      asFile(
-        (await exportProjectFile(project, font, [image])).blob,
-        "project.zip",
-      ),
-    );
-    // The font is found by elimination, so an images/ entry must not be mistaken
-    // for it (and vice versa).
-    expect(imported!.font?.fileName).toBe("Heros.ttf");
+    const artifact = await exportProjectFile(withBoth, [font], [image]);
+    expect(
+      Object.keys(unzipSync(new Uint8Array(await artifact.blob.arrayBuffer()))),
+    ).toEqual(["config.json", "fonts/Heros.ttf", "images/img-1.png"]);
+
+    const imported = await importProjectFile(asFile(artifact.blob, "p.zip"));
+    expect(imported!.fonts.map((f) => f.fileName)).toEqual(["Heros.ttf"]);
     expect(imported!.images.map((i) => i.id)).toEqual(["img-1.png"]);
   });
 
@@ -189,7 +297,7 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     const full = unzipSync(
       new Uint8Array(
         await (
-          await exportProjectFile(project, null, [image])
+          await exportProjectFile(project, [], [image])
         ).blob.arrayBuffer(),
       ),
     );
@@ -201,20 +309,6 @@ describe("project-file — custom images (ZIP, issue #20)", () => {
     expect(imported).not.toBeNull();
     // The manifest is config, so it survives; only the bytes are gone.
     expect(imported!.project.images).toEqual(project.images);
-    expect(imported!.images).toEqual([]);
-  });
-
-  it("loads a font-only ZIP saved before images existed", async () => {
-    const project = edited();
-    const font: PersistedFont = {
-      family: project.font.family,
-      fileName: "Heros.ttf",
-      blob: new Blob([new Uint8Array([0x00, 0x01])]),
-    };
-    const artifact = await exportProjectFile(project, font);
-
-    const imported = await importProjectFile(asFile(artifact.blob, "old.zip"));
-    expect(imported!.font?.fileName).toBe("Heros.ttf");
     expect(imported!.images).toEqual([]);
   });
 });
@@ -319,7 +413,7 @@ describe("project-file — the whole configured project (issue #23)", () => {
     expect(keyboard.enabled).not.toContain(enabledByDefault);
     expect(keyboard.custom.map((c) => c.label)).toEqual(["Grave"]);
 
-    const artifact = await exportProjectFile(project, null, [image]);
+    const artifact = await exportProjectFile(project, [], [image]);
     const imported = await importProjectFile(
       asFile(artifact.blob, artifact.filename),
     );
