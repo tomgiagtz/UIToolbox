@@ -600,7 +600,7 @@ export function GlyphCreator() {
         <section
           ref={preview.ref}
           aria-label="Sprite Atlas preview"
-          className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border bg-muted/20 p-4"
+          className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-lg border bg-surface-sunken/20 p-4"
         >
           {project.devices.length > 1 && (
             <div className="absolute right-3 top-3 z-10">
@@ -611,7 +611,7 @@ export function GlyphCreator() {
                 id="preview-device"
                 value={activeIndex}
                 onChange={(e) => onPreviewDeviceChange(Number(e.target.value))}
-                className="rounded-md border border-input bg-background/95 px-2.5 py-1.5 text-sm shadow-sm backdrop-blur"
+                className="rounded-md border border-input bg-surface-base/95 px-2.5 py-1.5 text-sm shadow-sm backdrop-blur"
               >
                 {project.devices.map((d, i) => (
                   <option key={d.name} value={i}>

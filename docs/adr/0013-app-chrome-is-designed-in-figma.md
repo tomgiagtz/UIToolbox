@@ -3,6 +3,8 @@
 - **Status:** Accepted — nothing built. Every section is filed as an issue off
   this ADR.
 - **Date:** 2026-08-12
+- **Amended:** 2026-08-14 — §7 adds motion to the token set, and §8 names the
+  surfaces and the accent
 - **Amends:** ADR-0001 (its "restyle without fighting a dependency" gets a place
   where the restyle is decided, and Storybook stops being the only visual surface)
 
@@ -160,12 +162,71 @@ preloaded rather than assumed.
 Every existing style has `lineHeight: AUTO`. A type scale without line heights
 is half a type scale; the replacement sets them explicitly.
 
+### 7. Motion is a token, and Figma holds it as a reference
+
+The app has no motion. Not "inconsistent motion" — none: no motion custom
+properties, no presets, no motion library, and exactly one explicit duration in
+`src/` (`duration-75` on the atlas preview crosshair, which is Glyph-domain
+canvas feedback and stays out of this). Popovers, tooltips and the Editor rail's
+disclosures all appear and disappear instantly.
+
+Motion joins the token set on the same two-layer shape as colour (§5) — four
+timing primitives, and roles that alias them:
+
+| Layer     | Token                                | Value                   |
+| --------- | ------------------------------------ | ----------------------- |
+| Primitive | `duration/xfast`                     | 0.2s                    |
+| Primitive | `duration/fast`                      | 0.3s                    |
+| Primitive | `duration/medium`                    | 0.4s                    |
+| Primitive | `duration/slow`                      | 0.6s                    |
+| Semantic  | `motion/popup/{duration,easing}`     | → `xfast`, decelerating |
+| Semantic  | `motion/container/{duration,easing}` | → `medium`, in-out      |
+
+Two roles, because two things move for different reasons. A **popup** is a
+means to an end and gets the fastest step — an overlay that lags reads as
+broken. A **container** resizing in place _is_ the thing being watched, so it
+gets room. `fast` and `slow` land as steps with no role bound to them yet; a
+component reaches for a role, never for a raw step, which is the same rule §5
+puts on colour.
+
+**Figma cannot bind these to anything, and that is fine.** There is no duration
+scope on a `FLOAT` variable — a number variable cannot drive a Smart Animate
+duration — so the motion tokens take `scopes: []` and exist as a readable,
+editable list in the Variables panel and Dev Mode. That makes Figma the place
+the timing is _decided and reviewed_, which is all §1 ever asked of it. The
+`s` suffix lives only in `globals.css`; Figma stores the number.
+
+Motion is where the "no pipeline" bet (§1) is most exposed, because a duration
+that drifts is invisible rather than wrong-looking. The mitigation is that a
+role is one custom property read by one CSS class, so there is exactly one place
+to look.
+
+### 8. Surfaces are named for the app's layering, not shadcn's slots
+
+`globals.css` inherited shadcn's `--background` / `--card` / `--popover` /
+`--muted`, which are named for the components shadcn ships rather than for how
+this app stacks. They become a surface scale — `base`, `raised`, `overlay`,
+`sunken`, `hover` — at the declaration site, and `@theme inline` keeps shadcn's
+utility names resolving so a component vendored through `components.json` still
+styles itself.
+
+The forcing case is `accent`. shadcn means **hover surface** by it, and every
+one of the app's `bg-accent` call sites is a `hover:`. A brand accent is a
+different thing that wants the same word, and two meanings on one token is the
+failure §4 describes at the component layer. So the hover role is renamed to
+`--surface-hover` and `--accent` is the brand accent — the one place a
+compatibility alias is deliberately refused, because keeping it would repaint
+every hover in the app the day #99 picks a hue.
+
+`--accent` ships holding the grey it already held. The slot is the decision
+here; the colour is #99's, and this ADR's "which hue" is still out of scope.
+
 ## Consequences
 
 - **Six existing Figma components are repainted dark and rebound to variables.**
   They are not rebuilt — their component properties and slots (`Slot`, `Label`,
   `Description`, `Placeholder`) are the useful part and survive.
-- **`.dark` is deleted** (`globals.css:39-62`), along with the four `.dark`
+- **`.dark` is deleted** (`globals.css:68-93`), along with the four `.dark`
   overrides of `--input-fill-*` / `--input-border-*`. The `dark` custom variant
   at `globals.css:4` goes with it.
 - **`globals.css` gains font tokens and loses the assumption of light.** `:root`
@@ -179,6 +240,18 @@ is half a type scale; the replacement sets them explicitly.
 - **Storybook stops being the only place the system is visible**, but does not
   stop being the gate — it is where a component is proven against the real
   tokens, which a Figma frame cannot do.
+- **A motion role is a CSS class, not a `className` string.** `motion-popup` and
+  `motion-container` are `@utility` rules in `globals.css`, next to the custom
+  properties they read — putting them in a feature file would repeat exactly the
+  `inputClass` mistake #103 exists to undo. `motion-container` transitions
+  `height` off `--disclosure-panel-height`, which react-aria's `useDisclosure`
+  sets and then waits on via `getAnimations()`; both roles no-op under
+  `prefers-reduced-motion`.
+- **Every surface utility in `src/` speaks the new vocabulary.**
+  `bg-background` → `bg-surface-base`, `bg-popover` → `bg-surface-overlay`,
+  `bg-muted` → `bg-surface-sunken`, `hover:bg-accent` → `hover:bg-surface-hover`.
+  The shadcn names survive only as aliases in `@theme inline`, and `accent` is
+  not among them.
 - **Two primitive stacks still coexist and this ADR does not settle it.**
   `button.tsx` is shadcn/Radix; `controls-ui.tsx`, `panel-section.tsx` and
   `style-controls.tsx` use `react-aria-components` directly. Designing a

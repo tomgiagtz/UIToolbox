@@ -63,7 +63,7 @@ export function ProjectMenuBar({
   }
 
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="sticky bottom-0 z-10 -mx-4 border-t bg-surface-base/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-surface-base/80">
       <div className="relative flex items-center gap-2">
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={openSaveDialog}>
@@ -88,7 +88,7 @@ export function ProjectMenuBar({
           onChange={(e) => onNameChange(e.target.value)}
           aria-label="Project name"
           title="Click to rename the project"
-          className="absolute left-1/2 hidden w-40 max-w-[40%] -translate-x-1/2 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-center text-sm font-medium text-muted-foreground hover:border-input focus:border-input focus:bg-background focus:text-foreground focus:outline-none sm:block"
+          className="absolute left-1/2 hidden w-40 max-w-[40%] -translate-x-1/2 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-center text-sm font-medium text-muted-foreground hover:border-input focus:border-input focus:bg-surface-base focus:text-foreground focus:outline-none sm:block"
         />
 
         <div className="ml-auto">
@@ -157,7 +157,7 @@ function SaveDialog({
               value={name}
               onChange={(e) => onNameChange(e.target.value)}
               autoFocus
-              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              className="w-full rounded-md border border-input bg-surface-base px-3 py-1.5 text-sm"
             />
             <p className="text-xs text-muted-foreground">
               Used as the download filename.

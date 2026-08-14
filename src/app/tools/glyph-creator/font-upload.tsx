@@ -23,7 +23,7 @@ export function FontUpload({
         type="file"
         accept=".ttf,.otf,.woff,.woff2,font/*"
         onChange={onFontChange}
-        className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
+        className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-surface-base file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-surface-hover"
       />
       <p className="text-xs text-muted-foreground">
         {fontName

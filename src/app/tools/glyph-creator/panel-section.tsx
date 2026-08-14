@@ -36,26 +36,26 @@ export function PanelSection({ id, title, help, children }: PanelSectionProps) {
         >
           <ChevronRight
             aria-hidden
-            className="size-4 shrink-0 text-muted-foreground transition-transform group-aria-expanded:rotate-90"
+            className="size-4 shrink-0 text-muted-foreground transition-transform duration-(--motion-container-duration) ease-(--motion-container-easing) group-aria-expanded:rotate-90"
           />
           {title}
         </Button>
         <TooltipTrigger delay={300}>
           <Button
             aria-label={`About ${title}`}
-            className="flex size-6 items-center justify-center rounded-full border border-input text-xs text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-6 items-center justify-center rounded-full border border-input text-xs text-muted-foreground outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring"
           >
             ?
           </Button>
           <Tooltip
             offset={6}
-            className="max-w-56 rounded-md bg-foreground px-2.5 py-1.5 text-xs text-background shadow-md"
+            className="motion-popup max-w-56 rounded-md bg-foreground px-2.5 py-1.5 text-xs text-surface-base shadow-md"
           >
             {help}
           </Tooltip>
         </TooltipTrigger>
       </Heading>
-      <DisclosurePanel>
+      <DisclosurePanel className="motion-container">
         <div className="pb-4 pt-1">{children}</div>
       </DisclosurePanel>
     </Disclosure>

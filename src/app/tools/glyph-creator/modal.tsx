@@ -34,7 +34,7 @@ export function Modal({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className="fixed inset-0 m-auto h-fit max-h-[85vh] w-fit rounded-lg border bg-background p-0 text-foreground backdrop:bg-black/40"
+      className="fixed inset-0 m-auto h-fit max-h-[85vh] w-fit rounded-lg border bg-surface-base p-0 text-foreground backdrop:bg-black/40"
     >
       <form
         onSubmit={onSubmit}

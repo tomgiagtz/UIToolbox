@@ -104,7 +104,7 @@ export function NamingControls({
       </fieldset>
 
       {sample && (
-        <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+        <div className="rounded-lg border bg-surface-sunken/40 p-3 text-sm">
           <p className="mb-1 font-medium">Sample output</p>
           <p className="text-muted-foreground">
             File: <span className="font-mono">{sample.filename}.png</span> /{" "}
