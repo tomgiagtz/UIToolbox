@@ -19,6 +19,9 @@ const roundedRect: Background = {
 
 const foreground: Foreground = {
   transform: identityTransform(),
+  // A generic CSS family, so the story draws without registering a FontFace.
+  fontFamily: "sans-serif",
+  fontWeight: 400,
   textColor: DEFAULT_TEXT_COLOR,
   symbolPaints: DEFAULT_SYMBOL_PAINTS,
 };
@@ -32,7 +35,6 @@ const meta = {
     cellSize: 128,
     background: roundedRect,
     foreground,
-    fontFamily: "sans-serif",
   },
 } satisfies Meta<typeof GlyphPreview>;
 

@@ -4,6 +4,10 @@
  * Not `presets.ts`: ADR-0012 gives "Preset" to a shipped *look*, and shipped
  * Presets land in `presets/` (§5).
  */
+import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_WEIGHT,
+} from "@/lib/glyph/bundled-fonts";
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
 import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
 import type {
@@ -91,10 +95,19 @@ export const DEFAULT_STYLE: GlyphStyle = {
   background: DEFAULT_BACKGROUND,
   foreground: {
     transform: identityTransform(),
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontWeight: DEFAULT_FONT_WEIGHT,
     textColor: DEFAULT_TEXT_COLOR,
     symbolPaints: DEFAULT_SYMBOL_PAINTS,
   },
 };
+
+/**
+ * Re-exported so importers that only ever wanted "the default font" don't need
+ * to know it comes from the bundled registry's first row (`bundled-fonts.ts`,
+ * a leaf module the Preset build gate can import — which `defaults.ts` is not).
+ */
+export { DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT };
 
 /** Default atlas output settings: 128px cells, `{device}_{input}` in snake_case. */
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
@@ -106,25 +119,18 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
 export const DEFAULT_PROJECT_NAME = "my-glyphs";
 
 /**
- * Family name of the bundled default font (Inter, see #13). A fresh project
- * renders with this immediately — no upload required — and an uploaded font
- * simply overrides it. The matching FontFace is registered from the vendored
- * file by {@link loadDefaultFont}.
- */
-export const DEFAULT_FONT_FAMILY = "Inter";
-
-/**
  * Build the default project: the Keyboard Device built from its Default Selection, plus
  * default style and naming. The UI holds this as editable state — style, Inputs,
  * Devices, and naming are all changed from here by the user.
+ *
+ * `fonts` starts empty while the style names the bundled default: the manifest
+ * lists uploads, and the default was never one (ADR-0012 §6).
  */
-export function createDefaultProject(
-  fontFamily: string = DEFAULT_FONT_FAMILY,
-): Project {
+export function createDefaultProject(): Project {
   return {
     name: DEFAULT_PROJECT_NAME,
-    font: { family: fontFamily },
     style: DEFAULT_STYLE,
+    fonts: [],
     images: [],
     devices: [createDeviceFromCatalog(DEVICE_CATALOGS[0])],
     exportSettings: DEFAULT_EXPORT_SETTINGS,

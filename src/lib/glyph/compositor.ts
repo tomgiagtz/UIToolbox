@@ -4,23 +4,20 @@ import { renderGlyph } from "@/lib/glyph/renderer";
 import { ensureSymbolBitmap } from "@/lib/glyph/symbol-render";
 import type { DeviceOutput } from "@/lib/glyph/types";
 
-export interface AtlasRenderInputs {
-  /** Registered FontFace family name. */
-  fontFamily: string;
-}
-
 /**
  * Composite a Device's Glyphs into its Sprite Atlas PNG.
  *
  * Uses an {@link OffscreenCanvas} sized to the (power-of-two) atlas and the
  * shared {@link renderGlyph} renderer, so the output is pixel-consistent with
  * the live preview. Each Glyph is drawn from its own cascade-resolved style
- * carried on the placement. Returns a PNG Blob.
+ * carried on the placement — the font included, so `output` is now the whole
+ * input and there is nothing to thread beside it. Returns a PNG Blob.
+ *
+ * Registration is the caller's job: `ensureFamiliesRegistered` must have
+ * resolved before this runs, or canvas quietly draws a lazily loaded family in
+ * its fallback face.
  */
-export async function renderAtlasBlob(
-  output: DeviceOutput,
-  inputs: AtlasRenderInputs,
-): Promise<Blob> {
+export async function renderAtlasBlob(output: DeviceOutput): Promise<Blob> {
   const { width, height } = output.atlasSize;
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext("2d");
@@ -61,7 +58,6 @@ export async function renderAtlasBlob(
       label: placement.label,
       cellSize: output.cellSize,
       style: placement.style,
-      fontFamily: inputs.fontFamily,
       symbol,
       image,
       backgroundImage,

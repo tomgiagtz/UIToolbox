@@ -79,7 +79,9 @@ test.describe("Input Glyph Creator", () => {
   }) => {
     await page.goto("/tools/glyph-creator");
 
-    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await page
+      .getByLabel("Upload a font", { exact: true })
+      .setInputFiles(FONT_PATH);
 
     // Live packed-atlas preview reflects the uploaded font.
     await expect(
@@ -112,7 +114,9 @@ test.describe("Input Glyph Creator", () => {
     page,
   }) => {
     await page.goto("/tools/glyph-creator");
-    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await page
+      .getByLabel("Upload a font", { exact: true })
+      .setInputFiles(FONT_PATH);
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
@@ -156,7 +160,9 @@ test.describe("Input Glyph Creator", () => {
     page,
   }) => {
     await page.goto("/tools/glyph-creator");
-    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await page
+      .getByLabel("Upload a font", { exact: true })
+      .setInputFiles(FONT_PATH);
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
@@ -181,7 +187,9 @@ test.describe("Input Glyph Creator", () => {
     page,
   }) => {
     await page.goto("/tools/glyph-creator");
-    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await page
+      .getByLabel("Upload a font", { exact: true })
+      .setInputFiles(FONT_PATH);
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
@@ -194,7 +202,7 @@ test.describe("Input Glyph Creator", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(
-      dialog.getByRole("checkbox", { name: /include font/i }),
+      dialog.getByRole("checkbox", { name: /include fonts/i }),
     ).toBeChecked();
     const downloadPromise = page.waitForEvent("download");
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
@@ -203,7 +211,7 @@ test.describe("Input Glyph Creator", () => {
     const savedPath = await download.path();
 
     // Delete resets the config (accept the confirm prompt). The preview stays
-    // visible on the bundled Inter (#13); the Xbox reset proves the config
+    // visible on the bundled default (#13); the Xbox reset proves the config
     // itself was cleared.
     page.on("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Delete" }).click();
@@ -438,7 +446,9 @@ test.describe("Input Glyph Creator", () => {
 
   test("has no WCAG 2.1 AA violations", async ({ page }, testInfo) => {
     await page.goto("/tools/glyph-creator");
-    await page.getByLabel("Font file").setInputFiles(FONT_PATH);
+    await page
+      .getByLabel("Upload a font", { exact: true })
+      .setInputFiles(FONT_PATH);
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();

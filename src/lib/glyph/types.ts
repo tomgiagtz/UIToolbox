@@ -179,6 +179,33 @@ export interface ImageAsset {
 }
 
 /**
+ * A user-uploaded **font**, manifested on the project (ADR-0012 §6).
+ *
+ * Uploads only. Bundled families are code (`BUNDLED_FONTS`) and are never
+ * listed here: doing so would put the shipped set in two places, drifting the
+ * moment one is added or dropped and leaving old saves asserting families that
+ * no longer exist. So a fresh project is `fonts: []` while still rendering in
+ * the bundled default — coherent, because the default was never an upload.
+ *
+ * As with {@link ImageAsset} the bytes are not in the config: they live in
+ * IndexedDB and travel in the project ZIP. A style naming a family with no
+ * bytes present is repaired on read (`repairFontFamilies`).
+ */
+export interface FontAsset {
+  /** The registered FontFace family — the key every style references. */
+  family: string;
+  /**
+   * The original filename, disambiguated if it collides, and the entry name
+   * inside a project ZIP's `fonts/` folder.
+   *
+   * There is no `type` field, unlike {@link ImageAsset}: images need their MIME
+   * so the blob round-trips as the right kind, while `FontFace` sniffs the
+   * bytes. A field nothing reads would only invite someone to trust it.
+   */
+  fileName: string;
+}
+
+/**
  * One Input resolved for generation: its stable id, effective label, and the
  * effective {@link GlyphStyle} the Style Cascade produced for it.
  *
@@ -202,8 +229,8 @@ export interface ResolvedInput {
 
 /**
  * The full project configuration — the sole input to {@link generateTilesets}.
- * `font.family` is the registered FontFace family name; the font blob itself is
- * handled by the UI/ProjectStore layer, not this pure model.
+ * Asset bytes (font and image blobs alike) are handled by the UI/ProjectStore
+ * layer, not this pure model, which carries only their manifests.
  *
  * Grouped by what each part is *for* (ADR-0012 §6): a look, the assets that look
  * draws from, the Devices it applies to, and the atlas output settings.
@@ -211,13 +238,18 @@ export interface ResolvedInput {
 export interface Project {
   /** User-facing config name; the default filename when saving a project file. */
   name: string;
-  font: { family: string };
   /**
    * The Project tier of the Style Cascade — a **full** {@link GlyphStyle}, which
    * is exactly the block a Preset carries (ADR-0012 §6). Every Device and Glyph
    * override falls up to here.
    */
   style: GlyphStyle;
+  /**
+   * Manifest of the user's uploaded fonts (bytes live elsewhere — see
+   * {@link FontAsset}). The families a project can pick from are these plus the
+   * bundled ones, assembled at render time and never stored.
+   */
+  fonts: FontAsset[];
   /**
    * Manifest of the user's uploaded custom images (bytes live elsewhere — see
    * {@link ImageAsset}). Shared by every Device, so one upload can serve several

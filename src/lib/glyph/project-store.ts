@@ -5,16 +5,23 @@
  *
  * - The {@link Project} config (colors, Background, Device/Input selection,
  *   naming + filename templates, cell size) is serialized to `localStorage`.
- * - The uploaded font blob — too large and binary for `localStorage` — lives in
- *   IndexedDB, and is re-registered as a {@link FontFace} on restore under the
- *   same family name the config already carries.
+ * - Uploaded font blobs — too large and binary for `localStorage` — live in
+ *   IndexedDB keyed by family, and are re-registered as {@link FontFace}s on
+ *   restore under the same family names the config already carries.
  *
  * Everything is client-side; nothing here makes a network call. All storage
  * access is defensively guarded so a private-mode / quota / SSR failure degrades
  * to "start fresh" rather than throwing.
  */
 import { DEFAULT_FONT_FAMILY } from "@/lib/glyph/defaults";
-import type { Foreground, GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
+import { isKnownFamily } from "@/lib/glyph/fonts";
+import { clearOverrideField } from "@/lib/glyph/style";
+import type {
+  Foreground,
+  GlyphStyle,
+  StyleOverride,
+  SymbolPaints,
+} from "@/lib/glyph/style";
 import type {
   Background,
   BackgroundShape,
@@ -22,6 +29,7 @@ import type {
   CustomInput,
   DeviceConfig,
   ExportSettings,
+  FontAsset,
   ImageAsset,
   NamingConfig,
   Project,
@@ -56,19 +64,63 @@ export function parseConfig(raw: string): Project | null {
   } catch {
     return null;
   }
-  return isProject(parsed) ? repairFontFamily(parsed) : null;
+  return isProject(parsed) ? repairFontFamilies(parsed) : null;
 }
 
 /**
- * Repair the one thing a valid config can still get wrong: an empty font family.
- * `family` flows unresolved into the canvas font string, where `""` yields an
- * invalid declaration and silently draws in the browser default — so it is
- * rewritten to the bundled default here, at the single entry point, and the next
- * save persists the real name (ADR-0010).
+ * Repair the one thing a valid config can still get wrong: a font family the
+ * project can't draw in — empty, or naming neither a bundled family nor one of
+ * its own uploads.
+ *
+ * An unusable family flows unresolved into the canvas font string, where it
+ * yields a declaration the browser silently answers with its default face. So
+ * it is rewritten here, at the single entry point, and the next save persists
+ * the repair (ADR-0010 — this holds for *any* config, not for configs of a
+ * vintage, which is what would make it a migration).
+ *
+ * The Project tier takes the bundled default, having no tier above to fall to;
+ * a Device or Glyph override instead has the field **deleted**, so it falls up
+ * the cascade the way an unset property always does.
+ *
+ * This is repair, not recovery: it cannot offer the missing font back. Being
+ * asked to re-upload, bound to the family the overrides already name, is the
+ * blocking missing-assets modal (#81).
  */
-function repairFontFamily(project: Project): Project {
-  if (project.font.family !== "") return project;
-  return { ...project, font: { ...project.font, family: DEFAULT_FONT_FAMILY } };
+function repairFontFamilies(project: Project): Project {
+  const known = (family: string) => isKnownFamily(project, family);
+
+  const style = known(project.style.foreground.fontFamily)
+    ? project.style
+    : {
+        ...project.style,
+        foreground: {
+          ...project.style.foreground,
+          fontFamily: DEFAULT_FONT_FAMILY,
+        },
+      };
+
+  const devices = project.devices.map((device) => ({
+    ...device,
+    style: repairOverride(device.style, known),
+    glyphStyles: Object.fromEntries(
+      Object.entries(device.glyphStyles).map(([id, override]) => [
+        id,
+        repairOverride(override, known),
+      ]),
+    ),
+  }));
+
+  return { ...project, style, devices };
+}
+
+/** Drop an override's `fontFamily` when it names a family nothing can draw. */
+function repairOverride(
+  override: StyleOverride,
+  known: (family: string) => boolean,
+): StyleOverride {
+  const family = override.foreground?.fontFamily;
+  if (family === undefined || known(family)) return override;
+  return clearOverrideField(override, "font");
 }
 
 // --- Config (localStorage) -------------------------------------------------
@@ -116,20 +168,25 @@ export function loadConfig(): LoadResult {
   return { kind: "rejected" };
 }
 
-// --- Font blob (IndexedDB) -------------------------------------------------
+// --- Font blobs (IndexedDB) ------------------------------------------------
 
 const DB_NAME = "uitoolbox";
-/** v2 added the `images` store for custom image Render Sources (ADR-0008). */
+/**
+ * v2 added the `images` store for custom image Render Sources (ADR-0008).
+ *
+ * Going multi-slot on fonts needed **no bump and no migration** (ADR-0012 §7):
+ * the stored record `{ family, fileName, blob }` already *is* the multi-slot
+ * record — the key was never load-bearing, since the record has always carried
+ * its own `family` — so `getAll()` over an untouched v2 database returns a
+ * well-formed set. This is ADR-0010's posture paying off: the old shape is the
+ * current shape.
+ */
 const DB_VERSION = 2;
 const FONT_STORE = "fonts";
 const IMAGE_STORE = "images";
-/** Single-slot key: the creator tracks exactly one active font at a time. */
-const FONT_KEY = "current";
 
 /** A persisted font: its registered family, original file name, and raw blob. */
-export interface PersistedFont {
-  family: string;
-  fileName: string;
+export interface PersistedFont extends FontAsset {
   blob: Blob;
 }
 
@@ -141,11 +198,14 @@ export interface PersistedImage extends ImageAsset {
   blob: Blob;
 }
 
-/** Persist the uploaded font blob. Silently no-ops if IndexedDB is unavailable. */
+/**
+ * Persist one uploaded font, keyed by its family. Silently no-ops if IndexedDB
+ * is unavailable.
+ */
 export async function saveFont(font: PersistedFont): Promise<void> {
   try {
     const db = await openDb();
-    await runRequest(txStore(db, "readwrite").put(font, FONT_KEY));
+    await runRequest(txStore(db, "readwrite").put(font, font.family));
     db.close();
   } catch {
     // No IndexedDB (SSR / disabled) — the font simply won't be restored.
@@ -153,19 +213,43 @@ export async function saveFont(font: PersistedFont): Promise<void> {
 }
 
 /**
- * Load the persisted font, or `null` if none is stored or IndexedDB is
- * unavailable. The caller re-registers it via {@link registerFont}.
+ * Every persisted font, or an empty list if none or IndexedDB is unavailable.
+ * The caller re-registers each via {@link registerFont}.
  */
-export async function loadFont(): Promise<PersistedFont | null> {
+export async function loadFonts(): Promise<PersistedFont[]> {
   try {
     const db = await openDb();
-    const font = await runRequest<PersistedFont | undefined>(
-      txStore(db, "readonly").get(FONT_KEY),
+    const fonts = await runRequest<PersistedFont[]>(
+      txStore(db, "readonly").getAll(),
     );
     db.close();
-    return font ?? null;
+    return fonts ?? [];
   } catch {
-    return null;
+    return [];
+  }
+}
+
+/**
+ * Replace every persisted font with `fonts` — what loading a project file does,
+ * since the incoming project owns the whole set.
+ *
+ * Unlike {@link replaceImages} this isn't about key collisions (a minted family
+ * can't collide); it is about growth. Merging would accumulate the blobs of
+ * every project ever opened in this browser, none of them reachable once their
+ * manifest was replaced.
+ */
+export async function replaceFonts(fonts: PersistedFont[]): Promise<void> {
+  try {
+    const db = await openDb();
+    // One transaction, so a failure part-way can't leave a half-swapped store.
+    const store = txStore(db, "readwrite");
+    await Promise.all([
+      runRequest(store.clear()),
+      ...fonts.map((font) => runRequest(store.put(font, font.family))),
+    ]);
+    db.close();
+  } catch {
+    // No IndexedDB (SSR / disabled) — the fonts just won't survive a reload.
   }
 }
 
@@ -226,7 +310,7 @@ export async function replaceImages(images: PersistedImage[]): Promise<void> {
   }
 }
 
-/** Clear all persisted state (config + font + images). */
+/** Clear all persisted state (config + fonts + images). */
 export async function clear(): Promise<void> {
   try {
     localStorage.removeItem(CONFIG_KEY);
@@ -235,7 +319,9 @@ export async function clear(): Promise<void> {
   }
   try {
     const db = await openDb();
-    await runRequest(txStore(db, "readwrite").delete(FONT_KEY));
+    // Clearing the whole store rather than deleting keys also sweeps the one
+    // orphan a pre-multi-slot user is left with at the old `"current"` key.
+    await runRequest(txStore(db, "readwrite").clear());
     await runRequest(txStore(db, "readwrite", IMAGE_STORE).clear());
     db.close();
   } catch {
@@ -359,11 +445,20 @@ function isGlyphStyle(value: unknown): value is GlyphStyle {
   );
 }
 
-/** The foreground layer of a resolved style — total, like its Background twin. */
+/**
+ * The foreground layer of a resolved style — total, like its Background twin.
+ *
+ * `fontFamily` is checked for its type only: an empty or unknown family is a
+ * valid (if undrawable) string, repaired by {@link repairFontFamilies} rather
+ * than rejected, since discarding a whole project over one font would lose far
+ * more than it protects.
+ */
 function isForeground(value: unknown): value is Foreground {
   return (
     isRecord(value) &&
     isLayerTransform(value.transform) &&
+    typeof value.fontFamily === "string" &&
+    isFiniteNumber(value.fontWeight) &&
     typeof value.textColor === "string" &&
     isSymbolPaints(value.symbolPaints)
   );
@@ -409,6 +504,14 @@ function isDevice(value: unknown): value is DeviceConfig {
   );
 }
 
+function isFontAsset(value: unknown): value is FontAsset {
+  return (
+    isRecord(value) &&
+    typeof value.family === "string" &&
+    typeof value.fileName === "string"
+  );
+}
+
 function isImageAsset(value: unknown): value is ImageAsset {
   return (
     isRecord(value) &&
@@ -419,17 +522,19 @@ function isImageAsset(value: unknown): value is ImageAsset {
 }
 
 /**
- * One flat structural check over the current {@link Project}. `font.family` is
- * only checked for its type — `""` is a valid (if unhelpful) family, repaired by
- * {@link normalize} rather than rejected.
+ * One flat structural check over the current {@link Project}.
+ *
+ * A config from before the font joined the cascade carried `font: { family }`
+ * and no `fonts`, so it fails here and is discarded with the loss reported —
+ * ADR-0010's correctness rule, deliberately not a data-preservation one.
  */
 function isProject(value: unknown): value is Project {
   return (
     isRecord(value) &&
     typeof value.name === "string" &&
-    isRecord(value.font) &&
-    typeof value.font.family === "string" &&
     isGlyphStyle(value.style) &&
+    Array.isArray(value.fonts) &&
+    value.fonts.every(isFontAsset) &&
     Array.isArray(value.images) &&
     value.images.every(isImageAsset) &&
     Array.isArray(value.devices) &&

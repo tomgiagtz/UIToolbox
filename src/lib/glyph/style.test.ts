@@ -23,6 +23,8 @@ function base(): GlyphStyle {
     },
     foreground: {
       transform: identityTransform(),
+      fontFamily: "Inter",
+      fontWeight: 400,
       textColor: "#ffffff",
       symbolPaints: {
         fill: "#ffffff",
@@ -48,6 +50,41 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
     expect(out.foreground.textColor).toBe("#ff0000");
     // Background untouched.
     expect(out.background).toEqual(base().background);
+  });
+
+  it("overrides the font family at a higher tier (ADR-0012 §2)", () => {
+    const out = resolveStyle(base(), {
+      foreground: { fontFamily: "Titan One" },
+    });
+    expect(out.foreground.fontFamily).toBe("Titan One");
+    // It paints the label, so it leaves everything else in the layer alone.
+    expect(out.foreground.textColor).toBe(base().foreground.textColor);
+    expect(out.background).toEqual(base().background);
+  });
+
+  it("overrides the font weight independently of the family", () => {
+    const out = resolveStyle(base(), { foreground: { fontWeight: 700 } });
+    expect(out.foreground.fontWeight).toBe(700);
+    expect(out.foreground.fontFamily).toBe(base().foreground.fontFamily);
+  });
+
+  it("resolves the font through all three tiers, narrowest winning", () => {
+    const out = resolveStyle(
+      base(),
+      { foreground: { fontFamily: "JetBrains Mono" } },
+      { foreground: { fontFamily: "Patrick Hand" } },
+    );
+    expect(out.foreground.fontFamily).toBe("Patrick Hand");
+  });
+
+  it("falls the font up when a higher tier sets only a sibling", () => {
+    const out = resolveStyle(
+      base(),
+      { foreground: { fontFamily: "JetBrains Mono" } },
+      { foreground: { textColor: "#ff0000" } },
+    );
+    expect(out.foreground.fontFamily).toBe("JetBrains Mono");
+    expect(out.foreground.textColor).toBe("#ff0000");
   });
 
   it("shallow-merges a partial Background without dropping unset fields", () => {
@@ -488,6 +525,23 @@ describe("isOverrideFieldSet", () => {
     ).toBe(true);
   });
 
+  it("detects a set font family (ADR-0012 §2)", () => {
+    expect(
+      isOverrideFieldSet({ foreground: { fontFamily: "Titan One" } }, "font"),
+    ).toBe(true);
+    expect(
+      isOverrideFieldSet({ foreground: { textColor: "#f00" } }, "font"),
+    ).toBe(false);
+    expect(isOverrideFieldSet({}, "font")).toBe(false);
+  });
+
+  it("detects a set font weight, separately from the family", () => {
+    const heavier: StyleOverride = { foreground: { fontWeight: 700 } };
+    expect(isOverrideFieldSet(heavier, "fontWeight")).toBe(true);
+    // Two entries, because they are two controls with two reset buttons.
+    expect(isOverrideFieldSet(heavier, "font")).toBe(false);
+  });
+
   it("detects a set Background source", () => {
     expect(
       isOverrideFieldSet(
@@ -514,6 +568,32 @@ describe("clearOverrideField", () => {
     expect(
       clearOverrideField({ foreground: { textColor: "#f00" } }, "textColor"),
     ).toEqual({});
+  });
+
+  it("removes the font family, collapsing to empty", () => {
+    expect(
+      clearOverrideField({ foreground: { fontFamily: "Titan One" } }, "font"),
+    ).toEqual({});
+  });
+
+  it("removes the font but keeps the rest of the foreground", () => {
+    const out = clearOverrideField(
+      { foreground: { fontFamily: "Titan One", textColor: "#f00" } },
+      "font",
+    );
+    expect(out).toEqual({ foreground: { textColor: "#f00" } });
+  });
+
+  it("clears the weight without disturbing the family, and vice versa", () => {
+    const both: StyleOverride = {
+      foreground: { fontFamily: "Inter", fontWeight: 700 },
+    };
+    expect(clearOverrideField(both, "fontWeight")).toEqual({
+      foreground: { fontFamily: "Inter" },
+    });
+    expect(clearOverrideField(both, "font")).toEqual({
+      foreground: { fontWeight: 700 },
+    });
   });
 
   it("removes a background sub-property but keeps the rest", () => {

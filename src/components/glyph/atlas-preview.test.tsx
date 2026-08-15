@@ -16,6 +16,8 @@ const style: GlyphStyle = {
   },
   foreground: {
     transform: identityTransform(),
+    fontFamily: "Test",
+    fontWeight: 400,
     textColor: "#ffffff",
     symbolPaints: { fill: "#ffffff", border: "#ffffff", secondary: "#ffffff" },
   },
@@ -48,7 +50,6 @@ function renderAtlas(
       deviceName="Keyboard"
       glyphs={glyphsOf(["A", "B", "Space"])}
       cellSize={128}
-      fontFamily="Test"
       {...props}
     />,
   );
