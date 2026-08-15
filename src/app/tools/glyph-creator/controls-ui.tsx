@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 /** Shared Tailwind for text/number/select controls in the editor panels. */
 export const inputClass =
-  "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "h-9 rounded-md border border-input bg-surface-base px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 /**
  * A circle-arrow button that clears a scoped override so the property falls back
@@ -46,7 +46,7 @@ export function ResetButton({
       onClick={onReset}
       aria-label={`Reset ${label} to inherited`}
       title="Reset to inherited"
-      className="flex size-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex size-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring"
     >
       <RotateCcw aria-hidden className="size-4" />
     </button>
@@ -122,7 +122,7 @@ export function ColorField({
             </Button>
             <Popover
               placement="bottom start"
-              className="rounded-lg border bg-popover p-4 shadow-md outline-none"
+              className="motion-popup rounded-lg border bg-surface-overlay p-4 shadow-md outline-none"
             >
               <Dialog className="flex flex-col gap-3 outline-none">
                 <ColorArea

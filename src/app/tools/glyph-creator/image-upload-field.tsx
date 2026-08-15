@@ -36,7 +36,7 @@ export function ImageUploadField({
           // Clear the input so re-picking the same file still fires a change.
           e.target.value = "";
         }}
-        className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
+        className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-surface-base file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-surface-hover"
       />
       <p className="text-xs text-muted-foreground">
         PNG, JPEG, WebP, or SVG. Uploads stay in your browser. {hint}

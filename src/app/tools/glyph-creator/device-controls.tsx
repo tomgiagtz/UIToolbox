@@ -73,7 +73,7 @@ export function DeviceControls({
               className={
                 i === activeIndex
                   ? "rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground"
-                  : "rounded-md border border-input px-3 py-1 text-sm hover:bg-accent"
+                  : "rounded-md border border-input px-3 py-1 text-sm hover:bg-surface-hover"
               }
             >
               {d.name}

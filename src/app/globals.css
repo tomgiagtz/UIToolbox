@@ -3,20 +3,32 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The tokens below are the code side of the `GlyphCreator` Figma file's
+   `Primitives` / `Semantic` collections (ADR-0013 §1, §5). Each one's
+   `codeSyntax.WEB` in Figma is the `var()` form of the property declared here,
+   so this block is where a token is *true* and Figma is where it is decided. */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  /* Surfaces, from the page ground upward. The names are the app's layering,
+     not shadcn's component slots — @theme inline keeps the shadcn utility
+     names (bg-background, bg-popover, …) resolving for anything vendored in. */
+  --surface-base: oklch(1 0 0);
+  --surface-raised: oklch(1 0 0);
+  --surface-raised-foreground: oklch(0.145 0 0);
+  --surface-overlay: oklch(1 0 0);
+  --surface-overlay-foreground: oklch(0.145 0 0);
+  --surface-sunken: oklch(0.97 0 0);
+  --surface-hover: oklch(0.97 0 0);
+  --surface-hover-foreground: oklch(0.205 0 0);
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --muted-foreground: oklch(0.556 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* The brand accent. Placeholder only: it holds the grey that used to live on
+     shadcn's `--accent` so this rename moves no pixels. #99 picks the hue —
+     until then, nothing here is a colour decision. */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -34,21 +46,40 @@
      theme (the fill carries its own translucency). */
   --glyph-highlight-border: oklch(0.347 0.008 255.548);
   --glyph-highlight-fill: oklch(1 0 0 / 0.4);
+
+  /* Motion (ADR-0013 §7). Four timing steps, then the roles that use them.
+     Figma holds the steps as unitless FLOAT variables in seconds — the `s` only
+     exists here. Two roles are bound today; `fast` and `slow` are steps waiting
+     for one, and a role is what a component reaches for, never a raw step. */
+  --duration-xfast: 0.2s;
+  --duration-fast: 0.3s;
+  --duration-medium: 0.4s;
+  --duration-slow: 0.6s;
+  /* Popups — popovers, tooltips, menus. Fastest step: an overlay that lags
+     reads as broken rather than as considered. Decelerating, so it arrives. */
+  --motion-popup-duration: var(--duration-xfast);
+  --motion-popup-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Containers — panels and disclosures that resize in place. The movement is
+     the thing being watched, so it gets room, and eases in and out evenly. */
+  --motion-container-duration: var(--duration-medium);
+  --motion-container-easing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --surface-base: oklch(0.145 0 0);
+  --surface-raised: oklch(0.205 0 0);
+  --surface-raised-foreground: oklch(0.985 0 0);
+  --surface-overlay: oklch(0.205 0 0);
+  --surface-overlay-foreground: oklch(0.985 0 0);
+  --surface-sunken: oklch(0.269 0 0);
+  --surface-hover: oklch(0.269 0 0);
+  --surface-hover-foreground: oklch(0.985 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --muted-foreground: oklch(0.708 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
@@ -62,18 +93,20 @@
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-surface-base: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-raised-foreground: var(--surface-raised-foreground);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-overlay-foreground: var(--surface-overlay-foreground);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-hover-foreground: var(--surface-hover-foreground);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
+  --color-muted-foreground: var(--muted-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -86,10 +119,70 @@
   --color-input-border-muted: var(--input-border-muted);
   --color-glyph-highlight-border: var(--glyph-highlight-border);
   --color-glyph-highlight-fill: var(--glyph-highlight-fill);
+  /* shadcn's slot names, kept so a component vendored through components.json
+     styles itself correctly without being rewritten first. `accent` is the one
+     that is deliberately absent: shadcn means "hover surface" by it and this
+     system means "brand", so aliasing it would repaint every hover the day #99
+     picks a hue. Vendored components want `hover:bg-surface-hover`. */
+  --color-background: var(--surface-base);
+  --color-card: var(--surface-raised);
+  --color-card-foreground: var(--surface-raised-foreground);
+  --color-popover: var(--surface-overlay);
+  --color-popover-foreground: var(--surface-overlay-foreground);
+  --color-muted: var(--surface-sunken);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* The two motion roles, as one class each. They live here rather than as a
+   shared className string because a role is a token, and a token belongs next
+   to the custom properties it reads (ADR-0013 §7) — not in a feature file,
+   which is the mistake `inputClass` already makes and #103 is undoing. */
+
+/* Popups. react-aria marks its overlays `data-entering` / `data-exiting`
+   around mount and unmount, which is the only window a transition would have. */
+@utility motion-popup {
+  animation-duration: var(--motion-popup-duration);
+  animation-timing-function: var(--motion-popup-easing);
+  animation-fill-mode: both;
+  &[data-entering] {
+    animation-name: popup-in;
+  }
+  &[data-exiting] {
+    animation-name: popup-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes popup-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes popup-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* Containers. `--disclosure-panel-height` is set by react-aria's
+   `useDisclosure`, which measures the panel and then waits on `getAnimations()`
+   before hiding it — so the transition below is what it is waiting for. */
+@utility motion-container {
+  height: var(--disclosure-panel-height, auto);
+  overflow: hidden;
+  transition: height var(--motion-container-duration)
+    var(--motion-container-easing);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 @layer base {
@@ -98,7 +191,7 @@
     outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
   }
   body {
-    background-color: var(--background);
+    background-color: var(--surface-base);
     color: var(--foreground);
   }
 }

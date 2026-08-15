@@ -190,13 +190,13 @@ export function StyleScopeSwitcher({
         <TooltipTrigger delay={300}>
           <Button
             aria-label="About style scope"
-            className="flex size-5 items-center justify-center rounded-full border border-input text-xs text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-5 items-center justify-center rounded-full border border-input text-xs text-muted-foreground outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring"
           >
             ?
           </Button>
           <Tooltip
             offset={6}
-            className="max-w-64 rounded-md bg-foreground px-2.5 py-1.5 text-xs text-background shadow-md"
+            className="motion-popup max-w-64 rounded-md bg-foreground px-2.5 py-1.5 text-xs text-surface-base shadow-md"
           >
             Scope sets which layer you edit. Project is the base for every
             Glyph; a Device or a single Glyph overrides only itself. Narrower
@@ -587,7 +587,7 @@ export function GlyphStylePanel({
           onClick={onClose}
           aria-label="Close Glyph editor"
           title="Close (Esc)"
-          className="flex size-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-8 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X aria-hidden className="size-4" />
         </button>
