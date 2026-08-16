@@ -122,8 +122,8 @@ export interface ScopeCascade {
   /** The Project tier — a full style, being the bottom of every chain. */
   base: GlyphStyle;
   /**
-   * Every tier above the base, in ascending precedence, the Catalog seed at its
-   * rank among them. Empty at Project scope, which *is* the base.
+   * Every tier above the base in ascending precedence, with the Catalog seed at
+   * its rank among them. Empty at Project scope, which *is* the base.
    */
   above: (StyleOverride | undefined)[];
   /**
@@ -165,32 +165,47 @@ export function cascadeAt(project: Project, scope: StyleScope): ScopeCascade {
 
   const catalog = getCatalog(device.catalogId);
   const entry = catalog ? catalogIndex(catalog).get(scope.glyphId) : undefined;
-  return { ...bare, ...glyphCascade(device, entry, scope.glyphId), entry };
-}
-
-/**
- * The Glyph tier of {@link cascadeAt}, taking the Catalog entry already in hand —
- * so {@link resolveDeviceInputs} can walk a whole Device off one Catalog lookup
- * rather than one per Input.
- */
-function glyphCascade(
-  device: DeviceConfig,
-  entry: CatalogInput | undefined,
-  glyphId: string,
-): Pick<ScopeCascade, "above" | "override"> {
-  const glyph = device.glyphStyles[glyphId];
   return {
-    above: glyphTiers({ device: device.style, seed: seedStyle(entry), glyph }),
-    override: glyph ?? {},
+    ...bare,
+    above: glyphTiersFor(device, entry, scope.glyphId),
+    override: overrideAt(project, scope),
+    entry,
   };
 }
 
 /**
+ * The tiers above the base for one Glyph, taking the Catalog entry already in
+ * hand — so {@link resolveDeviceInputs} can walk a whole Device off one Catalog
+ * lookup rather than one per Input.
+ */
+function glyphTiersFor(
+  device: DeviceConfig,
+  entry: CatalogInput | undefined,
+  glyphId: string,
+): (StyleOverride | undefined)[] {
+  return glyphTiers({
+    device: device.style,
+    seed: seedStyle(entry),
+    glyph: device.glyphStyles[glyphId],
+  });
+}
+
+/**
  * The sparse override stored at `scope` — what the Style panel's controls edit
- * and its reset affordance reads. `{}` at Project scope, which stores none.
+ * and its reset affordance reads. `{}` at Project scope, which stores none, and
+ * wherever the scope is stale, so a control always has an object to read.
+ *
+ * Where a scope's override is *kept* is a separate fact from where its tiers
+ * *rank*, so it is read directly rather than off {@link cascadeAt}: this runs on
+ * every render of the Style panel, and resolving a Glyph's rank would make it pay
+ * for a Catalog lookup and a seed projection it has no use for.
  */
 export function overrideAt(project: Project, scope: StyleScope): StyleOverride {
-  return cascadeAt(project, scope).override;
+  if (scope.tier === "project") return {};
+  const device = project.devices[scope.deviceIndex];
+  if (!device) return {};
+  if (scope.tier === "device") return device.style;
+  return device.glyphStyles[scope.glyphId] ?? {};
 }
 
 /** What the editor's Render Source control needs to know about one Glyph. */
@@ -274,7 +289,7 @@ export function resolveDeviceInputs(
   ): ResolvedInput {
     // Both resolvers fold the same tier list, so a Glyph's style and the source
     // it is drawn on can never come from different readings of the cascade.
-    const { above } = glyphCascade(device, entry, id);
+    const above = glyphTiersFor(device, entry, id);
     return {
       id,
       label,

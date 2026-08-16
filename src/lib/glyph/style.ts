@@ -499,11 +499,9 @@ export function resolveStyle(
 
 /** The tiers that stand above the Project base for one Glyph. */
 export interface GlyphTiers {
-  /** The Device-wide override. */
   device?: StyleOverride;
   /** What that Input's Catalog entry seeds — `seedStyle`'s projection. */
   seed?: StyleOverride;
-  /** That one Glyph's own override. */
   glyph?: StyleOverride;
 }
 
@@ -512,8 +510,11 @@ export interface GlyphTiers {
  * the single place the cascade's order is written (#51):
  *
  * ```
- * Glyph override → Catalog seed → Device tier → Project base
+ * Project base ‹ Device tier ‹ Catalog seed ‹ Glyph override
  * ```
+ *
+ * Written low-to-high, matching the returned list: read it the other way and a
+ * caller folding the array gets the cascade exactly backwards.
  *
  * Named rather than positional because the order is the whole content of this
  * function: a caller states which tier each override *is* and cannot silently
@@ -524,8 +525,8 @@ export interface GlyphTiers {
  * An unset tier stays in place as `undefined` rather than being dropped: the
  * ranks are positions, and both folds skip a missing one anyway.
  *
- * A seed is a presence fact about *that control*, so only a statement about that
- * control may overrule it. Because it outranks the Device tier, a device-wide
+ * A seed is a presence fact about *that control* (ADR-0012 §2), so only a
+ * statement about that control may overrule it. Because it outranks the Device tier, a device-wide
  * source no-ops on the eight seeded shoulder Inputs, and the only escape is a
  * per-Glyph override. It rides in as a pseudo-tier rather than a second pass, and
  * is sparse like any other: it names a source and — on the four left-side
