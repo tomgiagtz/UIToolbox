@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   clearOverrideField,
+  glyphTiers,
   isOverrideFieldSet,
   mergeOverride,
   normalizeRotation,
-  resolveGlyphStyle,
   resolveStyle,
 } from "@/lib/glyph/style";
 import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
@@ -209,12 +209,39 @@ describe("resolveStyle — Style Cascade (ADR-0006)", () => {
   });
 });
 
-describe("resolveGlyphStyle — the Catalog seed's rank (ADR-0012 §2)", () => {
+describe("glyphTiers — the Catalog seed's rank (ADR-0012 §2)", () => {
   /** What a mirrored shoulder's Catalog entry seeds: a tile, facing left. */
   const TILE: BackgroundSource = { kind: "authored", backgroundId: "bumper" };
   const SEED: StyleOverride = {
     background: { source: TILE, transform: { scale: { x: -1 } } },
   };
+
+  /**
+   * One Glyph resolved exactly as production resolves one: the rank under test
+   * comes from `glyphTiers`, so these rows fail if that order ever moves.
+   */
+  function resolveGlyphStyle(
+    base: GlyphStyle,
+    seed: StyleOverride | undefined,
+    device: StyleOverride | undefined,
+    glyph: StyleOverride | undefined,
+  ): GlyphStyle {
+    return resolveStyle(base, ...glyphTiers({ device, seed, glyph }));
+  }
+
+  it("orders the tiers Device → seed → Glyph, ascending precedence", () => {
+    const device: StyleOverride = { background: { fill: "#d" } };
+    const glyph: StyleOverride = { background: { fill: "#g" } };
+    expect(glyphTiers({ device, seed: SEED, glyph })).toEqual([
+      device,
+      SEED,
+      glyph,
+    ]);
+  });
+
+  it("keeps an unset tier in place, so the ranks below it don't shift up", () => {
+    expect(glyphTiers({ seed: SEED })).toEqual([undefined, SEED, undefined]);
+  });
 
   it("draws the seeded tile when the user has set nothing", () => {
     const out = resolveGlyphStyle(base(), SEED, undefined, undefined);

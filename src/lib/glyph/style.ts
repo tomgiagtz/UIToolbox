@@ -15,7 +15,7 @@
  * Every property is settable at every tier. A Catalog's art **seed** ranks
  * between the Glyph and Device tiers, and supplies only what it seeds — the
  * Background source and, for a mirrored control, that layer's `scale.x`: see
- * {@link resolveGlyphStyle}.
+ * {@link glyphTiers}, which is where that order is written.
  *
  * The grid `cellSize` is the one property that stays Project-global: it is an
  * atlas output value, so it lives in `project.exportSettings` (ADR-0012 §6)
@@ -497,32 +497,46 @@ export function resolveStyle(
   return { background, foreground };
 }
 
+/** The tiers that stand above the Project base for one Glyph. */
+export interface GlyphTiers {
+  /** The Device-wide override. */
+  device?: StyleOverride;
+  /** What that Input's Catalog entry seeds — `seedStyle`'s projection. */
+  seed?: StyleOverride;
+  /** That one Glyph's own override. */
+  glyph?: StyleOverride;
+}
+
 /**
- * Resolve one Glyph's effective style through the three tiers plus its Catalog
- * **seed** (ADR-0012 §2), which ranks between the Glyph and Device tiers:
+ * The tiers above the Project base for one Glyph, in **ascending precedence** —
+ * the single place the cascade's order is written (#51):
  *
  * ```
  * Glyph override → Catalog seed → Device tier → Project base
  * ```
  *
- * A seed is a presence fact about *that control*, so only a statement about that
- * control may overrule it. Because the seed outranks the Device tier, a
- * device-wide source no-ops on the eight seeded shoulder Inputs, and the only
- * escape is a per-Glyph override.
+ * Named rather than positional because the order is the whole content of this
+ * function: a caller states which tier each override *is* and cannot silently
+ * transpose two of them. Every consumer of the order — {@link resolveStyle} for
+ * the style, `resolveRenderSource` for the source drawn — folds this one list, so
+ * the panel and the atlas cannot disagree about a Glyph.
  *
- * The seed rides in as a pseudo-tier rather than a second pass, and is sparse
- * like any other: it names a source and — on the four left-side shoulders — that
- * layer's `scale.x`, leaving every other field of the Device tier intact. The
- * projection from the Catalog's presence facts to those values is
- * `seedStyle`'s job, not this one's.
+ * An unset tier stays in place as `undefined` rather than being dropped: the
+ * ranks are positions, and both folds skip a missing one anyway.
+ *
+ * A seed is a presence fact about *that control*, so only a statement about that
+ * control may overrule it. Because it outranks the Device tier, a device-wide
+ * source no-ops on the eight seeded shoulder Inputs, and the only escape is a
+ * per-Glyph override. It rides in as a pseudo-tier rather than a second pass, and
+ * is sparse like any other: it names a source and — on the four left-side
+ * shoulders — that layer's `scale.x`, leaving the Device tier otherwise intact.
  */
-export function resolveGlyphStyle(
-  base: GlyphStyle,
-  seed: StyleOverride | undefined,
-  device: StyleOverride | undefined,
-  glyph: StyleOverride | undefined,
-): GlyphStyle {
-  return resolveStyle(base, device, seed, glyph);
+export function glyphTiers({
+  device,
+  seed,
+  glyph,
+}: GlyphTiers): (StyleOverride | undefined)[] {
+  return [device, seed, glyph];
 }
 
 /** A detached copy of a resolved transform, safe to hand back to a caller. */
