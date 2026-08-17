@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  cascadeAt,
   generateTilesets,
+  overrideAt,
   resolveDeviceInputs,
   resolveScopeRenderSource,
   seedStyle,
@@ -527,6 +529,121 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
       // so pixels are byte-identical to the pre-cascade output.
       expect(placement.style).toEqual(base);
     }
+  });
+});
+
+describe("cascadeAt — the tiers at a scope, assembled once (#51)", () => {
+  /** An Xbox project holding a device-wide override and a per-Glyph one. */
+  function styled(): Project {
+    return [
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 0 },
+        patch: { background: { fill: "#d0d0d0" } },
+      } as const,
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
+        patch: { foreground: { textColor: "#0f0" } },
+      } as const,
+    ].reduce(projectReducer, xboxProject());
+  }
+
+  it("has no tier above the base at Project scope, and nothing to edit", () => {
+    const proj = styled();
+    expect(cascadeAt(proj, { tier: "project" })).toEqual({
+      base: proj.style,
+      above: [],
+      override: {},
+      entry: undefined,
+    });
+  });
+
+  it("puts the Device tier in the chain and under the editor's hand at once", () => {
+    const proj = styled();
+    const cascade = cascadeAt(proj, { tier: "device", deviceIndex: 0 });
+    expect(cascade.above).toEqual([proj.devices[0].style]);
+    expect(cascade.override).toBe(proj.devices[0].style);
+    // A Device scope addresses no single Input, so it seeds nothing.
+    expect(cascade.entry).toBeUndefined();
+  });
+
+  it("ranks the Catalog seed between the Device and Glyph tiers", () => {
+    const proj = styled();
+    const device = proj.devices[0];
+    const cascade = cascadeAt(proj, {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "xbox-lb",
+    });
+    expect(cascade.above).toEqual([
+      device.style,
+      seedStyle(cascade.entry),
+      device.glyphStyles["xbox-lb"],
+    ]);
+    expect(cascade.entry?.id).toBe("xbox-lb");
+    // The seed is a shipped fact, so it is no part of what the Glyph tier edits.
+    expect(cascade.override).toBe(device.glyphStyles["xbox-lb"]);
+  });
+
+  it("leaves an unedited Glyph an empty override to write into", () => {
+    const cascade = cascadeAt(styled(), {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "xbox-a",
+    });
+    expect(cascade.override).toEqual({});
+  });
+
+  it("falls back to the bare Project base for a scope whose Device is gone", () => {
+    const proj = styled();
+    const cascade = cascadeAt(proj, { tier: "device", deviceIndex: 9 });
+    expect(cascade).toEqual({
+      base: proj.style,
+      above: [],
+      override: {},
+      entry: undefined,
+    });
+  });
+
+  it("resolves a Glyph scope to exactly what generation resolves for it", () => {
+    // The invariant three copies of this walk used to hold in a comment: what
+    // the Style panel shows is what the atlas draws, for style and source alike.
+    const proj = styled();
+    for (const input of resolveDeviceInputs(proj.devices[0], proj)) {
+      const scope = {
+        tier: "glyph",
+        deviceIndex: 0,
+        glyphId: input.id,
+      } as const;
+      expect(resolveScopeStyle(proj, scope), input.id).toEqual(input.style);
+      expect(resolveScopeRenderSource(proj, scope)?.source, input.id).toEqual(
+        input.symbolId
+          ? { kind: "symbol", symbolId: input.symbolId }
+          : input.imageId
+            ? { kind: "image", imageId: input.imageId }
+            : { kind: "label" },
+      );
+    }
+  });
+});
+
+describe("overrideAt — the one override a scope stores (#19)", () => {
+  it("returns the stored override, and an empty one where none is stored", () => {
+    const proj = projectReducer(xboxProject(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 0 },
+      patch: { background: { fill: "#d0d0d0" } },
+    });
+    expect(overrideAt(proj, { tier: "device", deviceIndex: 0 })).toEqual({
+      background: { fill: "#d0d0d0" },
+    });
+    // The Project tier is the base itself — it overrides nothing.
+    expect(overrideAt(proj, { tier: "project" })).toEqual({});
+    expect(
+      overrideAt(proj, { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" }),
+    ).toEqual({});
+    expect(overrideAt(proj, { tier: "device", deviceIndex: 9 })).toEqual({});
   });
 });
 

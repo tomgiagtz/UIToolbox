@@ -18,6 +18,7 @@ import {
 import { familiesInUse, fontAssetFor, pickableFonts } from "@/lib/glyph/fonts";
 import {
   generateTilesets,
+  overrideAt,
   resolveDeviceInputs,
   resolveScopeStyle,
 } from "@/lib/glyph/generate";
@@ -26,7 +27,7 @@ import {
   createDefaultProject,
 } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
-import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
+import type { StyleScope } from "@/lib/glyph/style";
 import type { FontAsset, ImageAsset, Project } from "@/lib/glyph/types";
 import {
   exportProjectFile,
@@ -92,15 +93,6 @@ function useSquareSize() {
   }, []);
 
   return { ref, size };
-}
-
-/** The sparse override stored at `scope` — `{}` at Project scope or if missing. */
-function overrideAt(project: Project, scope: StyleScope): StyleOverride {
-  if (scope.tier === "project") return {};
-  const device = project.devices[scope.deviceIndex];
-  if (!device) return {};
-  if (scope.tier === "device") return device.style;
-  return device.glyphStyles[scope.glyphId] ?? {};
 }
 
 /** True when `scope` still points at a Device (and Glyph) that resolves today. */
