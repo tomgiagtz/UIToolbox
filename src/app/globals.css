@@ -28,7 +28,7 @@
   --secondary-foreground: oklch(0.205 0 0);
   /* The brand accent. Placeholder only: it holds the grey that used to live on
      shadcn's `--accent` so this rename moves no pixels. #99 picks the hue —
-     until then, nothing here is a colour decision. */
+     until then, nothing here is a color decision. */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -93,6 +93,15 @@
 }
 
 @theme inline {
+  /* The two chrome faces, declared on <html> by `next/font` in `fonts.ts` and
+     named here so a component reaches for a role (`font-sans`, `font-heading`)
+     rather than for a family. #99 chose them: Public Sans replaces Calibri,
+     which was a Windows fallback rather than a decision, and Cal Sans stays as
+     the display face (ADR-0013 §6). The Tailwind names deliberately differ from
+     the `--font-display` / `--font-body` custom properties they read, since a
+     theme key that resolved to itself would be a cycle. */
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
   --color-surface-base: var(--surface-base);
   --color-surface-raised: var(--surface-raised);
   --color-surface-raised-foreground: var(--surface-raised-foreground);
@@ -193,5 +202,6 @@
   body {
     background-color: var(--surface-base);
     color: var(--foreground);
+    font-family: var(--font-body);
   }
 }
