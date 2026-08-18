@@ -13,8 +13,10 @@
  * `npm run presets`, and checked by `tsc` from then on. Nothing here is parsed
  * at runtime, so ADR-0010's discard-and-report path never applies — a broken
  * Preset is a build defect, not a status line (ADR-0012 §5). This module is the
- * typed accessor over that generated output: the app imports here, never a
- * source or the codegen (which only the gate's own tests reach into).
+ * app's face on that generated output — the typed accessor plus the reads the
+ * picker needs over it: what a Preset covers, what it takes by default, and what
+ * a preview of it looks like. The app imports here, never a source or the codegen
+ * (which only the gate's own tests reach into).
  */
 import { PRESETS } from "@/lib/glyph/presets/presets.generated";
 import { projectReducer } from "@/lib/glyph/project";
@@ -107,8 +109,9 @@ export function previewPreset(
   preset: Preset,
   taken: string[],
 ): Project {
-  const have = new Set(project.devices.map((d) => d.catalogId));
-  const absent = presetCatalogIds(preset).filter((id) => !have.has(id));
+  // The Devices you lack are exactly the ones taken by default, so the pane's
+  // extra materialising is that same set, whatever the user has since untaken.
+  const absent = defaultTakenDevices(project, preset);
   return projectReducer(project, {
     type: "apply-preset",
     preset,

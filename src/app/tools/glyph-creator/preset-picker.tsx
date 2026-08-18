@@ -20,21 +20,23 @@ import type { Project, ResolvedInput } from "@/lib/glyph/types";
 import { Modal } from "./modal";
 
 /**
- * The four Inputs a Catalog's swatch always draws — WASD for a keyboard, the face
- * buttons for a pad. Fixed rather than author-chosen: comparing looks requires
- * comparing the same subject, so moving down the list compares Presets rather
- * than whichever Inputs each author found flattering (ADR-0012 §4).
+ * The Inputs a Catalog's swatch draws, where its first four aren't the reading —
+ * WASD for a keyboard, whose Catalog opens on Esc and the function row. Fixed
+ * rather than author-chosen: comparing looks requires comparing the same subject,
+ * so moving down the list compares Presets rather than whichever Inputs each
+ * author found flattering (ADR-0012 §4).
  */
 const SWATCH_INPUTS: Record<string, string[]> = {
   keyboard: ["key-w", "key-a", "key-s", "key-d"],
-  xbox: ["xbox-a", "xbox-b", "xbox-x", "xbox-y"],
-  playstation: ["ps-cross", "ps-circle", "ps-square", "ps-triangle"],
 };
 
-/** Rendered resolution of a swatch tile; its display size is rail scale (18px). */
+/** How many tiles a swatch draws. */
+const SWATCH_TILES = 4;
+
+/** Rendered resolution of a swatch tile; it displays far smaller, at rail scale. */
 const SWATCH_CELL_SIZE = 64;
 
-/** One Preset's swatch: four resolved Glyphs, and the Catalog they came from. */
+/** One Preset's swatch: its four Glyphs, and the Catalog they were drawn from. */
 interface Swatch {
   catalogId: string;
   inputs: ResolvedInput[];
@@ -44,17 +46,27 @@ interface Swatch {
  * Resolve a Preset's swatch against a **fresh** project rather than the open one:
  * the swatch says what the Preset looks like, so it must not move with whose
  * project is open (ADR-0012 §4). The Preset's first covered Catalog is the subject.
+ *
+ * A Catalog with no {@link SWATCH_INPUTS} entry takes the first four Inputs of its
+ * Default Selection — still the same four under every Preset covering it, which is
+ * the whole property the swatch needs. So a new Catalog has a swatch by existing,
+ * and earns an entry above only when its opening Inputs make a poor portrait.
+ *
+ * `null` where the Preset covers no Catalog this build knows — which the build
+ * gate rejects (ADR-0012 §5), so that row simply carries its name and pills.
  */
-function swatchFor(preset: Preset): Swatch {
-  const catalogId = presetCatalogIds(preset)[0] ?? "";
+function swatchFor(preset: Preset): Swatch | null {
+  const catalogId = presetCatalogIds(preset)[0];
+  if (!catalogId) return null;
   const sample = previewPreset(createDefaultProject(), preset, []);
   const device = sample.devices.find((d) => d.catalogId === catalogId);
-  if (!device) return { catalogId, inputs: [] };
-  const byId = new Map(
-    resolveDeviceInputs(device, sample).map((input) => [input.id, input]),
-  );
-  // Walked in the sample's order rather than the Catalog's, so it reads "WASD".
-  const ids = SWATCH_INPUTS[catalogId] ?? [];
+  if (!device) return null;
+
+  const resolved = resolveDeviceInputs(device, sample);
+  const ids = SWATCH_INPUTS[catalogId];
+  if (!ids) return { catalogId, inputs: resolved.slice(0, SWATCH_TILES) };
+  // Walked in SWATCH_INPUTS' order, not the Catalog's, so it reads "WASD".
+  const byId = new Map(resolved.map((input) => [input.id, input]));
   return { catalogId, inputs: ids.flatMap((id) => byId.get(id) ?? []) };
 }
 
@@ -195,6 +207,11 @@ export function PresetPicker({ ref, project, dispatch }: PresetPickerProps) {
         taken: taken.map((d) => d.catalogId),
       });
     }
+    // Every decision here was made against the project as it was. A Device you
+    // just added is now present, where the default flips to untaken — so keeping
+    // the ticks would leave the picker reopening with its most destructive option
+    // pre-armed (ADR-0012 §4).
+    setTakeOverrides({});
     (e.target as HTMLFormElement).closest("dialog")?.close();
   }
 
@@ -297,7 +314,9 @@ export function PresetPicker({ ref, project, dispatch }: PresetPickerProps) {
                 <Button type="button" variant="outline" onClick={close}>
                   Cancel
                 </Button>
-                {/* The species is said by the action, never by a chip. */}
+                {/* The species is said by the action, never by a chip — naming
+                    the Device as you named it, so the button and the row above
+                    it can't call one Device two things. */}
                 <Button type="submit">
                   {preset.kind === "device"
                     ? `Apply to ${covered[0]?.name ?? "Device"}`

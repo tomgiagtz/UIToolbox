@@ -28,7 +28,7 @@ function renderPicker({
   render(<PresetPicker ref={ref} project={project} dispatch={dispatch} />);
   // The parent opens it; a closed <dialog> is hidden from the a11y tree.
   ref.current!.showModal();
-  return { dispatch, project };
+  return { dispatch, project, ref };
 }
 
 /** Move the picker to `preset` by clicking its row. */
@@ -46,6 +46,36 @@ describe("PresetPicker — the list", () => {
         screen.getByRole("button", { name: new RegExp(preset.label) }),
       ).toBeInTheDocument();
     }
+  });
+
+  it("gives every row a four-tile swatch, whatever Catalog it covers", () => {
+    renderPicker();
+    // A Catalog with no SWATCH_INPUTS entry falls back to the opening four of
+    // its Default Selection, so a swatch-less row can't happen.
+    for (const preset of PRESETS) {
+      const row = screen.getByRole("button", {
+        name: new RegExp(preset.label),
+      });
+      expect(row.querySelectorAll("canvas"), preset.label).toHaveLength(4);
+    }
+  });
+
+  it("draws a keyboard swatch as WASD, not as the Catalog's opening keys", () => {
+    const keyboardFirst = PRESETS.find(
+      (p) =>
+        coveredDevices(createDefaultProject(), p)[0]?.catalogId === "keyboard",
+    );
+    if (!keyboardFirst) return;
+    renderPicker();
+
+    const row = screen.getByRole("button", {
+      name: new RegExp(keyboardFirst.label),
+    });
+    expect(
+      [...row.querySelectorAll("canvas")].map((c) =>
+        c.getAttribute("aria-label"),
+      ),
+    ).toEqual(["W", "A", "S", "D"].map((l) => `Glyph preview for ${l}`));
   });
 
   it("says a Device you have apart from one you don't, on the row's pills", () => {
@@ -165,6 +195,30 @@ describe("PresetPicker — applying", () => {
       preset: projectSpecies,
       taken: absentIn(project, projectSpecies).map((d) => d.catalogId),
     });
+  });
+
+  it("forgets take decisions on apply, so the defaults are read afresh", () => {
+    // A Device you just added is present now, where the default is untaken. A
+    // surviving tick would re-arm the most destructive option in the picker.
+    const project = createDefaultProject();
+    const { dispatch, ref } = renderPicker({ project });
+    select(deviceSpecies);
+    const absent = absentIn(project, deviceSpecies)[0];
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: `Take ${absent.name}` }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Apply to / }));
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ taken: [] }),
+    );
+    // Reopened — with a mocked dispatch the project is unchanged, so the box is
+    // back at its default rather than at what was ticked a moment ago.
+    ref.current!.showModal();
+    expect(
+      screen.getByRole("checkbox", { name: `Take ${absent.name}` }),
+    ).toBeChecked();
   });
 
   it("takes nothing until Apply is pressed", () => {
