@@ -36,7 +36,7 @@ export function AssetsWindow({
   onUploadFont,
   onRemoveImages,
 }: {
-  ref: React.Ref<HTMLDialogElement>;
+  ref: React.RefObject<HTMLDialogElement | null>;
   project: Project;
   dispatch: Dispatch<ProjectAction>;
   onUploadImage: (file: File) => Promise<ImageAsset>;
@@ -44,7 +44,6 @@ export function AssetsWindow({
   /** Forget the bytes behind ids the reducer has just dropped from the manifest. */
   onRemoveImages: (ids: string[]) => void;
 }) {
-  const dialogRef = ref as React.RefObject<HTMLDialogElement | null>;
   const titleId = useId();
 
   return (
@@ -62,7 +61,7 @@ export function AssetsWindow({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => dialogRef.current?.close()}
+            onClick={() => ref.current?.close()}
           >
             Close
           </Button>
@@ -189,8 +188,7 @@ function ImagesSection({
               </span>
               <ConfirmButton
                 label="Remove"
-                // Named for assistive tech, where the row's filename is not
-                // implied by proximity the way it is on screen.
+                name={`Remove ${image.fileName}`}
                 onConfirm={() =>
                   remove([image.id], {
                     type: "remove-image",

@@ -426,3 +426,62 @@ describe("project-file — the whole configured project (issue #23)", () => {
     ).toEqual(Array.from(bytes));
   });
 });
+
+describe("project-file — a removed image stops shipping (ADR-0014, #62)", () => {
+  /** What the editor bundles: the bytes for the rows the manifest still lists. */
+  function manifestBytes(project: Project): PersistedImage[] {
+    return project.images.map((asset) => ({
+      ...asset,
+      blob: new Blob([new Uint8Array([1, 2, 3])]),
+    }));
+  }
+
+  it("drops the removed image's entry and keeps the rest", async () => {
+    const kept = { id: "kept-a1.png", fileName: "kept.png", type: "image/png" };
+    const gone = { id: "gone-b2.png", fileName: "gone.png", type: "image/png" };
+    const project = [
+      { type: "add-image", image: kept } as const,
+      { type: "add-image", image: gone } as const,
+    ].reduce(projectReducer, createDefaultProject());
+
+    const before = unzipSync(
+      new Uint8Array(
+        await (
+          await exportProjectFile(project, [], manifestBytes(project))
+        ).blob.arrayBuffer(),
+      ),
+    );
+    expect(Object.keys(before)).toContain(`images/${gone.id}`);
+
+    const removed = projectReducer(project, {
+      type: "remove-image",
+      imageId: gone.id,
+    });
+    const after = unzipSync(
+      new Uint8Array(
+        await (
+          await exportProjectFile(removed, [], manifestBytes(removed))
+        ).blob.arrayBuffer(),
+      ),
+    );
+    // The ZIP carries exactly the manifest, so dropping the row drops the entry.
+    expect(Object.keys(after)).toContain(`images/${kept.id}`);
+    expect(Object.keys(after)).not.toContain(`images/${gone.id}`);
+  });
+
+  it("goes back to plain JSON once the last image is swept", async () => {
+    const image = {
+      id: "only-c3.png",
+      fileName: "only.png",
+      type: "image/png",
+    };
+    const project = projectReducer(createDefaultProject(), {
+      type: "add-image",
+      image,
+    });
+    const swept = projectReducer(project, { type: "sweep-unused-images" });
+
+    const artifact = await exportProjectFile(swept, [], manifestBytes(swept));
+    expect(artifact.filename.endsWith(".json")).toBe(true);
+  });
+});

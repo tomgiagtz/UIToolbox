@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -12,32 +12,30 @@ import { Button } from "@/components/ui/button";
  * without reading them, and the one dialog in this editor that must be read is
  * the missing-assets modal (#81).
  *
- * It disarms on a blur or an Esc, and after a timeout, so an armed button left
- * on screen can never be pressed later by someone who has forgotten what it was
- * pointed at.
+ * It disarms on a blur and on Esc, so an armed button cannot be left waiting for
+ * a press by someone who has forgotten what it was pointed at.
  */
 export function ConfirmButton({
   label,
-  confirmLabel = "Confirm",
+  name = label,
   onConfirm,
   className,
 }: {
-  /** Resting text, and the accessible name of the action being confirmed. */
+  /** Resting text on the button. */
   label: string;
-  confirmLabel?: string;
+  /**
+   * The accessible name, where it has to say more than the visible text.
+   *
+   * A Remove button in a list row reads as "Remove" on screen because the row
+   * around it names what would go; a screen reader reaches the button on its
+   * own. Repeating the filename in the visible text instead would push a long
+   * name through the row.
+   */
+  name?: string;
   onConfirm: () => void;
   className?: string;
 }) {
   const [armed, setArmed] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!armed) return;
-    timer.current = setTimeout(() => setArmed(false), 4000);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [armed]);
 
   return (
     <Button
@@ -45,7 +43,7 @@ export function ConfirmButton({
       variant={armed ? "destructive" : "outline"}
       size="sm"
       className={className}
-      aria-label={armed ? `${confirmLabel} — ${label}` : label}
+      aria-label={armed ? `Confirm — ${name}` : name}
       onBlur={() => setArmed(false)}
       onKeyDown={(e) => {
         if (e.key === "Escape" && armed) {
@@ -64,7 +62,7 @@ export function ConfirmButton({
         onConfirm();
       }}
     >
-      {armed ? confirmLabel : label}
+      {armed ? "Confirm" : label}
     </Button>
   );
 }

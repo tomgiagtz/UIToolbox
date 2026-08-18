@@ -11,7 +11,13 @@ import type {
 } from "@/lib/glyph/style";
 import type { ImageAsset } from "@/lib/glyph/types";
 import { AssetArt } from "./asset-art";
-import { AssetGrid, type AssetGridItem } from "./asset-grid";
+import {
+  AssetGrid,
+  imageIdFromKey,
+  imageKey,
+  imageTiles,
+  type AssetGridItem,
+} from "./asset-grid";
 import { ResetButton } from "./controls-ui";
 
 /**
@@ -78,16 +84,13 @@ export function RenderSourceControls({
           },
         ]
       : []),
-    ...images.map((image) => ({
-      key: `image:${image.id}`,
-      label: image.fileName,
-      art: <AssetArt spec={{ kind: "image", id: image.id }} />,
-    })),
+    ...imageTiles(images),
   ];
 
   function onSelect(key: string) {
-    if (key === "label" || key === "symbol") return patch({ kind: key });
-    patch({ kind: "image", imageId: key.slice("image:".length) });
+    const imageId = imageIdFromKey(key);
+    if (imageId) return patch({ kind: "image", imageId });
+    if (key === "label" || key === "symbol") patch({ kind: key });
   }
 
   function patch(renderSource: RenderSourceOverride) {
@@ -136,6 +139,6 @@ export function RenderSourceControls({
  * always names a tile the grid is showing.
  */
 function selectedKey(source: ResolvedRenderSource): string {
-  if (source.kind === "image") return `image:${source.imageId}`;
+  if (source.kind === "image") return imageKey(source.imageId);
   return source.kind;
 }

@@ -26,7 +26,13 @@ import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 import { FontField } from "./font-field";
 import { AssetArt } from "./asset-art";
-import { AssetGrid, type AssetGridItem } from "./asset-grid";
+import {
+  AssetGrid,
+  imageIdFromKey,
+  imageKey,
+  imageTiles,
+  type AssetGridItem,
+} from "./asset-grid";
 import { RenderSourceControls } from "./render-source-controls";
 import { TransformField } from "./transform-field";
 
@@ -36,16 +42,16 @@ const SHAPES: { value: BackgroundShape; label: string }[] = [
   { value: "circle", label: "Circle" },
 ];
 
-/** Stable option value for a {@link BackgroundSource} in the source picker. */
+/** Stable tile key for a {@link BackgroundSource} in the source grid. */
 function sourceValue(source: BackgroundSource): string {
   if (source.kind === "authored") return `authored:${source.backgroundId}`;
-  if (source.kind === "image") return `image:${source.imageId}`;
+  if (source.kind === "image") return imageKey(source.imageId);
   if (source.kind === "none") return "none";
   return "shape";
 }
 
 /**
- * Read a picked option value back into a {@link BackgroundSource}.
+ * Read a picked tile key back into a {@link BackgroundSource}.
  *
  * Nothing is carried over from the current source: a source says only where the
  * art comes from, and orientation left the union for the tile layer's transform
@@ -55,10 +61,9 @@ function sourceFromValue(value: string): BackgroundSource {
   if (value.startsWith("authored:")) {
     return { kind: "authored", backgroundId: value.slice("authored:".length) };
   }
-  if (value.startsWith("image:")) {
-    return { kind: "image", imageId: value.slice("image:".length) };
-  }
-  // Before the fallback: "shape" is what an unrecognized value becomes, so a
+  const imageId = imageIdFromKey(value);
+  if (imageId) return { kind: "image", imageId };
+  // Before the fallback: "shape" is what an unrecognized key becomes, so a
   // missed branch here would round-trip "none" into a drawn shape.
   if (value === "none") return { kind: "none" };
   return { kind: "shape" };
@@ -118,24 +123,24 @@ function BackgroundSourceField({
         />
       ),
     })),
-    ...images.map((image) => ({
-      key: `image:${image.id}`,
-      label: image.fileName,
-      art: <AssetArt spec={{ kind: "image", id: image.id }} />,
-    })),
+    ...imageTiles(images),
   ];
 
   return (
-    <Field label="Background source" onReset={onReset}>
-      {() => (
-        <AssetGrid
-          label="Background source"
-          items={items}
-          selectedKey={sourceValue(source)}
-          onSelect={(key) => onChange(sourceFromValue(key))}
-        />
-      )}
-    </Field>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">Background source</span>
+        {onReset ? (
+          <ResetButton label="Background source" onReset={onReset} />
+        ) : null}
+      </div>
+      <AssetGrid
+        label="Background source"
+        items={items}
+        selectedKey={sourceValue(source)}
+        onSelect={(key) => onChange(sourceFromValue(key))}
+      />
+    </div>
   );
 }
 

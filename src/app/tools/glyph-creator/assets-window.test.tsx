@@ -109,7 +109,7 @@ describe("AssetsWindow — the Images section (#62)", () => {
     const { dispatch, onRemoveImages } = renderWindow();
 
     await userEvent.click(
-      within(row("metal.png")).getByRole("button", { name: "Remove" }),
+      within(row("metal.png")).getByRole("button", { name: /^Remove /i }),
     );
     expect(dispatch).not.toHaveBeenCalled();
     expect(onRemoveImages).not.toHaveBeenCalled();
@@ -128,16 +128,16 @@ describe("AssetsWindow — the Images section (#62)", () => {
   it("disarms a Remove that loses focus, so it cannot be pressed later", async () => {
     const { dispatch } = renderWindow();
     await userEvent.click(
-      within(row("metal.png")).getByRole("button", { name: "Remove" }),
+      within(row("metal.png")).getByRole("button", { name: /^Remove /i }),
     );
     await userEvent.click(
-      within(row("paper.png")).getByRole("button", { name: "Remove" }),
+      within(row("paper.png")).getByRole("button", { name: /^Remove /i }),
     );
 
     // The first button is back at rest, so the second press armed the second row
     // rather than removing the first.
     expect(
-      within(row("metal.png")).getByRole("button", { name: "Remove" }),
+      within(row("metal.png")).getByRole("button", { name: /^Remove /i }),
     ).toBeInTheDocument();
     expect(dispatch).not.toHaveBeenCalled();
   });
@@ -205,7 +205,7 @@ describe("AssetsWindow — the other Asset kinds (ADR-0014 §3)", () => {
     expect(screen.getAllByText("Bundled").length).toBeGreaterThan(0);
     // Removing a font is filed, not built — so the control must not be there.
     expect(
-      screen.queryByRole("button", { name: "Remove" }),
+      screen.queryByRole("button", { name: /^Remove /i }),
     ).not.toBeInTheDocument();
   });
 

@@ -2,7 +2,9 @@
 
 import { ListBox, ListBoxItem, type Selection } from "react-aria-components";
 import type { ReactNode } from "react";
+import type { ImageAsset } from "@/lib/glyph/types";
 import { cn } from "@/lib/utils";
+import { AssetArt } from "./asset-art";
 
 /** One tile: a stable key, the caption under it, and whatever it draws. */
 export interface AssetGridItem {
@@ -13,14 +15,44 @@ export interface AssetGridItem {
 }
 
 /**
+ * Tile key prefix for an uploaded image.
+ *
+ * Both pickers encode and decode it, and a Background source and a Render Source
+ * that disagreed about the spelling would each silently fall through to their own
+ * terminal default — so the pair lives here rather than once per picker.
+ */
+const IMAGE_KEY = "image:";
+
+/** The tiles for the project's uploaded images, in manifest order. */
+export function imageTiles(images: ImageAsset[]): AssetGridItem[] {
+  return images.map((image) => ({
+    key: `${IMAGE_KEY}${image.id}`,
+    label: image.fileName,
+    art: <AssetArt spec={{ kind: "image", id: image.id }} />,
+  }));
+}
+
+/** The tile key naming `id`. */
+export function imageKey(id: string): string {
+  return `${IMAGE_KEY}${id}`;
+}
+
+/** The image id a tile key names, or `null` if the key names something else. */
+export function imageIdFromKey(key: string): string | null {
+  return key.startsWith(IMAGE_KEY) ? key.slice(IMAGE_KEY.length) : null;
+}
+
+/**
  * A single-select grid of picture tiles, replacing the artwork `<select>`s
  * (ADR-0014 §5, #45) so the user picks art they can see.
  *
- * It knows nothing about **Assets**. Tiles are handed in already drawn, which is
- * what lets a Background picker put its two non-art choices — `none` and
- * `shape` — at the head of the same grid without the grid needing a notion of
- * "an option that isn't an Asset". One control still presents every variant of
- * the union, as the `<select>` it replaces did.
+ * The component itself knows nothing about **Assets**: tiles are handed in
+ * already drawn. That is what lets a Background picker put its two non-art
+ * choices — `none` and `shape` — at the head of the same grid without the grid
+ * needing a notion of "an option that isn't an Asset", so one control still
+ * presents every variant of the union as the `<select>` it replaces did. The
+ * tile helpers above are the Asset-aware half, kept beside it because both
+ * pickers share them.
  *
  * Built on `react-aria-components`' `ListBox` rather than a grid of buttons: a
  * picker is a listbox, and this way arrow-key navigation, typeahead, and the

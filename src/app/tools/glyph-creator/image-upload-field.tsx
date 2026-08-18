@@ -2,14 +2,13 @@
 
 import { useId } from "react";
 
-/** File types the image pickers accept — raster art plus SVG. */
+/** File types an image upload accepts — raster art plus SVG. */
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml";
 
 /**
- * A labeled file input for adding an image to the project. Shared by the two
- * places an upload can start — a Glyph's **Render Source** and a Background's
- * tile art (#20, #22) — so both accept the same file types and both explain that
- * uploads never leave the browser.
+ * A labeled file input for adding an image to the project, used by the Assets
+ * window — the one place an upload can start, since having an Asset is the
+ * window's job and picking one is the Style panel's (ADR-0014).
  */
 export function ImageUploadField({
   label,

@@ -27,8 +27,8 @@ interface ProjectMenuBarProps {
 }
 
 /**
- * The always-visible bottom toolbar: Save / Load / Delete a project, plus the
- * primary Export action. Sticks to the bottom of the viewport so the developer
+ * The always-visible bottom toolbar: Save / Load / Delete a project, the Assets
+ * window, plus the primary Export action. Sticks to the bottom of the viewport so the developer
  * can act from anywhere in the (long) editor.
  */
 export function ProjectMenuBar({

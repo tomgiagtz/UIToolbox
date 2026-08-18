@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getImageBlob } from "@/lib/glyph/images";
 import { recolorSymbolSvg, type RoleColors } from "@/lib/glyph/symbol-render";
-import { getSymbolSvg } from "@/lib/glyph/symbols";
+import { getSymbolAsset, getSymbolSvg } from "@/lib/glyph/symbols";
 
 /**
  * One **Asset**'s artwork, drawn small (ADR-0014).
@@ -21,6 +21,28 @@ export type AssetArtSpec =
   | { kind: "image"; id: string }
   | { kind: "symbol"; id: string; device?: string }
   | { kind: "authored"; id: string; device?: string };
+
+/**
+ * The art for a shipped cell, drawn for a gallery rather than for a Glyph.
+ *
+ * A cell id is bare and resolves through the shared-to-device cascade, so the
+ * scope being edited picks the right drawing — a PlayStation dpad on a
+ * PlayStation Glyph. But some cells are drawn by **no** shared atlas at all:
+ * `bumper` and `trigger` exist only per-device, so at Project scope, which has
+ * no Device to resolve against, they would have no art whatsoever. A gallery
+ * still has to show what the tile *is*, so it falls back to any atlas that draws
+ * it. That is a picture rather than a promise — which Glyph gets which drawing is
+ * still the cascade's answer, not this one's.
+ */
+function gallerySvg(id: string, device?: string): string | undefined {
+  const own = getSymbolSvg(id, device);
+  if (own) return own;
+  for (const atlas of getSymbolAsset(id)?.atlases ?? []) {
+    const svg = getSymbolSvg(id, atlas);
+    if (svg) return svg;
+  }
+  return undefined;
+}
 
 /**
  * Fixed neutral Paint Roles for shipped art in a picker.
@@ -48,7 +70,7 @@ export function AssetArt({
   if (spec.kind === "image") {
     return <UploadedArt id={spec.id} className={className} />;
   }
-  const svg = getSymbolSvg(spec.id, spec.device);
+  const svg = gallerySvg(spec.id, spec.device);
   if (!svg) return <MissingArt className={className} />;
   return (
     <span

@@ -343,9 +343,8 @@ export function GlyphCreator() {
   /**
    * Take an uploaded image into the project: register its bytes for drawing, add
    * it to the shared manifest, and persist it so it survives a reload (ADR-0008).
-   * Resolves to the manifest entry, and it's the caller that decides what the
-   * upload is *for* — a Glyph's Render Source or a Background tile (#20, #22) —
-   * since only it knows the scope being edited.
+   * Resolves to the manifest entry. Nothing is pointed at it here: an upload
+   * joins the project, and the Style panel picks it afterwards (ADR-0014).
    */
   async function onUploadImage(file: File): Promise<ImageAsset> {
     const asset = imageAssetFor(file);
@@ -361,9 +360,9 @@ export function GlyphCreator() {
    * Forget the bytes behind images the reducer has just dropped, in the two
    * layers it cannot reach: the runtime registry and IndexedDB (ADR-0014 §6).
    *
-   * The same three layers as an upload, in reverse order — the manifest row goes
-   * first, because that is the one the draw path consults, so a Glyph falls back
-   * on the next render rather than after an await.
+   * The manifest row goes first — the caller has already dispatched it — because
+   * that is the layer the draw path consults, so a Glyph falls back on the next
+   * render rather than after an await.
    */
   function onRemoveImages(ids: string[]) {
     for (const id of ids) forgetImage(id);

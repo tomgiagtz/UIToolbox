@@ -88,7 +88,7 @@ both would organise itself by kind in one mode and by role in the other.
 
 ### 2. A bespoke shell, not the shared `Modal`
 
-A full-surface `<dialog>` over the editor, opened from the project menu bar. The
+A large centred `<dialog>` over the editor, opened from the project menu bar. The
 project lives in a `useReducer` in `glyph-creator.tsx`; a sibling route would
 have to lift or persist that mid-edit for no gain, and managing assets
 interrupts editing rather than being somewhere you navigate to.

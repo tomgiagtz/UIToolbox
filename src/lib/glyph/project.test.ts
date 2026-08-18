@@ -388,17 +388,13 @@ describe("projectReducer — removing a custom image (ADR-0014, #62)", () => {
     );
   }
 
-  function useAt(project: Project, ...actions: ProjectAction[]): Project {
-    return run(project, ...actions);
-  }
-
   it("drops the manifest row", () => {
     const next = run(withImages(), { type: "remove-image", imageId: "a.png" });
     expect(next.images.map((i) => i.id)).toEqual(["b.png"]);
   });
 
   it("clears a Render Source override that named it, at the Glyph tier", () => {
-    const used = useAt(withImages(), {
+    const used = run(withImages(), {
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 1, glyphId: "xbox-a" },
       patch: {
@@ -412,7 +408,7 @@ describe("projectReducer — removing a custom image (ADR-0014, #62)", () => {
   });
 
   it("clears a Background source at the Device tier, keeping its other fields", () => {
-    const used = useAt(withImages(), {
+    const used = run(withImages(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 1 },
       patch: {
@@ -432,7 +428,7 @@ describe("projectReducer — removing a custom image (ADR-0014, #62)", () => {
     // The base is a full GlyphStyle, so there is nothing to fall back to and the
     // field cannot be cleared — it takes the default source outright, and the
     // shape, fill and border it already carried are left alone (ADR-0014 §4).
-    const used = useAt(withImages(), {
+    const used = run(withImages(), {
       type: "patch-style",
       scope: { tier: "project" },
       patch: { background: { source: { kind: "image", imageId: "a.png" } } },
@@ -447,7 +443,7 @@ describe("projectReducer — removing a custom image (ADR-0014, #62)", () => {
   });
 
   it("clears every tier that named it in one action", () => {
-    const used = useAt(
+    const used = run(
       withImages(),
       {
         type: "patch-style",
@@ -475,7 +471,7 @@ describe("projectReducer — removing a custom image (ADR-0014, #62)", () => {
   });
 
   it("leaves references to other images alone", () => {
-    const used = useAt(withImages(), {
+    const used = run(withImages(), {
       type: "patch-style",
       scope: { tier: "device", deviceIndex: 1 },
       patch: { background: { source: { kind: "image", imageId: "b.png" } } },
