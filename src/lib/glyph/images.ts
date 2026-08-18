@@ -12,36 +12,44 @@
  * that outlives its assets degrades quietly.
  */
 import { createBitmapCache, decodeToBitmap } from "@/lib/glyph/bitmap-cache";
+import { slugify } from "@/lib/glyph/slugify";
 import type { ImageAsset } from "@/lib/glyph/types";
 
 /** Extension used when an upload's filename doesn't carry one. */
 const FALLBACK_EXTENSION = "img";
 
 /**
- * Allocate the next image id: `img-<n>.<ext>`, numbered above the highest id the
- * manifest already uses.
+ * Mint an image id: `<stem>-<tag>.<ext>`, unique by construction (ADR-0014 §6).
  *
- * Numbering past the highest rather than off the count matters because ids
- * outlive the assets that used them — reusing `img-2.png` after that asset was
- * removed would silently repoint any Glyph still referencing it. The extension
- * is kept so the id doubles as a usable filename inside a project ZIP.
+ * It takes the **filename and nothing else**. That is the fix, not a
+ * simplification: the previous allocator numbered `img-<n>` above the highest id
+ * *in the manifest*, which is the one collection removing an image shrinks.
+ * Remove the highest-numbered image, upload another, and it took the freed id —
+ * so any override still naming the old one silently drew art the project never
+ * contained, which is the failure ADR-0011 exists to prevent. An id that cannot
+ * be derived from the manifest cannot be freed by editing it.
+ *
+ * The stem is the upload's filename because that is the name the user
+ * recognises, and it stays true however many Glyphs point at the image — unlike
+ * a Device or Input, which an image cannot honestly carry, being project-level
+ * and usable as one Glyph's Render Source and another's tile at once. It is run
+ * through {@link slugify} for the same reason a Sprite Name is: the id doubles as
+ * the entry name inside a project ZIP. The extension is kept so anyone unzipping
+ * a project by hand gets a file their OS recognises.
  */
-export function nextImageId(images: ImageAsset[], fileName: string): string {
-  let max = 0;
-  for (const { id } of images) {
-    const match = /^img-(\d+)\./.exec(id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
+export function mintImageId(fileName: string): string {
   const dot = fileName.lastIndexOf(".");
   const ext =
     dot > 0 ? fileName.slice(dot + 1).toLowerCase() : FALLBACK_EXTENSION;
-  return `img-${max + 1}.${ext}`;
+  const stem = slugify(dot > 0 ? fileName.slice(0, dot) : fileName);
+  const tag = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return `${stem}-${tag}.${ext}`;
 }
 
-/** The manifest entry for a newly uploaded `file`, with a fresh id. */
-export function imageAssetFor(images: ImageAsset[], file: File): ImageAsset {
+/** The manifest entry for a newly uploaded `file`, with a freshly minted id. */
+export function imageAssetFor(file: File): ImageAsset {
   return {
-    id: nextImageId(images, file.name),
+    id: mintImageId(file.name),
     fileName: file.name,
     type: file.type,
   };
@@ -64,6 +72,20 @@ export function getImageBlob(id: string): Blob | undefined {
 /** Whether bytes for this image id are loaded and drawable. */
 export function hasImage(id: string): boolean {
   return blobs.has(id);
+}
+
+/**
+ * Forget one image's bytes, as a removal does (ADR-0014 §6).
+ *
+ * The whole bitmap cache goes with it rather than the one key. A cache key is
+ * `id|size` and nothing here knows which sizes are warm, removal is rare, and the
+ * cache refills on the next draw — where the alternative, a per-key eviction on
+ * {@link BitmapCache}, would land on Symbols and Authored Backgrounds that have
+ * no removal to serve it.
+ */
+export function forgetImage(id: string): void {
+  blobs.delete(id);
+  bitmaps.clear();
 }
 
 /** Forget every registered image (and its rasterized bitmaps). */

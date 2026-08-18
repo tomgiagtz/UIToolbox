@@ -373,3 +373,184 @@ describe("projectReducer — Render Source & custom images (#20)", () => {
     expect(next.style.foreground.transform.rotation).toBe(0);
   });
 });
+
+describe("projectReducer — removing a custom image (ADR-0014, #62)", () => {
+  const IMAGE = { id: "a.png", fileName: "a.png", type: "image/png" };
+  const OTHER = { id: "b.png", fileName: "b.png", type: "image/png" };
+
+  /** Two uploads and a second Device, so every tier is reachable. */
+  function withImages(): Project {
+    return run(
+      base(),
+      { type: "add-image", image: IMAGE },
+      { type: "add-image", image: OTHER },
+      { type: "toggle-device", catalogId: "xbox" },
+    );
+  }
+
+  function useAt(project: Project, ...actions: ProjectAction[]): Project {
+    return run(project, ...actions);
+  }
+
+  it("drops the manifest row", () => {
+    const next = run(withImages(), { type: "remove-image", imageId: "a.png" });
+    expect(next.images.map((i) => i.id)).toEqual(["b.png"]);
+  });
+
+  it("clears a Render Source override that named it, at the Glyph tier", () => {
+    const used = useAt(withImages(), {
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 1, glyphId: "xbox-a" },
+      patch: {
+        foreground: { renderSource: { kind: "image", imageId: "a.png" } },
+      },
+    });
+
+    const next = run(used, { type: "remove-image", imageId: "a.png" });
+    // The override held nothing else, so it leaves no trace behind.
+    expect(next.devices[1].glyphStyles["xbox-a"]).toBeUndefined();
+  });
+
+  it("clears a Background source at the Device tier, keeping its other fields", () => {
+    const used = useAt(withImages(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 1 },
+      patch: {
+        background: {
+          source: { kind: "image", imageId: "a.png" },
+          fill: "#123456",
+        },
+      },
+    });
+
+    const next = run(used, { type: "remove-image", imageId: "a.png" });
+    expect(next.devices[1].style.background?.source).toBeUndefined();
+    expect(next.devices[1].style.background?.fill).toBe("#123456");
+  });
+
+  it("writes the default shape over a Project base that used it", () => {
+    // The base is a full GlyphStyle, so there is nothing to fall back to and the
+    // field cannot be cleared — it takes the default source outright, and the
+    // shape, fill and border it already carried are left alone (ADR-0014 §4).
+    const used = useAt(withImages(), {
+      type: "patch-style",
+      scope: { tier: "project" },
+      patch: { background: { source: { kind: "image", imageId: "a.png" } } },
+    });
+
+    const next = run(used, { type: "remove-image", imageId: "a.png" });
+    expect(next.style.background.source).toEqual({ kind: "shape" });
+    expect(next.style.background.fill).toBe(used.style.background.fill);
+    expect(next.style.background.cornerRadius).toBe(
+      used.style.background.cornerRadius,
+    );
+  });
+
+  it("clears every tier that named it in one action", () => {
+    const used = useAt(
+      withImages(),
+      {
+        type: "patch-style",
+        scope: { tier: "project" },
+        patch: { background: { source: { kind: "image", imageId: "a.png" } } },
+      },
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 1 },
+        patch: {
+          foreground: { renderSource: { kind: "image", imageId: "a.png" } },
+        },
+      },
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 1, glyphId: "xbox-b" },
+        patch: { background: { source: { kind: "image", imageId: "a.png" } } },
+      },
+    );
+
+    const next = run(used, { type: "remove-image", imageId: "a.png" });
+    expect(next.style.background.source).toEqual({ kind: "shape" });
+    expect(next.devices[1].style.foreground?.renderSource).toBeUndefined();
+    expect(next.devices[1].glyphStyles["xbox-b"]).toBeUndefined();
+  });
+
+  it("leaves references to other images alone", () => {
+    const used = useAt(withImages(), {
+      type: "patch-style",
+      scope: { tier: "device", deviceIndex: 1 },
+      patch: { background: { source: { kind: "image", imageId: "b.png" } } },
+    });
+
+    const next = run(used, { type: "remove-image", imageId: "a.png" });
+    expect(next.devices[1].style.background?.source).toEqual({
+      kind: "image",
+      imageId: "b.png",
+    });
+  });
+
+  it("is a no-op for an id the manifest never carried", () => {
+    const project = withImages();
+    expect(run(project, { type: "remove-image", imageId: "gone.png" })).toBe(
+      project,
+    );
+  });
+});
+
+describe("projectReducer — sweeping unused images (ADR-0014 §5, #62)", () => {
+  function withImages(): Project {
+    return run(
+      base(),
+      {
+        type: "add-image",
+        image: { id: "a.png", fileName: "a.png", type: "image/png" },
+      },
+      {
+        type: "add-image",
+        image: { id: "b.png", fileName: "b.png", type: "image/png" },
+      },
+      { type: "toggle-device", catalogId: "xbox" },
+    );
+  }
+
+  it("drops every row nothing references", () => {
+    const next = run(withImages(), { type: "sweep-unused-images" });
+    expect(next.images).toEqual([]);
+  });
+
+  it("never drops an image referenced anywhere", () => {
+    const used = run(withImages(), {
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 1, glyphId: "xbox-a" },
+      patch: {
+        foreground: { renderSource: { kind: "image", imageId: "a.png" } },
+      },
+    });
+
+    const next = run(used, { type: "sweep-unused-images" });
+    expect(next.images.map((i) => i.id)).toEqual(["a.png"]);
+    // Nothing was cleared, because by construction there was nothing to clear.
+    expect(
+      next.devices[1].glyphStyles["xbox-a"].foreground?.renderSource,
+    ).toEqual({ kind: "image", imageId: "a.png" });
+  });
+
+  it("is a no-op when every image is in use", () => {
+    const used = run(
+      withImages(),
+      {
+        type: "patch-style",
+        scope: { tier: "project" },
+        patch: { background: { source: { kind: "image", imageId: "a.png" } } },
+      },
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 1 },
+        patch: {
+          foreground: { renderSource: { kind: "image", imageId: "b.png" } },
+        },
+      },
+    );
+
+    expect(run(used, { type: "sweep-unused-images" })).toBe(used);
+  });
+});

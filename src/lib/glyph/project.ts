@@ -3,7 +3,11 @@ import {
   getCatalog,
   type DeviceCatalog,
 } from "@/lib/glyph/catalog";
-import { createDeviceFromCatalog } from "@/lib/glyph/defaults";
+import {
+  DEFAULT_BACKGROUND,
+  createDeviceFromCatalog,
+} from "@/lib/glyph/defaults";
+import { imageReferences, unusedImages } from "@/lib/glyph/image-refs";
 import {
   clearOverrideField,
   mergeOverride,
@@ -55,6 +59,11 @@ export type ProjectAction =
   // families are never added here; they are code (ADR-0012 §6).
   | { type: "add-font"; font: FontAsset }
   | { type: "add-image"; image: ImageAsset }
+  // Removal is always explicit (ADR-0014 §5). `remove-image` also clears every
+  // cascade reference to the id; `sweep-unused-images` clears none, because by
+  // construction it only drops rows nothing references.
+  | { type: "remove-image"; imageId: string }
+  | { type: "sweep-unused-images" }
   // --- Export settings: cell size + naming (#6, #21) ---
   // All Project-global. `cellSize` is an atlas output value rather than a cascade
   // tier (ADR-0006), which is why it sits beside naming (ADR-0012 §6).
@@ -138,6 +147,15 @@ export function projectReducer(
     case "add-image":
       return { ...project, images: [...project.images, action.image] };
 
+    case "remove-image":
+      return removeImages(project, [action.imageId]);
+
+    case "sweep-unused-images":
+      return removeImages(
+        project,
+        unusedImages(project).map((image) => image.id),
+      );
+
     case "set-cell-size":
       return patchExportSettings(project, { cellSize: action.size });
 
@@ -150,6 +168,56 @@ export function projectReducer(
     case "set-filename-template":
       return patchNaming(project, { filenameTemplate: action.template });
   }
+}
+
+/**
+ * Drop `ids` from the manifest and clear every cascade reference to them.
+ *
+ * Dropping the row is already enough to make a Glyph fall back —
+ * `resolveRenderSource` checks the manifest, not the bytes — so the clearing is
+ * about the *next* upload, not this one: a reference left dangling would be
+ * adopted by whatever later took the id. Minted ids mean that can no longer
+ * happen (ADR-0014 §6), and this is the second of the two guards, because a
+ * single missed site fails silently rather than loudly.
+ *
+ * Returns the project untouched when no id is carried, so a no-op removal does
+ * not re-render the editor.
+ */
+function removeImages(project: Project, ids: string[]): Project {
+  const removing = new Set(
+    ids.filter((id) => project.images.some((image) => image.id === id)),
+  );
+  if (removing.size === 0) return project;
+
+  const references = imageReferences(project);
+  let next: Project = {
+    ...project,
+    images: project.images.filter((image) => !removing.has(image.id)),
+  };
+
+  for (const id of removing) {
+    for (const { scope, field } of references.get(id) ?? []) {
+      next =
+        scope.tier === "project"
+          ? {
+              ...next,
+              style: {
+                ...next.style,
+                background: {
+                  ...next.style.background,
+                  // The base is a full style with nothing above it to fall back
+                  // to, so the field is written rather than cleared — with the
+                  // default source, leaving the shape and paint it already had.
+                  source: DEFAULT_BACKGROUND.source,
+                },
+              },
+            }
+          : patchDeviceStyle(next, scope, (override) =>
+              clearOverrideField(override, field),
+            );
+    }
+  }
+  return next;
 }
 
 /** Patch the export settings block, leaving the rest of the project alone. */

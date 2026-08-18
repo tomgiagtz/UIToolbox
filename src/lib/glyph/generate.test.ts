@@ -332,15 +332,17 @@ describe("Render Source per Input (issue #20)", () => {
         deviceIndex: 0,
         glyphId: "xbox-a",
       }),
-      // Rendering its label, but its Symbol is still there to switch back to.
-    ).toEqual({ source: { kind: "label" }, hasSymbol: true });
+      // Rendering its label, but its Symbol is still there to switch back to —
+      // and named, because the picker has to draw it on a tile (ADR-0014 §5).
+    ).toEqual({ source: { kind: "label" }, symbolId: "a" });
     expect(
       resolveScopeRenderSource(proj, {
         tier: "glyph",
         deviceIndex: 0,
         glyphId: "c0",
       }),
-    ).toEqual({ source: { kind: "label" }, hasSymbol: false });
+      // A custom Input has no Catalog entry, so no Symbol is offered at all.
+    ).toEqual({ source: { kind: "label" }, symbolId: undefined });
     // A Device or Project scope has no single Input, so there's nothing to resolve.
     expect(resolveScopeRenderSource(proj, { tier: "project" })).toBeNull();
   });

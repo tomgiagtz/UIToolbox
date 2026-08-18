@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,13 +39,6 @@ function xboxProject(images: ImageAsset[] = []): Project {
   return { ...project, images };
 }
 
-/** The manifest entry a stubbed image upload resolves to. */
-const uploaded: ImageAsset = {
-  id: "img-9.png",
-  fileName: "tile.png",
-  type: "image/png",
-};
-
 /** The manifest entry a stubbed font upload resolves to. */
 const uploadedFont: FontAsset = {
   family: "UITBFont-9-abc",
@@ -58,7 +52,6 @@ const uploadedFont: FontAsset = {
 function renderPanel({
   onClose = vi.fn(),
   dispatch = vi.fn(),
-  onUploadImage = vi.fn(async () => uploaded),
   onUploadFont = vi.fn(async () => uploadedFont),
   source,
   project = createDefaultProject(),
@@ -67,7 +60,6 @@ function renderPanel({
 }: {
   onClose?: () => void;
   dispatch?: () => void;
-  onUploadImage?: (file: File) => Promise<ImageAsset>;
   onUploadFont?: (file: File) => Promise<FontAsset>;
   source?: BackgroundSource;
   project?: Project;
@@ -85,14 +77,12 @@ function renderPanel({
     style,
     override,
     onClose,
-    onUploadImage,
     onUploadFont,
   };
   const { rerender } = render(<GlyphStylePanel {...props} />);
   return {
     dispatch,
     onClose,
-    onUploadImage,
     onUploadFont,
     /** Re-render the same panel with a tile applied. */
     withTile: (tile: BackgroundSource) =>
@@ -104,6 +94,37 @@ function renderPanel({
       ),
   };
 }
+
+/** The tiles in one picker grid, by its accessible name. */
+function optionsIn(label: string): HTMLElement[] {
+  return within(screen.getByRole("listbox", { name: label })).getAllByRole(
+    "option",
+  );
+}
+
+const sourceOptions = () => optionsIn("Background source");
+const renderSourceOptions = () => optionsIn("Render Source");
+
+/** The caption of the currently selected tile in a grid. */
+function selectedIn(label: string): string {
+  const selected = optionsIn(label).find(
+    (o) => o.getAttribute("aria-selected") === "true",
+  );
+  return selected?.textContent ?? "";
+}
+
+const selectedSource = () => selectedIn("Background source");
+const selectedRenderSource = () => selectedIn("Render Source");
+
+/** Press the tile whose caption carries `name`. */
+async function pick(label: string, name: string) {
+  const tile = optionsIn(label).find((o) => o.textContent?.includes(name));
+  if (!tile) throw new Error(`no "${name}" tile in the ${label} grid`);
+  await userEvent.click(tile);
+}
+
+const pickSource = (name: string) => pick("Background source", name);
+const pickRenderSource = (name: string) => pick("Render Source", name);
 
 describe("GlyphStylePanel", () => {
   it("names the selected Glyph and hides the Project-global cell size", () => {
@@ -130,15 +151,16 @@ describe("GlyphStylePanel", () => {
     });
   });
 
-  it("writes an explicit shape source when the tile is turned off", () => {
+  it("writes an explicit shape source when the tile is turned off", async () => {
     // A Glyph whose Catalog seed gives it a tile, the way an Xbox bumper has —
     // the case where omitting the field would be a no-op.
     const { dispatch } = renderPanel({
       source: { kind: "authored", backgroundId: "bumper" },
     });
-    const select = screen.getByLabelText("Background source");
-    expect((select as HTMLSelectElement).value).toBe("authored:bumper");
-    fireEvent.change(select, { target: { value: "shape" } });
+    expect(selectedSource()).toContain(
+      AUTHORED_BACKGROUNDS.find((a) => a.id === "bumper")!.label,
+    );
+    await pickSource("Shape");
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
@@ -243,30 +265,29 @@ describe("GlyphStylePanel", () => {
 
 describe("GlyphStylePanel — Background source (issue #22)", () => {
   const image: ImageAsset = {
-    id: "img-1.png",
+    id: "metal-a1b2.png",
     fileName: "metal.png",
     type: "image/png",
   };
+  const trigger = AUTHORED_BACKGROUNDS.find((a) => a.id === "trigger")!;
+  const bumper = AUTHORED_BACKGROUNDS.find((a) => a.id === "bumper")!;
 
   it("offers the plain shape, none, every Authored Background, and each upload", () => {
     renderPanel({ project: { ...createDefaultProject(), images: [image] } });
-    const select = screen.getByLabelText("Background source");
-    const options = [...select.querySelectorAll("option")].map((o) => o.value);
+    const names = sourceOptions().map((o) => o.textContent ?? "");
     // The two "no art" choices lead, in the order the picker declares them.
-    expect(options[0]).toBe("none");
-    expect(options[1]).toBe("shape");
+    expect(names[0]).toContain("None");
+    expect(names[1]).toContain("Shape");
     for (const a of AUTHORED_BACKGROUNDS)
-      expect(options).toContain(`authored:${a.id}`);
-    expect(options).toContain(`image:${image.id}`);
+      expect(names.some((n) => n.includes(a.label))).toBe(true);
+    expect(names.some((n) => n.includes(image.fileName))).toBe(true);
   });
 
-  it("points the Background at an uploaded image", () => {
+  it("points the Background at an uploaded image", async () => {
     const { dispatch } = renderPanel({
       project: { ...createDefaultProject(), images: [image] },
     });
-    fireEvent.change(screen.getByLabelText("Background source"), {
-      target: { value: `image:${image.id}` },
-    });
+    await pickSource(image.fileName);
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
@@ -274,31 +295,27 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     });
   });
 
-  it("carries nothing over from the source it replaces", () => {
+  it("carries nothing over from the source it replaces", async () => {
     // Orientation left the source union, so a re-pick names the tile and only
     // the tile — there is no flag left for it to preserve or to drop.
     const { dispatch } = renderPanel({
-      source: { kind: "authored", backgroundId: "bumper" },
+      source: { kind: "authored", backgroundId: bumper.id },
     });
-    fireEvent.change(screen.getByLabelText("Background source"), {
-      target: { value: "authored:trigger" },
-    });
+    await pickSource(trigger.label);
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
       patch: {
-        background: { source: { kind: "authored", backgroundId: "trigger" } },
+        background: { source: { kind: "authored", backgroundId: trigger.id } },
       },
     });
   });
 
-  it('turns the Background off entirely with "none"', () => {
+  it('turns the Background off entirely with "none"', async () => {
     const { dispatch } = renderPanel({
-      source: { kind: "authored", backgroundId: "bumper" },
+      source: { kind: "authored", backgroundId: bumper.id },
     });
-    fireEvent.change(screen.getByLabelText("Background source"), {
-      target: { value: "none" },
-    });
+    await pickSource("None");
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
@@ -307,12 +324,10 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
   });
 
   it('round-trips a "none" source back into the picker', () => {
-    // The option value and the union have to agree in both directions, or the
+    // The tile key and the union have to agree in both directions, or the
     // terminal "shape" fallback silently swallows the selection.
     renderPanel({ source: { kind: "none" } });
-    expect(
-      (screen.getByLabelText("Background source") as HTMLSelectElement).value,
-    ).toBe("none");
+    expect(selectedSource()).toContain("None");
   });
 
   it("hides every Background control while nothing is drawn", () => {
@@ -328,51 +343,39 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
   });
 
-  it("draws a newly uploaded tile image on the Glyph", async () => {
-    const { dispatch } = renderPanel();
-    const file = new File([new Uint8Array([1])], "tile.png", {
-      type: "image/png",
-    });
-    fireEvent.change(screen.getByLabelText("Upload tile image"), {
-      target: { files: [file] },
-    });
-    await vi.waitFor(() =>
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "patch-style",
-        scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-        patch: {
-          background: { source: { kind: "image", imageId: uploaded.id } },
-        },
-      }),
-    );
+  it("offers no upload here — having an image is the Assets window's job", () => {
+    // ADR-0014: this control picks from what the project already has.
+    renderPanel();
+    expect(
+      screen.queryByLabelText("Upload tile image"),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe("GlyphStylePanel — Render Source (issue #20)", () => {
   const image: ImageAsset = {
-    id: "img-1.png",
+    id: "arrow-a1b2.png",
     fileName: "arrow.png",
     type: "image/png",
   };
 
   it("shows a well-known Input rendering its Symbol", () => {
     renderPanel({ project: xboxProject(), glyph: xboxA });
-    expect(screen.getByLabelText("Symbol")).toBeChecked();
+    expect(selectedRenderSource()).toContain("Symbol");
   });
 
-  it("offers no Symbol option for an Input the Catalog ships none for", () => {
+  it("offers no Symbol tile for an Input the Catalog ships none for", () => {
     // Offering it would only resolve straight back to the label.
     renderPanel();
-    expect(screen.queryByLabelText("Symbol")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Label")).toBeChecked();
+    expect(
+      renderSourceOptions().some((o) => o.textContent?.includes("Symbol")),
+    ).toBe(false);
+    expect(selectedRenderSource()).toContain("Label");
   });
 
-  it("switches a Symbol-rendered Glyph back to its label", () => {
-    const { dispatch } = renderPanel({
-      project: xboxProject(),
-      glyph: xboxA,
-    });
-    fireEvent.click(screen.getByLabelText("Label"));
+  it("switches a Symbol-rendered Glyph back to its label", async () => {
+    const { dispatch } = renderPanel({ project: xboxProject(), glyph: xboxA });
+    await pickRenderSource("Label");
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
@@ -380,23 +383,19 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     });
   });
 
-  it("can't pick Image until something has been uploaded", () => {
+  it("shows no image tiles until something has been uploaded", () => {
     renderPanel();
-    expect(screen.getByLabelText("Image")).toBeDisabled();
-    // Nothing to choose between yet, so no picker either — just the upload field.
-    expect(screen.queryByLabelText("Image file")).not.toBeInTheDocument();
+    expect(renderSourceOptions()).toHaveLength(1);
+    expect(
+      screen.getByText(/upload an image in the assets window/i),
+    ).toBeInTheDocument();
   });
 
-  it("enables Image once the project carries one", () => {
-    renderPanel({ project: { ...createDefaultProject(), images: [image] } });
-    expect(screen.getByLabelText("Image")).not.toBeDisabled();
-  });
-
-  it("points the Glyph at an uploaded image", () => {
+  it("points the Glyph at an uploaded image", async () => {
     const { dispatch } = renderPanel({
       project: { ...createDefaultProject(), images: [image] },
     });
-    fireEvent.click(screen.getByLabelText("Image"));
+    await pickRenderSource(image.fileName);
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
@@ -406,15 +405,32 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     });
   });
 
-  it("hands an uploaded file to the editor", () => {
-    const { onUploadImage } = renderPanel();
-    const file = new File([new Uint8Array([1])], "arrow.png", {
-      type: "image/png",
+  it("points at the image whose tile was pressed, not the first upload", async () => {
+    // Each upload is its own tile, so a pick names it directly — there is no
+    // "switch back to Image" step left that would have to guess which picture
+    // was meant.
+    const images: ImageAsset[] = [
+      { id: "first-a1.png", fileName: "first.png", type: "image/png" },
+      { id: "second-b2.png", fileName: "second.png", type: "image/png" },
+    ];
+    const { dispatch } = renderPanel({
+      project: { ...createDefaultProject(), images },
     });
-    fireEvent.change(screen.getByLabelText("Upload image"), {
-      target: { files: [file] },
+    await pickRenderSource("second.png");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      patch: {
+        foreground: {
+          renderSource: { kind: "image", imageId: "second-b2.png" },
+        },
+      },
     });
-    expect(onUploadImage).toHaveBeenCalledWith(file);
+  });
+
+  it("offers no upload here — having an image is the Assets window's job", () => {
+    renderPanel();
+    expect(screen.queryByLabelText("Upload image")).not.toBeInTheDocument();
   });
 
   it("offers no reset while the Glyph just inherits its Render Source", () => {
@@ -441,32 +457,6 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
   });
 });
 
-describe("GlyphStylePanel — returning to a custom image (issue #20)", () => {
-  const images: ImageAsset[] = [
-    { id: "img-1.png", fileName: "first.png", type: "image/png" },
-    { id: "img-2.png", fileName: "second.png", type: "image/png" },
-  ];
-
-  it("restores the Glyph's own image, not the first upload", () => {
-    // The id survives on the override while the label is shown, so switching
-    // back must not silently repoint the Glyph at someone else's picture.
-    const { dispatch } = renderPanel({
-      project: { ...createDefaultProject(), images },
-      override: {
-        foreground: { renderSource: { kind: "image", imageId: "img-2.png" } },
-      },
-    });
-    fireEvent.click(screen.getByLabelText("Image"));
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "patch-style",
-      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
-      patch: {
-        foreground: { renderSource: { kind: "image", imageId: "img-2.png" } },
-      },
-    });
-  });
-});
-
 describe("StyleControls — the Background source at each scope (ADR-0012 §2)", () => {
   /** Render the shared Style controls at one scope, over a given base source. */
   function renderAt(scope: StyleScope, source?: BackgroundSource) {
@@ -484,7 +474,6 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
         scope={scope}
         style={style}
         override={{}}
-        onUploadImage={vi.fn(async () => uploaded)}
         onUploadFont={vi.fn(async () => uploadedFont)}
       />,
     );
@@ -493,12 +482,16 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
   it("offers the Background source control at Device scope", () => {
     // A device-wide source is a real capability.
     renderAt({ tier: "device", deviceIndex: 0 });
-    expect(screen.getByLabelText("Background source")).toBeInTheDocument();
+    expect(
+      screen.getByRole("listbox", { name: "Background source" }),
+    ).toBeInTheDocument();
   });
 
   it("offers it at Project scope too", () => {
     renderAt({ tier: "project" });
-    expect(screen.getByLabelText("Background source")).toBeInTheDocument();
+    expect(
+      screen.getByRole("listbox", { name: "Background source" }),
+    ).toBeInTheDocument();
   });
 
   it("hides the shape controls under a tile at Glyph scope", () => {

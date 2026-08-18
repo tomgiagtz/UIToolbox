@@ -25,7 +25,8 @@ import type {
 import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 import { FontField } from "./font-field";
-import { ImageUploadField } from "./image-upload-field";
+import { AssetArt } from "./asset-art";
+import { AssetGrid, type AssetGridItem } from "./asset-grid";
 import { RenderSourceControls } from "./render-source-controls";
 import { TransformField } from "./transform-field";
 
@@ -65,70 +66,76 @@ function sourceFromValue(value: string): BackgroundSource {
 
 /**
  * Picks where a Glyph's Background tile comes from: nothing at all, the drawn
- * shape, a shipped **Authored Background**, or one of the user's uploaded tile
- * images (issue #22).
+ * shape, a shipped **Authored Background**, or one of the project's uploaded
+ * tile images (issue #22).
  *
- * Picking "Shape" writes an explicit `{ kind: "shape" }` rather than clearing the
- * field: a Catalog **seed** outranks it, so bumpers and triggers would otherwise
- * just fall back to their authored tile.
+ * A grid of the tiles themselves rather than a list of ids (ADR-0014 §5, #45).
+ * The two variants that are not art — `none` and `shape` — are tiles at the head
+ * of the same grid, so one control still presents every variant of the union as
+ * the `<select>` it replaces did. They carry a word rather than a picture
+ * because there is no picture to carry.
+ *
+ * Picking "Shape" writes an explicit `{ kind: "shape" }` rather than clearing
+ * the field: a Catalog **seed** outranks it, so bumpers and triggers would
+ * otherwise just fall back to their authored tile.
+ *
+ * Uploading is the **Assets window**'s job, not this control's: this picks from
+ * what the project has.
  */
 function BackgroundSourceField({
   source,
   images,
+  deviceCatalogId,
   onChange,
   onReset,
-  onUploadImage,
 }: {
   /** The effective source at the current scope. */
   source: BackgroundSource;
   /** The project's uploaded images, any of which can serve as a tile. */
   images: ImageAsset[];
+  /** Which Device's Set the authored tiles are drawn from (a Catalog id). */
+  deviceCatalogId: string | undefined;
   onChange: (source: BackgroundSource) => void;
   onReset?: () => void;
-  /** Hand an uploaded file to the editor; resolves to its manifest entry. */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
 }) {
+  const items: AssetGridItem[] = [
+    {
+      key: "none",
+      label: "None",
+      art: <span className="text-xs font-medium">None</span>,
+    },
+    {
+      key: "shape",
+      label: "Shape",
+      art: <span className="size-8 rounded-md border-2 border-current" />,
+    },
+    ...AUTHORED_BACKGROUNDS.map((tile) => ({
+      key: `authored:${tile.id}`,
+      label: tile.label,
+      art: (
+        <AssetArt
+          spec={{ kind: "authored", id: tile.id, device: deviceCatalogId }}
+        />
+      ),
+    })),
+    ...images.map((image) => ({
+      key: `image:${image.id}`,
+      label: image.fileName,
+      art: <AssetArt spec={{ kind: "image", id: image.id }} />,
+    })),
+  ];
+
   return (
-    <div className="flex flex-col gap-3">
-      <Field label="Background source" onReset={onReset}>
-        {(id) => (
-          <select
-            id={id}
-            className={inputClass}
-            value={sourceValue(source)}
-            onChange={(e) => onChange(sourceFromValue(e.target.value))}
-          >
-            <option value="none">None (content only)</option>
-            <option value="shape">Shape</option>
-            <optgroup label="Authored">
-              {AUTHORED_BACKGROUNDS.map((a) => (
-                <option key={a.id} value={`authored:${a.id}`}>
-                  {a.label}
-                </option>
-              ))}
-            </optgroup>
-            {images.length > 0 && (
-              <optgroup label="Uploaded">
-                {images.map((image) => (
-                  <option key={image.id} value={`image:${image.id}`}>
-                    {image.fileName}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-        )}
-      </Field>
-      <ImageUploadField
-        label="Upload tile image"
-        hint="The image becomes this scope's tile, fitted to the cell."
-        onUpload={(file) => {
-          void onUploadImage(file).then((asset) =>
-            onChange({ kind: "image", imageId: asset.id }),
-          );
-        }}
-      />
-    </div>
+    <Field label="Background source" onReset={onReset}>
+      {() => (
+        <AssetGrid
+          label="Background source"
+          items={items}
+          selectedKey={sourceValue(source)}
+          onSelect={(key) => onChange(sourceFromValue(key))}
+        />
+      )}
+    </Field>
   );
 }
 
@@ -239,7 +246,6 @@ export function StyleControls({
   override,
   showCellSize = true,
   showRenderSource = false,
-  onUploadImage,
   onUploadFont,
 }: {
   project: Project;
@@ -260,8 +266,6 @@ export function StyleControls({
    * the sidebar addresses whole tiers.
    */
   showRenderSource?: boolean;
-  /** Hand an uploaded tile image to the editor; resolves to its manifest entry. */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
   /** Hand an uploaded font to the editor; resolves to its manifest entry. */
   onUploadFont: (file: File) => Promise<FontAsset>;
 }) {
@@ -271,6 +275,12 @@ export function StyleControls({
     showRenderSource && scope.tier === "glyph"
       ? resolveScopeRenderSource(project, scope)
       : undefined;
+  // Which Device's Set the gallery draws from: a bare cell id resolves through
+  // the shared->device cascade, so a pad's own bumper art shows on its own tiles.
+  const deviceCatalogId =
+    scope.tier === "project"
+      ? undefined
+      : project.devices[scope.deviceIndex]?.catalogId;
   const showsShapeFields = bg.source.kind === "shape";
   /**
    * Show the fill and border controls: they paint an Authored tile's sentinel
@@ -298,9 +308,9 @@ export function StyleControls({
         <BackgroundSourceField
           source={bg.source}
           images={project.images}
+          deviceCatalogId={deviceCatalogId}
           onChange={(source) => patch({ background: { source } })}
           onReset={resetFor("backgroundSource")}
-          onUploadImage={onUploadImage}
         />
 
         {/* A tile carries its own shape and corner treatment, and "none" draws no
@@ -422,10 +432,10 @@ export function StyleControls({
             dispatch={dispatch}
             scope={scope}
             source={renderSource.source}
-            hasSymbol={renderSource.hasSymbol}
+            symbolId={renderSource.symbolId}
+            deviceCatalogId={deviceCatalogId}
             images={project.images}
             override={override}
-            onUploadImage={onUploadImage}
           />
         )}
 
@@ -539,7 +549,6 @@ export function GlyphStylePanel({
   style,
   override,
   onClose,
-  onUploadImage,
   onUploadFont,
 }: {
   project: Project;
@@ -550,12 +559,6 @@ export function GlyphStylePanel({
   /** Raw sparse override stored on the Glyph. */
   override: StyleOverride;
   onClose: () => void;
-  /**
-   * Hand an uploaded image to the editor, which registers and persists it and
-   * resolves to its manifest entry — the caller then points whatever it is
-   * editing (a Render Source, a Background tile) at that id.
-   */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
   /** Hand an uploaded font to the editor; resolves to its manifest entry. */
   onUploadFont: (file: File) => Promise<FontAsset>;
 }) {
@@ -603,7 +606,6 @@ export function GlyphStylePanel({
           override={override}
           showCellSize={false}
           showRenderSource
-          onUploadImage={onUploadImage}
           onUploadFont={onUploadFont}
         />
       </div>

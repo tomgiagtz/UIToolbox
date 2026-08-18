@@ -43,12 +43,14 @@ import {
   replaceImages,
   saveConfig,
   saveFont,
+  deleteImages,
   saveImage,
   type PersistedImage,
 } from "@/lib/glyph/project-store";
 import {
   clearImages,
   getImageBlob,
+  forgetImage,
   imageAssetFor,
   putImage,
 } from "@/lib/glyph/images";
@@ -60,6 +62,7 @@ import {
 } from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
 import { ExportDialog, type ExportSelection } from "./export-dialog";
+import { AssetsWindow } from "./assets-window";
 import { ProjectMenuBar } from "./project-menu-bar";
 import { PanelSection } from "./panel-section";
 
@@ -135,6 +138,7 @@ export function GlyphCreator() {
   // The Export modal is opened from the menu bar but owned here, since it edits
   // the project's naming alongside the selection.
   const exportDialogRef = useRef<HTMLDialogElement>(null);
+  const assetsWindowRef = useRef<HTMLDialogElement>(null);
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
   // before the load below runs.
@@ -344,13 +348,26 @@ export function GlyphCreator() {
    * since only it knows the scope being edited.
    */
   async function onUploadImage(file: File): Promise<ImageAsset> {
-    const asset = imageAssetFor(project.images, file);
+    const asset = imageAssetFor(file);
     // Register before dispatching, so the redraw the patch triggers already has
     // bytes to rasterize.
     putImage(asset.id, file);
     dispatch({ type: "add-image", image: asset });
     await saveImage({ ...asset, blob: file });
     return asset;
+  }
+
+  /**
+   * Forget the bytes behind images the reducer has just dropped, in the two
+   * layers it cannot reach: the runtime registry and IndexedDB (ADR-0014 §6).
+   *
+   * The same three layers as an upload, in reverse order — the manifest row goes
+   * first, because that is the one the draw path consults, so a Glyph falls back
+   * on the next render rather than after an await.
+   */
+  function onRemoveImages(ids: string[]) {
+    for (const id of ids) forgetImage(id);
+    void deleteImages(ids);
   }
 
   /**
@@ -590,7 +607,6 @@ export function GlyphCreator() {
                       scope={validScope}
                       style={scopeStyle}
                       override={scopeOverride}
-                      onUploadImage={onUploadImage}
                       onUploadFont={onUploadFont}
                     />
                   </div>
@@ -607,7 +623,6 @@ export function GlyphCreator() {
               style={resolveScopeStyle(project, selectedGlyphScope)}
               override={overrideAt(project, selectedGlyphScope)}
               onClose={() => setSelectedGlyph(null)}
-              onUploadImage={onUploadImage}
               onUploadFont={onUploadFont}
             />
           )}
@@ -687,6 +702,16 @@ export function GlyphCreator() {
         onLoadFile={onLoadFile}
         onDelete={onDelete}
         onExport={() => exportDialogRef.current?.showModal()}
+        onOpenAssets={() => assetsWindowRef.current?.showModal()}
+      />
+
+      <AssetsWindow
+        ref={assetsWindowRef}
+        project={project}
+        dispatch={dispatch}
+        onUploadImage={onUploadImage}
+        onUploadFont={onUploadFont}
+        onRemoveImages={onRemoveImages}
       />
 
       <ExportDialog

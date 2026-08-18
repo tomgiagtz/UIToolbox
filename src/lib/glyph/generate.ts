@@ -213,11 +213,15 @@ export interface ScopeRenderSource {
   /** The source that Glyph draws today. */
   source: ResolvedRenderSource;
   /**
-   * Whether the Catalog offers this Input a Symbol at all — the control hides
-   * the Symbol option entirely when it doesn't, rather than offering a choice
-   * that would silently resolve back to the label.
+   * The Symbol the Catalog gives this Input, if it gives one.
+   *
+   * The id rather than a `hasSymbol` boolean, because the picker both hides the
+   * Symbol option when there is none — offering it would silently resolve back
+   * to the label — and has to *draw* the Symbol on its tile (ADR-0014 §5). A
+   * boolean answered the first question and left the second needing a second
+   * lookup of the same Catalog entry.
    */
-  hasSymbol: boolean;
+  symbolId: string | undefined;
 }
 
 /**
@@ -236,7 +240,7 @@ export function resolveScopeRenderSource(
   const { above, entry } = cascadeAt(project, scope);
   return {
     source: resolveRenderSource(entry, project.images, ...above),
-    hasSymbol: Boolean(entry?.symbolId),
+    symbolId: entry?.symbolId,
   };
 }
 

@@ -7,6 +7,11 @@
 - **Amended by:** ADR-0012 — `contentScale` is deleted, folded into a
   `content.transform` covering rotation and signed per-axis scale. Everything
   about image persistence stands.
+- **Amended by:** ADR-0014 — the open consequence below ("there is no per-image
+  delete yet") is closed: a custom image is removable from the Assets window, and
+  removal sweeps the manifest, the runtime registry and IndexedDB. Image ids are
+  minted rather than counted above the manifest, so a removal cannot free an id
+  for the next upload to take.
 
 ## Context
 

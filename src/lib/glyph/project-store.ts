@@ -310,6 +310,27 @@ export async function replaceImages(images: PersistedImage[]): Promise<void> {
   }
 }
 
+/**
+ * Delete the persisted bytes for `ids`, as removing an image does (ADR-0014 §6).
+ *
+ * Plural, and one transaction, because the sweep removes a whole set at once and
+ * a half-applied sweep would leave bytes with no manifest row to find them by.
+ * Silently no-ops without IndexedDB, like every write here: the manifest row is
+ * already gone, so the worst case is orphaned bytes that the next project load
+ * clears wholesale (ADR-0011).
+ */
+export async function deleteImages(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    const db = await openDb();
+    const store = txStore(db, "readwrite", IMAGE_STORE);
+    await Promise.all(ids.map((id) => runRequest(store.delete(id))));
+    db.close();
+  } catch {
+    // No IndexedDB (SSR / disabled) — nothing was persisted to delete.
+  }
+}
+
 /** Clear all persisted state (config + fonts + images). */
 export async function clear(): Promise<void> {
   try {
