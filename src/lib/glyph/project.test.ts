@@ -468,7 +468,7 @@ describe("projectReducer — applying a Preset (ADR-0012 §3/§4)", () => {
     expect(next.devices[0].glyphStyles["key-a"]).toBeUndefined();
   });
 
-  it("replaces a taken Device's selection with its Catalog's Default Selection", () => {
+  it("replaces a taken Device's Catalog selection, keeping its custom Inputs", () => {
     const edited = run(
       base(),
       { type: "toggle-input", deviceIndex: 0, inputId: "key-space" },
@@ -480,7 +480,11 @@ describe("projectReducer — applying a Preset (ADR-0012 §3/§4)", () => {
     expect(next.devices[0].enabled).toEqual(
       createDefaultProject().devices[0].enabled,
     );
-    expect(next.devices[0].custom).toEqual([]);
+    // A Default Selection is a statement about a Catalog, so it has nothing to
+    // say about an off-catalog Input and can't be what deletes one.
+    expect(next.devices[0].custom).toEqual([
+      { id: "custom-1", label: "Any Key" },
+    ]);
   });
 
   it("creates a taken Device you lack, in Catalog order, from its Default Selection", () => {

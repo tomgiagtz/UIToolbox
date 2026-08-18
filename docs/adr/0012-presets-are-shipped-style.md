@@ -9,7 +9,8 @@
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
   land-as-one-change requirement withdrawn 2026-08-07, §2's per-Glyph-only
   `background.source` withdrawn 2026-08-08, §2's font placement corrected and
-  weight added 2026-08-13
+  weight added 2026-08-13, §4's taken-Device rule narrowed to the Catalog
+  selection 2026-08-18
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
   loses `contentScale`, and `cellSize` moves without changing status), ADR-0007 §3
   (its four-tier framing of `symbolPaints`, and where the brand palette ships),
@@ -445,6 +446,14 @@ Defaults are asymmetric per Device: **absent → taken** (adding costs nothing),
 **present → untaken** (a curated selection is the most expensive thing in the
 tool). Still no confirm anywhere — every destructive option is a checkbox whose
 consequence is stated beside it.
+
+_Amended 2026-08-18, in place._ Taking a Device you have replaces its **Catalog
+selection** only: its **custom Inputs survive**. A Default Selection is a
+statement about a Catalog, so it has nothing to say about an off-catalog Input,
+and taking a Device must not be the way one gets deleted. The checkbox's sentence
+says so where there are any — _"Replaces your Keyboard selection with the 24
+default Inputs. Your 2 custom Inputs stay."_ — since disclosure is what stands in
+for the confirm.
 
 **Nothing a Preset covers is ever unpreviewable.** The pane materialises every
 covered Device — yours where you have it, the Catalog's Default Selection where

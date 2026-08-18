@@ -239,6 +239,7 @@ describe("presenceNote", () => {
     catalogId: "xbox",
     name: "Xbox",
     defaultCount: 16,
+    customCount: 0,
     present: false,
   };
 
@@ -251,8 +252,22 @@ describe("presenceNote", () => {
     );
     const mine = { ...device, present: true };
     expect(presenceNote(mine, true)).toBe(
-      "Replaces your Xbox Inputs with the 16 default ones.",
+      "Replaces your Xbox selection with the 16 default Inputs.",
     );
+    expect(presenceNote(mine, false)).toBe(
+      "Your Xbox Inputs are kept; only the style changes.",
+    );
+  });
+
+  it("promises the custom Inputs back, and only where there are some", () => {
+    const mine = { ...device, present: true, customCount: 1 };
+    expect(presenceNote(mine, true)).toBe(
+      "Replaces your Xbox selection with the 16 default Inputs. Your 1 custom Input stays.",
+    );
+    expect(presenceNote({ ...mine, customCount: 3 }, true)).toBe(
+      "Replaces your Xbox selection with the 16 default Inputs. Your 3 custom Inputs stay.",
+    );
+    // Untaken keeps everything, so there is nothing to single out.
     expect(presenceNote(mine, false)).toBe(
       "Your Xbox Inputs are kept; only the style changes.",
     );

@@ -247,8 +247,9 @@ function patchDeviceStyle(
  *
  * - absent + taken — the Device is created from its Catalog's Default Selection.
  * - absent + untaken — that entry's payload lands nowhere.
- * - present + taken — the selection is replaced by the Default Selection.
- * - present + untaken — the selection survives; only the style changes.
+ * - present + taken — the Catalog selection is replaced by the Default Selection,
+ *   while the Device's custom Inputs survive it.
+ * - present + untaken — the selection survives whole; only the style changes.
  *
  * A Project Preset additionally replaces the Project tier, which belongs to no
  * Device and so is never taken or not.
@@ -275,9 +276,11 @@ function applyPreset(
     }
     devices = patchDevice(devices, at, (device) =>
       styleDevice(
-        isTaken
-          ? { ...device, enabled: [...catalog.defaultEnabled], custom: [] }
-          : device,
+        // Taking replaces the *Catalog* selection only. An off-catalog Input is
+        // something the Preset's Catalog cannot express and its author never saw,
+        // so a Default Selection has nothing to say about it and taking one must
+        // not be how it gets deleted.
+        isTaken ? { ...device, enabled: [...catalog.defaultEnabled] } : device,
         entry,
       ),
     );

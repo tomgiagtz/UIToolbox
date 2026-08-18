@@ -86,6 +86,8 @@ export interface CoveredDevice {
   name: string;
   /** How many Inputs this Catalog's Default Selection enables. */
   defaultCount: number;
+  /** How many off-catalog Inputs your Device carries; 0 where you have none. */
+  customCount: number;
   present: boolean;
 }
 
@@ -108,6 +110,7 @@ export function coveredDevices(
         catalogId,
         name: mine?.name ?? catalog.name,
         defaultCount: catalog.defaultEnabled.length,
+        customCount: mine?.custom.length ?? 0,
         present: Boolean(mine),
       },
     ];
@@ -117,17 +120,25 @@ export function coveredDevices(
 /**
  * What taking — or not taking — this Device costs, in one sentence (ADR-0012 §4).
  * There is no confirm anywhere in the picker: every destructive option is a
- * checkbox with its consequence stated beside it, and this is that sentence.
+ * checkbox with its consequence stated beside it, and this is that sentence. So
+ * it has to be exact about what survives: taking replaces the Catalog selection
+ * and leaves your custom Inputs, which the sentence says only where you have some.
  */
 export function presenceNote(device: CoveredDevice, taken: boolean): string {
-  const { name, defaultCount } = device;
+  const { name, defaultCount, customCount } = device;
   if (!device.present) {
     return taken
       ? `Applying adds ${name} with its ${defaultCount} default Inputs.`
       : `Preview only — ${name} won't be added.`;
   }
+  const kept =
+    customCount === 0
+      ? ""
+      : customCount === 1
+        ? " Your 1 custom Input stays."
+        : ` Your ${customCount} custom Inputs stay.`;
   return taken
-    ? `Replaces your ${name} Inputs with the ${defaultCount} default ones.`
+    ? `Replaces your ${name} selection with the ${defaultCount} default Inputs.${kept}`
     : `Your ${name} Inputs are kept; only the style changes.`;
 }
 
