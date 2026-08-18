@@ -233,8 +233,7 @@ The shipped set is **code**: a committed tool export per Preset under
 module that `tsc` checks and CI regenerates. Nothing is parsed at runtime, so a
 broken Preset stops the build instead of reaching a user.
 
-_(ADR-0012. The shipped set and its build gate are built; the picker, the
-preview and the apply path are not.)_
+_(ADR-0012. Built, apart from §7's blocking missing-assets modal.)_
 
 ### Background
 

@@ -17,7 +17,9 @@
  * source or the codegen (which only the gate's own tests reach into).
  */
 import { PRESETS } from "@/lib/glyph/presets/presets.generated";
+import { projectReducer } from "@/lib/glyph/project";
 import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
+import type { Project } from "@/lib/glyph/types";
 
 /**
  * One Device a Preset covers: which Catalog it is for, and the two style tiers
@@ -67,4 +69,49 @@ export { PRESETS };
 /** The shipped Preset with this id, or `undefined`. */
 export function getPreset(id: string): Preset | undefined {
   return PRESETS.find((p) => p.id === id);
+}
+
+/** The Catalogs a Preset covers, in the order its source export listed them. */
+export function presetCatalogIds(preset: Preset): string[] {
+  return preset.devices.map((d) => d.catalogId);
+}
+
+/**
+ * Which of a Preset's Devices the picker **takes** before the user touches a
+ * checkbox — the ones this project doesn't carry (ADR-0012 §4).
+ *
+ * Taking governs presence, so the default is asymmetric: adding a Device you
+ * lack costs you nothing, while replacing the selection on a Device you already
+ * curated is the most expensive thing in the tool, and stays opt-in.
+ */
+export function defaultTakenDevices(
+  project: Project,
+  preset: Preset,
+): string[] {
+  const have = new Set(project.devices.map((d) => d.catalogId));
+  return presetCatalogIds(preset).filter((id) => !have.has(id));
+}
+
+/**
+ * The Project the picker's pane draws: this Preset applied with the user's
+ * `taken` decisions, plus **every** covered Device materialised so nothing a
+ * Preset covers is unpreviewable (ADR-0012 §4).
+ *
+ * The only difference from what Apply commits is that a Device you lack and did
+ * not take is still built here — you are looking at it, you just won't be given
+ * it. Everything else runs the real `apply-preset` action, so the pane cannot
+ * promise a look the commit wouldn't produce.
+ */
+export function previewPreset(
+  project: Project,
+  preset: Preset,
+  taken: string[],
+): Project {
+  const have = new Set(project.devices.map((d) => d.catalogId));
+  const absent = presetCatalogIds(preset).filter((id) => !have.has(id));
+  return projectReducer(project, {
+    type: "apply-preset",
+    preset,
+    taken: [...new Set([...taken, ...absent])],
+  });
 }

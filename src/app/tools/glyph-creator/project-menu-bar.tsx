@@ -20,6 +20,8 @@ interface ProjectMenuBarProps {
   onLoadFile: (file: File) => void;
   /** Reset everything (config + persisted fonts). Parent confirms first. */
   onDelete: () => void;
+  /** Open the Preset picker; the parent owns it and the edit it dispatches. */
+  onPresets: () => void;
   /** Open the Export modal; the parent owns it and the download it triggers. */
   onExport: () => void;
 }
@@ -37,6 +39,7 @@ export function ProjectMenuBar({
   onSave,
   onLoadFile,
   onDelete,
+  onPresets,
   onExport,
 }: ProjectMenuBarProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -78,6 +81,9 @@ export function ProjectMenuBar({
           </Button>
           <Button type="button" variant="outline" onClick={onDelete}>
             Delete
+          </Button>
+          <Button type="button" variant="outline" onClick={onPresets}>
+            Presets…
           </Button>
         </div>
 
