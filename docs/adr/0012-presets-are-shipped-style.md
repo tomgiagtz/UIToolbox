@@ -2,8 +2,9 @@
 
 - **Status:** Accepted — partly built. §1 and §2's three-tier cascade and Catalog
   seeds landed with #78, §2's two layer transforms with #79, and §2's font plus
-  §6/§7's `fonts` manifest and multi-slot storage with #80; §3–§5 and the Presets
-  themselves are still filed as issues off this ADR.
+  §6/§7's `fonts` manifest and multi-slot storage with #80, and §5's shipped
+  Presets — sources, manifest, build gate and generated module — with #82; §3's
+  apply path and §4's picker are still filed as issues off this ADR.
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
   land-as-one-change requirement withdrawn 2026-08-07, §2's per-Glyph-only
   `background.source` withdrawn 2026-08-08, §2's font placement corrected and

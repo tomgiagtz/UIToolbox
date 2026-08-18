@@ -10,6 +10,9 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // The Preset build gate is a `.mts` run by Node's type stripping, so its
+    // imports carry the real `.ts` extension Node needs (ADR-0012 §5).
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,

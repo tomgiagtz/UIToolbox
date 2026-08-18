@@ -228,7 +228,13 @@ Because a Preset restyles _your_ selection, the picker card promises nothing —
 covered; a live pane renders your actual atlas through the real cascade before
 you commit.
 
-_(ADR-0012, decided and not yet built.)_
+The shipped set is **code**: a committed tool export per Preset under
+`src/lib/glyph/presets/sources/`, projected by `npm run presets` into a typed
+module that `tsc` checks and CI regenerates. Nothing is parsed at runtime, so a
+broken Preset stops the build instead of reaching a user.
+
+_(ADR-0012. The shipped set and its build gate are built; the picker, the
+preview and the apply path are not.)_
 
 ### Background
 

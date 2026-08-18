@@ -1,0 +1,100 @@
+{
+  "name": "xbox-neon",
+  "style": {
+    "background": {
+      "source": { "kind": "shape" },
+      "transform": { "rotation": 0, "scale": { "x": 1, "y": 1 } },
+      "shape": "rounded-rect",
+      "fill": "#1e293b",
+      "cornerRadius": 18,
+      "border": { "width": 4, "color": "#475569" }
+    },
+    "foreground": {
+      "transform": { "rotation": 0, "scale": { "x": 1, "y": 1 } },
+      "fontFamily": "Inter",
+      "fontWeight": 400,
+      "textColor": "#f8fafc",
+      "symbolPaints": {
+        "fill": "#f8fafc",
+        "border": "#cbd5e1",
+        "secondary": "#334155"
+      }
+    }
+  },
+  "fonts": [],
+  "images": [],
+  "devices": [
+    {
+      "name": "Xbox",
+      "catalogId": "xbox",
+      "enabled": [
+        "xbox-a",
+        "xbox-b",
+        "xbox-x",
+        "xbox-y",
+        "xbox-lb",
+        "xbox-rb",
+        "xbox-lt",
+        "xbox-rt",
+        "xbox-view",
+        "xbox-menu",
+        "xbox-left-stick",
+        "xbox-right-stick",
+        "xbox-dpad-up",
+        "xbox-dpad-down",
+        "xbox-dpad-left",
+        "xbox-dpad-right"
+      ],
+      "custom": [],
+      "style": {
+        "background": {
+          "fill": "#0b1020",
+          "cornerRadius": 30,
+          "border": { "width": 6, "color": "#22d3ee" }
+        },
+        "foreground": {
+          "fontFamily": "JetBrains Mono",
+          "fontWeight": 700,
+          "textColor": "#22d3ee",
+          "symbolPaints": {
+            "fill": "#22d3ee",
+            "border": "#0b1020",
+            "secondary": "#f0abfc"
+          }
+        }
+      },
+      "glyphStyles": {
+        "xbox-a": {
+          "background": { "border": { "color": "#4ade80" } },
+          "foreground": { "symbolPaints": { "fill": "#4ade80" } }
+        },
+        "xbox-b": {
+          "background": { "border": { "color": "#fb7185" } },
+          "foreground": { "symbolPaints": { "fill": "#fb7185" } }
+        },
+        "xbox-x": {
+          "background": { "border": { "color": "#60a5fa" } },
+          "foreground": { "symbolPaints": { "fill": "#60a5fa" } }
+        },
+        "xbox-y": {
+          "background": { "border": { "color": "#fde047" } },
+          "foreground": { "symbolPaints": { "fill": "#fde047" } }
+        },
+        "xbox-left-stick": {
+          "foreground": { "symbolPaints": { "secondary": "#22d3ee" } }
+        },
+        "xbox-right-stick": {
+          "foreground": { "symbolPaints": { "secondary": "#f0abfc" } }
+        }
+      }
+    }
+  ],
+  "exportSettings": {
+    "cellSize": 128,
+    "naming": {
+      "template": "{device}_{input}",
+      "filenameTemplate": "{device}_atlas",
+      "case": "snake"
+    }
+  }
+}
