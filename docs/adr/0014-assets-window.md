@@ -207,6 +207,16 @@ from any Catalog becomes pickable.
   nothing about Assets: tiles arrive already drawn, which is what lets those two
   sit in it without the grid needing a notion of "an option that is not an
   Asset".
+- **A picker offers only art the scope can actually draw.** `bumper` and
+  `trigger` are authored by the pads and by nothing else, with no shared drawing
+  behind them, so a Keyboard Glyph asking for one resolves to no art and the
+  renderer quietly draws the plain shape. The grid therefore filters to the tiles
+  every Device in scope can draw — one Device at the Device and Glyph tiers, all
+  of them at Project scope, since a Project-tier source applies to each. This
+  answers a question #45 left open ("should the gallery filter to the previewed
+  Device's Symbol Set?") and it is the gallery's own doing: a text `<option>`
+  merely offered a name, while a tile shows a picture, and a picture of art the
+  Glyph will not draw is a promise the draw path breaks.
 - An uploaded **font** is an Asset with the same one-way manifest and no removal.
   This ADR says where it belongs; building it is a follow-up issue rather than a
   silent omission.

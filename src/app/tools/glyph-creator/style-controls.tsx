@@ -14,7 +14,7 @@ import type {
   StyleOverride,
   StyleScope,
 } from "@/lib/glyph/style";
-import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
+import { authoredBackgroundsFor } from "@/lib/glyph/symbols";
 import type {
   BackgroundShape,
   BackgroundSource,
@@ -90,7 +90,7 @@ function sourceFromValue(value: string): BackgroundSource {
 function BackgroundSourceField({
   source,
   images,
-  deviceCatalogId,
+  devices,
   onChange,
   onReset,
 }: {
@@ -98,8 +98,12 @@ function BackgroundSourceField({
   source: BackgroundSource;
   /** The project's uploaded images, any of which can serve as a tile. */
   images: ImageAsset[];
-  /** Which Device's Set the authored tiles are drawn from (a Catalog id). */
-  deviceCatalogId: string | undefined;
+  /**
+   * The Catalog ids this scope covers — one Device, or every Device in the
+   * project at Project scope. Both which tiles may be offered and which Set they
+   * are drawn from come from it.
+   */
+  devices: string[];
   onChange: (source: BackgroundSource) => void;
   onReset?: () => void;
 }) {
@@ -114,12 +118,14 @@ function BackgroundSourceField({
       label: "Shape",
       art: <span className="size-8 rounded-md border-2 border-current" />,
     },
-    ...AUTHORED_BACKGROUNDS.map((tile) => ({
+    // Only tiles every Device in scope can draw: offering the rest would draw a
+    // picture the Glyph then falls back from, silently.
+    ...authoredBackgroundsFor(devices).map((tile) => ({
       key: `authored:${tile.id}`,
       label: tile.label,
       art: (
         <AssetArt
-          spec={{ kind: "authored", id: tile.id, device: deviceCatalogId }}
+          spec={{ kind: "authored", id: tile.id, device: devices[0] }}
         />
       ),
     })),
@@ -283,10 +289,14 @@ export function StyleControls({
       : undefined;
   // Which Device's Set the gallery draws from: a bare cell id resolves through
   // the shared->device cascade, so a pad's own bumper art shows on its own tiles.
-  const deviceCatalogId =
+  // A Project-tier source applies to every Device, so the tiles it may offer are
+  // the ones they can all draw; a Device or Glyph scope answers for one.
+  const devices =
     scope.tier === "project"
-      ? undefined
-      : project.devices[scope.deviceIndex]?.catalogId;
+      ? project.devices.map((d) => d.catalogId)
+      : [project.devices[scope.deviceIndex]?.catalogId].filter(
+          (id) => id !== undefined,
+        );
   const showsShapeFields = bg.source.kind === "shape";
   /**
    * Show the fill and border controls: they paint an Authored tile's sentinel
@@ -314,7 +324,7 @@ export function StyleControls({
         <BackgroundSourceField
           source={bg.source}
           images={project.images}
-          deviceCatalogId={deviceCatalogId}
+          devices={devices}
           onChange={(source) => patch({ background: { source } })}
           onReset={resetFor("backgroundSource")}
         />
@@ -439,7 +449,7 @@ export function StyleControls({
             scope={scope}
             source={renderSource.source}
             symbolId={renderSource.symbolId}
-            deviceCatalogId={deviceCatalogId}
+            deviceCatalogId={devices[0]}
             images={project.images}
             override={override}
           />

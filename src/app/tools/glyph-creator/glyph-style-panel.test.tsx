@@ -13,7 +13,10 @@ import {
 import { createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
 import type { StyleOverride, StyleScope } from "@/lib/glyph/style";
-import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
+import {
+  AUTHORED_BACKGROUNDS,
+  authoredBackgroundsFor,
+} from "@/lib/glyph/symbols";
 import type {
   BackgroundSource,
   FontAsset,
@@ -155,15 +158,15 @@ describe("GlyphStylePanel", () => {
     // A Glyph whose Catalog seed gives it a tile, the way an Xbox bumper has —
     // the case where omitting the field would be a no-op.
     const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
       source: { kind: "authored", backgroundId: "bumper" },
     });
-    expect(selectedSource()).toContain(
-      AUTHORED_BACKGROUNDS.find((a) => a.id === "bumper")!.label,
-    );
+    expect(selectedSource()).toContain("Bumper");
     await pickSource("Shape");
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
-      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
       patch: { background: { source: { kind: "shape" } } },
     });
   });
@@ -272,15 +275,29 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
   const trigger = AUTHORED_BACKGROUNDS.find((a) => a.id === "trigger")!;
   const bumper = AUTHORED_BACKGROUNDS.find((a) => a.id === "bumper")!;
 
-  it("offers the plain shape, none, every Authored Background, and each upload", () => {
-    renderPanel({ project: { ...createDefaultProject(), images: [image] } });
+  it("offers the plain shape, none, the Device's Authored Backgrounds, and each upload", () => {
+    renderPanel({
+      project: { ...xboxProject(), images: [image] },
+      glyph: xboxA,
+    });
     const names = sourceOptions().map((o) => o.textContent ?? "");
     // The two "no art" choices lead, in the order the picker declares them.
     expect(names[0]).toContain("None");
     expect(names[1]).toContain("Shape");
-    for (const a of AUTHORED_BACKGROUNDS)
+    for (const a of authoredBackgroundsFor(["xbox"]))
       expect(names.some((n) => n.includes(a.label))).toBe(true);
     expect(names.some((n) => n.includes(image.fileName))).toBe(true);
+  });
+
+  it("offers the Keyboard no shoulder tiles, since it draws none", () => {
+    // Offering them would promise art the Glyph silently falls back from: the
+    // pads author bumper and trigger, and nothing else does (#45).
+    renderPanel();
+    const names = sourceOptions().map((o) => o.textContent ?? "");
+    expect(names.some((n) => n.includes("Bumper"))).toBe(false);
+    expect(names.some((n) => n.includes("Trigger"))).toBe(false);
+    expect(names[0]).toContain("None");
+    expect(names[1]).toContain("Shape");
   });
 
   it("points the Background at an uploaded image", async () => {
@@ -299,12 +316,14 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     // Orientation left the source union, so a re-pick names the tile and only
     // the tile — there is no flag left for it to preserve or to drop.
     const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
       source: { kind: "authored", backgroundId: bumper.id },
     });
     await pickSource(trigger.label);
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
-      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
       patch: {
         background: { source: { kind: "authored", backgroundId: trigger.id } },
       },
@@ -313,12 +332,14 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
 
   it('turns the Background off entirely with "none"', async () => {
     const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
       source: { kind: "authored", backgroundId: bumper.id },
     });
     await pickSource("None");
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
-      scope: { tier: "glyph", deviceIndex: 0, glyphId: "a" },
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
       patch: { background: { source: { kind: "none" } } },
     });
   });
