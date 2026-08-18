@@ -102,7 +102,8 @@ export function RenderSourceControls({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    // Full row: a gallery in one third of the panel truncates every caption.
+    <div className="col-span-full flex flex-col gap-1.5">
       <div className="mb-1.5 flex items-center gap-2">
         <span className="text-sm font-medium">Render Source</span>
         {isOverridden && (

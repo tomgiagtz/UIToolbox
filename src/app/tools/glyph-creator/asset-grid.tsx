@@ -95,7 +95,7 @@ export function AssetGrid({
       onSelectionChange={onSelectionChange}
       items={items}
       className={cn(
-        "grid grid-cols-4 gap-2 rounded-md border border-input bg-surface-base p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-2 rounded-md border border-input bg-surface-base p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >
@@ -113,7 +113,9 @@ export function AssetGrid({
             )
           }
         >
-          <span className="flex size-10 items-center justify-center [&>svg]:size-full [&>img]:size-full [&>img]:object-contain">
+          {/* Descendant, not child: AssetArt wraps shipped art in a span of its
+              own, so a child selector reaches the wrapper and never the svg. */}
+          <span className="flex size-10 items-center justify-center [&_img]:size-full [&_img]:object-contain [&_svg]:size-full">
             {item.art}
           </span>
           <span className="w-full truncate text-center text-[11px] leading-tight text-muted-foreground">

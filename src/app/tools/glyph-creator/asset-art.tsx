@@ -54,17 +54,21 @@ function gallerySvg(id: string, device?: string): string | undefined {
  * same split for the Preset picker's swatches.
  */
 const GALLERY_PAINTS: RoleColors = {
-  fill: "#e2e8f0",
-  border: "#64748b",
-  secondary: "#94a3b8",
+  // Mid-tones, not the near-white a Glyph draws its ink in. A Glyph is painted
+  // to read against its own dark tile; a gallery tile sits on the panel surface,
+  // so the same colours would be white ink on a white card. These read on either
+  // surface, which is what a picker needs and what a Glyph never has to be.
+  fill: "#64748b",
+  border: "#94a3b8",
+  secondary: "#cbd5e1",
 };
 
 export function AssetArt({
   spec,
-  className,
+  className = "block size-full",
 }: {
   spec: AssetArtSpec;
-  /** Sizing comes from the caller; the art fills whatever box it is given. */
+  /** Sizing; defaults to filling whatever box the caller puts it in. */
   className?: string;
 }) {
   if (spec.kind === "image") {
