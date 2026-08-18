@@ -13,8 +13,8 @@
  * `npm run presets`, and checked by `tsc` from then on. Nothing here is parsed
  * at runtime, so ADR-0010's discard-and-report path never applies — a broken
  * Preset is a build defect, not a status line (ADR-0012 §5). This module is the
- * typed accessor over that generated output; the app and tests import here,
- * never the sources or the codegen.
+ * typed accessor over that generated output: the app imports here, never a
+ * source or the codegen (which only the gate's own tests reach into).
  */
 import { PRESETS } from "@/lib/glyph/presets/presets.generated";
 import type { GlyphStyle, StyleOverride } from "@/lib/glyph/style";
@@ -45,8 +45,9 @@ interface PresetBase {
   /** Picker label, e.g. "Neon". The species is said by the action, not a chip. */
   label: string;
   /**
-   * Every Device this Preset covers, in manifest order. A Device Preset covers
-   * exactly one; a Project Preset may cover any number, including none.
+   * Every Device this Preset covers, in the order its source export listed
+   * them. A Device Preset covers exactly one — the Device its manifest row
+   * named; a Project Preset covers any number, including none.
    */
   devices: PresetDevice[];
 }

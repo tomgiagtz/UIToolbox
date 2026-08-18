@@ -26,7 +26,6 @@ import { normalizeRotation } from "../style.ts";
 import { SYMBOL_MANIFEST } from "../symbols/manifest.mjs";
 import { PRESET_MANIFEST } from "./manifest.mjs";
 import type { Preset, PresetDevice } from "../presets.ts";
-import type { GlyphStyle } from "../style.ts";
 import type { DeviceConfig, Project } from "../types.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,15 +54,16 @@ const FORBIDDEN_KEYS = [
   "cellSize",
   "naming",
   "filenameTemplate",
-  "images",
   // A Device's selection, which a Preset must never spend — an absent Device is
   // created from its Catalog's Default Selection instead.
   "enabled",
   "custom",
-  // The no-bytes rule, enforced structurally rather than by schema: an
-  // `imageId` is the only way a style can reach bytes, and it can ride in a
-  // Background source or a Render Source override alike.
+  // How a style reaches image bytes, in a Background source or a Render Source
+  // override alike. Font bytes are the bundled-family check below; this is the
+  // other half of the no-bytes rule.
   "imageId",
+  // The uploaded-image manifest those ids point into.
+  "images",
 ];
 
 /** Ids of the Authored Backgrounds the tool ships, the only ones nameable. */
@@ -119,7 +119,7 @@ function projectDevice(device: DeviceConfig): PresetDevice {
   };
 }
 
-/** Every value in a tree, with a readable path to it for the error message. */
+/** Every object node in a tree, with a readable path to it; the root's is "". */
 function* walk(
   value: unknown,
   path: string,
@@ -133,6 +133,26 @@ function* walk(
   yield [path, value as Record<string, unknown>];
   for (const [key, child] of Object.entries(value))
     yield* walk(child, path ? `${path}.${key}` : key);
+}
+
+/**
+ * The no-bytes rule, checked on the **export** — "any `imageId` anywhere"
+ * (ADR-0012 §5), which the projection alone can't say: a Device Preset drops
+ * every Device but one, so an illegal source would ship clean and its author
+ * would never hear that what they committed was illegal.
+ *
+ * Only bytes are read this strictly. Every other rule is about what *survives*,
+ * and holding a dropped tier to them would fail the build over a look the
+ * Preset doesn't carry — an uploaded font at the project tier of a Device
+ * Preset's export is a legitimate thing to have styled with.
+ */
+function checkNoBytes(entry: PresetEntry, source: Project): void {
+  for (const [path, node] of walk(source, "")) {
+    if ("imageId" in node)
+      reject(entry, `its export carries "imageId" at ${path}`);
+  }
+  if (source.images.length > 0)
+    reject(entry, "its export uploads custom images, which can never ship");
 }
 
 /**
@@ -185,6 +205,15 @@ function checkDevice(entry: PresetEntry, device: PresetDevice): void {
  * the Project tier plus every Device the export covers.
  */
 export function buildPreset(entry: PresetEntry, source: Project): Preset {
+  checkNoBytes(entry, source);
+  const preset = project(entry, source);
+  for (const device of preset.devices) checkDevice(entry, device);
+  checkPayload(entry, preset);
+  return preset;
+}
+
+/** {@link buildPreset}'s projection half; every rule runs over what it returns. */
+function project(entry: PresetEntry, source: Project): Preset {
   if (entry.kind === "device") {
     if (!entry.catalogId)
       reject(
@@ -197,15 +226,12 @@ export function buildPreset(entry: PresetEntry, source: Project): Preset {
         entry,
         `has no ${entry.catalogId} Device in its export to lift out`,
       );
-    const preset: Preset = {
+    return {
       id: entry.id,
       label: entry.label,
       kind: "device",
       devices: [projectDevice(device)],
     };
-    checkDevice(entry, preset.devices[0]);
-    checkPayload(entry, preset);
-    return preset;
   }
   // A Project Preset writes the Project tier, so it scopes itself; a catalogId
   // here would name a scope the projection silently ignores.
@@ -214,16 +240,13 @@ export function buildPreset(entry: PresetEntry, source: Project): Preset {
       entry,
       "is a Project Preset, so its manifest row may not set catalogId",
     );
-  const preset: Preset = {
+  return {
     id: entry.id,
     label: entry.label,
     kind: "project",
-    style: projectStyle(source.style) as GlyphStyle,
+    style: projectStyle(source.style),
     devices: source.devices.map(projectDevice),
   };
-  for (const device of preset.devices) checkDevice(entry, device);
-  checkPayload(entry, preset);
-  return preset;
 }
 
 /**
@@ -236,6 +259,13 @@ export function buildPresets(
 ): Preset[] {
   const seen = new Set<string>();
   for (const entry of entries) {
+    // The manifest is a `.mjs`, so its `@typedef` documents the row without
+    // `tsc` ever checking one — the rows reach here as unchecked data, and a
+    // misspelled `kind` would otherwise build silently as the other species.
+    if (entry.kind !== "device" && entry.kind !== "project")
+      reject(entry, `has kind "${entry.kind}", which is no Preset species`);
+    if (!entry.id || !entry.label || !entry.source)
+      reject(entry, "is missing an id, a label or a source");
     if (seen.has(entry.id))
       reject(entry, "repeats an id already in the manifest");
     seen.add(entry.id);
@@ -251,7 +281,7 @@ function readSource(entry: PresetEntry): Project {
 // Only when run as `npm run presets` — the projection and the gate are imported
 // on their own by the tests, which must not write the generated file.
 if (import.meta.main) {
-  const presets = buildPresets(PRESET_MANIFEST as PresetEntry[], readSource);
+  const presets = buildPresets(PRESET_MANIFEST, readSource);
   const banner =
     "// GENERATED FILE — do not edit by hand.\n" +
     "// Regenerate with `npm run presets` after changing a source export in\n" +

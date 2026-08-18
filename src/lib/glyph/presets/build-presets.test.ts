@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildPreset, buildPresets } from "./build-presets.mts";
+import {
+  buildPreset,
+  buildPresets,
+  type PresetEntry,
+} from "./build-presets.mts";
 import { DEFAULT_STYLE } from "@/lib/glyph/defaults";
 import type { StyleOverride } from "@/lib/glyph/style";
 import type { DeviceConfig, Project } from "@/lib/glyph/types";
@@ -44,18 +48,18 @@ function exportedProject(overrides: Partial<Project> = {}): Project {
   };
 }
 
-const DEVICE_ENTRY = {
+const DEVICE_ENTRY: PresetEntry = {
   id: "neon",
   label: "Neon",
-  kind: "device" as const,
+  kind: "device",
   source: "neon.json",
   catalogId: "xbox",
 };
 
-const PROJECT_ENTRY = {
+const PROJECT_ENTRY: PresetEntry = {
   id: "arcade",
   label: "Arcade",
-  kind: "project" as const,
+  kind: "project",
   source: "arcade.json",
 };
 
@@ -157,6 +161,33 @@ describe("the gate", () => {
     expect(() => buildPreset(DEVICE_ENTRY, source)).toThrow(/imageId/);
   });
 
+  it("throws on an imageId in a tier the projection would have dropped", () => {
+    // Bytes are read on the *export*, not the projection: a Device Preset drops
+    // every Device but one, so an illegal source would otherwise ship clean and
+    // its author would never hear that what they committed was illegal.
+    const source = exportedProject({
+      devices: [
+        device(),
+        device({
+          catalogId: "keyboard",
+          glyphStyles: {
+            "key-w": {
+              foreground: { renderSource: { kind: "image", imageId: "img-1" } },
+            },
+          },
+        }),
+      ],
+    });
+    expect(() => buildPreset(DEVICE_ENTRY, source)).toThrow(/imageId/);
+  });
+
+  it("throws on an export that uploaded custom images at all", () => {
+    const source = exportedProject({
+      images: [{ id: "img-1", fileName: "tile.png", type: "image/png" }],
+    });
+    expect(() => buildPreset(DEVICE_ENTRY, source)).toThrow(/images/);
+  });
+
   it("throws on an imageId in a Render Source override", () => {
     const source = withGlyphStyle({
       "xbox-a": {
@@ -225,6 +256,17 @@ describe("the manifest", () => {
       "arcade",
       "second",
     ]);
+  });
+
+  it("throws on a row whose kind is no species", () => {
+    // `manifest.mjs` is a `.mjs`, so its rows arrive unchecked by `tsc`.
+    const entry = { ...DEVICE_ENTRY, kind: "Device" } as unknown as PresetEntry;
+    expect(() => buildPresets([entry], read)).toThrow(/Device/);
+  });
+
+  it("throws on a row missing its source file", () => {
+    const entry = { ...DEVICE_ENTRY, source: "" };
+    expect(() => buildPresets([entry], read)).toThrow(/source/);
   });
 
   it("throws on a duplicate id", () => {

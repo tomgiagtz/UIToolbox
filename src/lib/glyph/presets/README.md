@@ -40,13 +40,23 @@ the projection drops `enabled` and `custom` outright.
 `build-presets.mts` is the single place a shipped Preset is validated. It throws
 the build on:
 
-- any `imageId` anywhere, and on `name` / `cellSize` / `naming` /
-  `filenameTemplate` / `images` / `enabled` / `custom` surviving the projection;
+- any `imageId` anywhere in the **export**, and any uploaded image in its
+  manifest — read that strictly so a source whose dropped tiers are illegal
+  fails loudly rather than shipping clean;
+- `name` / `cellSize` / `naming` / `filenameTemplate` / `images` / `enabled` /
+  `custom` surviving the projection;
 - an unknown `catalogId`, or a `glyphStyles` key that isn't an Input of that
   Catalog (a **custom** Input's id included — customs don't ship);
 - a `backgroundId` that isn't a shipped Authored Background;
 - a font family that isn't in `BUNDLED_FONTS` — a Preset may name only bundled
-  families, never font bytes.
+  families, never font bytes;
+- a manifest row whose `kind` is no species, or which is missing an `id`, a
+  `label` or a `source`: `manifest.mjs` is a `.mjs`, so `tsc` never checks a row.
+
+Everything but the bytes rule is judged on what **survives** the projection: an
+uploaded font at the project tier of a Device Preset's export is a legitimate
+thing to have styled with, and failing the build over a look the Preset doesn't
+carry would be a lie.
 
 It also canonicalises every rotation into −180…180 as it writes, so a shipped
 Preset reads the way the tool's own control would have spelled it.
