@@ -21,6 +21,9 @@ src/lib/glyph/layouts/pad-layouts.generated.ts
 # Codegen output (see src/lib/glyph/symbols/build-symbols.mjs)
 src/lib/glyph/symbols/symbols.generated.ts
 
+# Codegen output (see src/lib/glyph/presets/build-presets.mts)
+src/lib/glyph/presets/presets.generated.ts
+
 # Vendored agent skills & tooling
 .claude/
 

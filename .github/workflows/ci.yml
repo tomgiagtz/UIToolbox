@@ -47,6 +47,12 @@ jobs:
           git diff --exit-code -- src/lib/glyph/symbols/symbols.generated.ts \
             || (echo "::error::symbols.generated.ts is out of date. Run 'npm run symbols' and commit the result." && exit 1)
 
+      - name: Presets up to date
+        run: |
+          npm run presets
+          git diff --exit-code -- src/lib/glyph/presets/presets.generated.ts \
+            || (echo "::error::presets.generated.ts is out of date. Run 'npm run presets' and commit the result." && exit 1)
+
       - name: Unit tests
         run: npm run test
 

@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "layouts": "node src/lib/glyph/layouts/build-layouts.mjs",
     "symbols": "node src/lib/glyph/symbols/build-symbols.mjs",
+    "presets": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/lib/glyph/presets/build-presets.mts",
     "symbols:preview": "npm run symbols && node src/lib/glyph/symbols/preview-symbols.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

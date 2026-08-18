@@ -1,0 +1,95 @@
+{
+  "name": "arcade",
+  "style": {
+    "background": {
+      "source": { "kind": "shape" },
+      "transform": { "rotation": 0, "scale": { "x": 1, "y": 1 } },
+      "shape": "circle",
+      "fill": "#2a0e3f",
+      "cornerRadius": 18,
+      "border": { "width": 8, "color": "#f59e0b" }
+    },
+    "foreground": {
+      "transform": { "rotation": 0, "scale": { "x": 1, "y": 1 } },
+      "fontFamily": "Titan One",
+      "fontWeight": 400,
+      "textColor": "#fde68a",
+      "symbolPaints": {
+        "fill": "#fde68a",
+        "border": "#7c2d12",
+        "secondary": "#f97316"
+      }
+    }
+  },
+  "fonts": [],
+  "images": [],
+  "devices": [
+    {
+      "name": "Keyboard",
+      "catalogId": "keyboard",
+      "enabled": [
+        "key-w",
+        "key-a",
+        "key-s",
+        "key-d",
+        "key-space",
+        "key-enter",
+        "key-esc",
+        "mouse-left",
+        "mouse-right"
+      ],
+      "custom": [],
+      "style": {
+        "background": { "shape": "rounded-rect", "cornerRadius": 24 }
+      },
+      "glyphStyles": {
+        "key-space": {
+          "background": { "fill": "#3b0764" }
+        },
+        "key-enter": {
+          "foreground": { "symbolPaints": { "fill": "#f97316" } }
+        }
+      }
+    },
+    {
+      "name": "Xbox",
+      "catalogId": "xbox",
+      "enabled": [
+        "xbox-a",
+        "xbox-b",
+        "xbox-x",
+        "xbox-y",
+        "xbox-lb",
+        "xbox-rb",
+        "xbox-lt",
+        "xbox-rt",
+        "xbox-dpad-up",
+        "xbox-dpad-down",
+        "xbox-dpad-left",
+        "xbox-dpad-right"
+      ],
+      "custom": [],
+      "style": {
+        "background": { "border": { "width": 10 } }
+      },
+      "glyphStyles": {
+        "xbox-lb": {
+          "background": { "fill": "#f59e0b" },
+          "foreground": { "textColor": "#2a0e3f" }
+        },
+        "xbox-rb": {
+          "background": { "fill": "#f59e0b" },
+          "foreground": { "textColor": "#2a0e3f" }
+        }
+      }
+    }
+  ],
+  "exportSettings": {
+    "cellSize": 128,
+    "naming": {
+      "template": "{device}_{input}",
+      "filenameTemplate": "{device}_atlas",
+      "case": "snake"
+    }
+  }
+}
