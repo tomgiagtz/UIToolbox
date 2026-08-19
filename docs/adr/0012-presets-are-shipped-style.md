@@ -452,8 +452,10 @@ selection** only: its **custom Inputs survive**. A Default Selection is a
 statement about a Catalog, so it has nothing to say about an off-catalog Input,
 and taking a Device must not be the way one gets deleted. The checkbox's sentence
 says so where there are any — _"Replaces your Keyboard selection with the 24
-default Inputs. Your 2 custom Inputs stay."_ — since disclosure is what stands in
-for the confirm.
+default Inputs. Your custom Inputs aren't removed."_ — since disclosure is what
+stands in for the confirm. It claims no more than that: the Glyph tier is
+replaced with every other tier, so a custom Input survives the apply while the
+styling given to it does not.
 
 **Nothing a Preset covers is ever unpreviewable.** The pane materialises every
 covered Device — yours where you have it, the Catalog's Default Selection where

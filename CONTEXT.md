@@ -221,8 +221,9 @@ writes the Project tier. Neither carries `enabled`, `custom`, `name`, the export
 settings, or any bytes — never font bytes (it may only name a **bundled family**)
 and never an uploaded image. Applying one restyles the Devices you have and never
 touches your selection unless you **take** that Device explicitly, which swaps its
-Catalog selection for the **Default Selection** and leaves its custom Inputs
-alone; a Device you lack can be created from that same Default Selection.
+Catalog selection for the **Default Selection** without removing its custom
+Inputs (their styling goes with every other tier); a Device you lack can be
+created from that same Default Selection.
 
 Because a Preset restyles _your_ selection, the picker card promises nothing —
 **the preview does**. A card is a fixed swatch, a name, and one pill per Device

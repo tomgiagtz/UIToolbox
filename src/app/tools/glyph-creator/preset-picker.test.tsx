@@ -1,7 +1,12 @@
 import { createRef } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { PresetPicker, coveredDevices, presenceNote } from "./preset-picker";
+import {
+  PresetPicker,
+  coveredDevices,
+  presenceNote,
+  swatchFor,
+} from "./preset-picker";
 import { createDefaultProject } from "@/lib/glyph/defaults";
 import { PRESETS, type Preset } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
@@ -77,6 +82,33 @@ describe("PresetPicker — the list", () => {
       ),
     ).toEqual(["W", "A", "S", "D"].map((l) => `Glyph preview for ${l}`));
   });
+
+  /**
+   * Where a Catalog has no SWATCH_INPUTS entry the swatch is its Default
+   * Selection's opening four — so Catalog order silently decides what every
+   * Preset covering it looks like in the list. Pinned per Catalog rather than
+   * per Preset: a new Preset over a known Catalog needs no row, a reorder fails
+   * here, and whoever did it then either accepts the new portrait or writes a
+   * SWATCH_INPUTS entry.
+   */
+  const SWATCHES_BY_CATALOG: Record<string, string[]> = {
+    keyboard: ["key-w", "key-a", "key-s", "key-d"],
+    xbox: ["xbox-a", "xbox-b", "xbox-x", "xbox-y"],
+  };
+
+  it.each(PRESETS.map((p) => [p.label, p] as const))(
+    "draws %s's swatch from the Inputs its Catalog is pinned to",
+    (_label, preset) => {
+      const swatch = swatchFor(preset);
+      expect(swatch).not.toBeNull();
+      const expected = SWATCHES_BY_CATALOG[swatch!.catalogId];
+      expect(
+        expected,
+        `no pinned swatch for ${swatch!.catalogId}`,
+      ).toBeDefined();
+      expect(swatch!.inputs.map((i) => i.id)).toEqual(expected);
+    },
+  );
 
   it("says a Device you have apart from one you don't, on the row's pills", () => {
     const project = createDefaultProject();
@@ -261,11 +293,13 @@ describe("presenceNote", () => {
 
   it("promises the custom Inputs back, and only where there are some", () => {
     const mine = { ...device, present: true, customCount: 1 };
+    // "Aren't removed", not "are kept": the Glyph tier goes with every other
+    // tier, so a custom Input survives the apply but its styling doesn't.
     expect(presenceNote(mine, true)).toBe(
-      "Replaces your Xbox selection with the 16 default Inputs. Your 1 custom Input stays.",
+      "Replaces your Xbox selection with the 16 default Inputs. Your custom Inputs aren't removed.",
     );
     expect(presenceNote({ ...mine, customCount: 3 }, true)).toBe(
-      "Replaces your Xbox selection with the 16 default Inputs. Your 3 custom Inputs stay.",
+      "Replaces your Xbox selection with the 16 default Inputs. Your custom Inputs aren't removed.",
     );
     // Untaken keeps everything, so there is nothing to single out.
     expect(presenceNote(mine, false)).toBe(

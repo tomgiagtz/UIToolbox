@@ -48,14 +48,16 @@ interface Swatch {
  * project is open (ADR-0012 §4). The Preset's first covered Catalog is the subject.
  *
  * A Catalog with no {@link SWATCH_INPUTS} entry takes the first four Inputs of its
- * Default Selection — still the same four under every Preset covering it, which is
- * the whole property the swatch needs. So a new Catalog has a swatch by existing,
- * and earns an entry above only when its opening Inputs make a poor portrait.
+ * Default Selection, on the convention that a Catalog opens on its signature
+ * Inputs — xbox opens ABXY. So a new Catalog has a swatch by existing, and earns
+ * an entry above only where its opening Inputs make a poor portrait. That leans on
+ * Catalog order, which nothing else here would notice changing, so the swatch each
+ * shipped Preset draws is pinned by test.
  *
  * `null` where the Preset covers no Catalog this build knows — which the build
  * gate rejects (ADR-0012 §5), so that row simply carries its name and pills.
  */
-function swatchFor(preset: Preset): Swatch | null {
+export function swatchFor(preset: Preset): Swatch | null {
   const catalogId = presetCatalogIds(preset)[0];
   if (!catalogId) return null;
   const sample = previewPreset(createDefaultProject(), preset, []);
@@ -122,7 +124,7 @@ export function coveredDevices(
  * There is no confirm anywhere in the picker: every destructive option is a
  * checkbox with its consequence stated beside it, and this is that sentence. So
  * it has to be exact about what survives: taking replaces the Catalog selection
- * and leaves your custom Inputs, which the sentence says only where you have some.
+ * but not your custom Inputs, which the sentence says only where you have some.
  */
 export function presenceNote(device: CoveredDevice, taken: boolean): string {
   const { name, defaultCount, customCount } = device;
@@ -131,12 +133,9 @@ export function presenceNote(device: CoveredDevice, taken: boolean): string {
       ? `Applying adds ${name} with its ${defaultCount} default Inputs.`
       : `Preview only — ${name} won't be added.`;
   }
-  const kept =
-    customCount === 0
-      ? ""
-      : customCount === 1
-        ? " Your 1 custom Input stays."
-        : ` Your ${customCount} custom Inputs stay.`;
+  // "Aren't removed" rather than "are kept": the Inputs survive, but the Glyph
+  // tier is replaced wholesale like every other tier, so their styling doesn't.
+  const kept = customCount === 0 ? "" : " Your custom Inputs aren't removed.";
   return taken
     ? `Replaces your ${name} selection with the ${defaultCount} default Inputs.${kept}`
     : `Your ${name} Inputs are kept; only the style changes.`;
