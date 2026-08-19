@@ -21,6 +21,15 @@ describe("mintImageId — ids are minted, never counted (ADR-0014 §6)", () => {
     expect(mintImageId("logo.SVG")).toMatch(/^logo-[a-z0-9]+\.svg$/);
   });
 
+  it("reads a hyphen in the filename as a word gap, not as 'minus'", () => {
+    // `slugify` spells punctuation out for Sprite Names, where `-` is an Input
+    // a player presses. In a filename it is only a gap, and `test_minus_image`
+    // is not the name the user recognises.
+    expect(mintImageId("test-image.svg")).toMatch(
+      /^test_image-[a-z0-9]+\.svg$/,
+    );
+  });
+
   it("never returns the same id twice for the same filename", () => {
     // The whole point: an id freed by a removal must not come back. Counting
     // above the manifest did exactly that, because removal shrinks the manifest.

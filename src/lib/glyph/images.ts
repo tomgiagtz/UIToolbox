@@ -36,12 +36,19 @@ const FALLBACK_EXTENSION = "img";
  * through {@link slugify} for the same reason a Sprite Name is: the id doubles as
  * the entry name inside a project ZIP. The extension is kept so anyone unzipping
  * a project by hand gets a file their OS recognises.
+ *
+ * Hyphens are spaces here, not the word "minus". A Sprite Name spells its
+ * punctuation out because `+` and `-` are Inputs a player presses; a filename's
+ * hyphen is only a word gap, and `my_minus_icon` is not the name the user
+ * recognises.
  */
 export function mintImageId(fileName: string): string {
   const dot = fileName.lastIndexOf(".");
   const ext =
     dot > 0 ? fileName.slice(dot + 1).toLowerCase() : FALLBACK_EXTENSION;
-  const stem = slugify(dot > 0 ? fileName.slice(0, dot) : fileName);
+  const stem = slugify(
+    (dot > 0 ? fileName.slice(0, dot) : fileName).replaceAll("-", " "),
+  );
   const tag = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   return `${stem}-${tag}.${ext}`;
 }
