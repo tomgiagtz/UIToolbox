@@ -60,6 +60,7 @@ import {
 } from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
 import { ExportDialog, type ExportSelection } from "./export-dialog";
+import { PresetPicker } from "./preset-picker";
 import { ProjectMenuBar } from "./project-menu-bar";
 import { PanelSection } from "./panel-section";
 
@@ -135,6 +136,9 @@ export function GlyphCreator() {
   // The Export modal is opened from the menu bar but owned here, since it edits
   // the project's naming alongside the selection.
   const exportDialogRef = useRef<HTMLDialogElement>(null);
+  // Likewise the Preset picker: it is opened from the menu bar and dispatches an
+  // `apply-preset` against the project this component owns.
+  const presetPickerRef = useRef<HTMLDialogElement>(null);
   // Until the persisted config + font have been restored, the save effect must
   // not fire — otherwise the initial default project overwrites saved storage
   // before the load below runs.
@@ -686,7 +690,14 @@ export function GlyphCreator() {
         onSave={onSave}
         onLoadFile={onLoadFile}
         onDelete={onDelete}
+        onPresets={() => presetPickerRef.current?.showModal()}
         onExport={() => exportDialogRef.current?.showModal()}
+      />
+
+      <PresetPicker
+        ref={presetPickerRef}
+        project={project}
+        dispatch={dispatch}
       />
 
       <ExportDialog

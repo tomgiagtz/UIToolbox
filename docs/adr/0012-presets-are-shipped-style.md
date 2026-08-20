@@ -2,13 +2,15 @@
 
 - **Status:** Accepted — partly built. §1 and §2's three-tier cascade and Catalog
   seeds landed with #78, §2's two layer transforms with #79, and §2's font plus
-  §6/§7's `fonts` manifest and multi-slot storage with #80, and §5's shipped
-  Presets — sources, manifest, build gate and generated module — with #82; §3's
-  apply path and §4's picker are still filed as issues off this ADR.
+  §6/§7's `fonts` manifest and multi-slot storage with #80, §5's shipped
+  Presets — sources, manifest, build gate and generated module — with #82, and
+  §3's apply path plus §4's picker with #83; §7's blocking missing-assets modal
+  is still filed as an issue off this ADR.
 - **Date:** 2026-07-30, redrafted 2026-07-31, accepted 2026-08-06, migration's
   land-as-one-change requirement withdrawn 2026-08-07, §2's per-Glyph-only
   `background.source` withdrawn 2026-08-08, §2's font placement corrected and
-  weight added 2026-08-13
+  weight added 2026-08-13, §4's taken-Device rule narrowed to the Catalog
+  selection 2026-08-18
 - **Amends:** ADR-0006 (the cascade loses a tier, gains font and two transforms,
   loses `contentScale`, and `cellSize` moves without changing status), ADR-0007 §3
   (its four-tier framing of `symbolPaints`, and where the brand palette ships),
@@ -444,6 +446,16 @@ Defaults are asymmetric per Device: **absent → taken** (adding costs nothing),
 **present → untaken** (a curated selection is the most expensive thing in the
 tool). Still no confirm anywhere — every destructive option is a checkbox whose
 consequence is stated beside it.
+
+_Amended 2026-08-18, in place._ Taking a Device you have replaces its **Catalog
+selection** only: its **custom Inputs survive**. A Default Selection is a
+statement about a Catalog, so it has nothing to say about an off-catalog Input,
+and taking a Device must not be the way one gets deleted. The checkbox's sentence
+says so where there are any — _"Replaces your Keyboard selection with the 24
+default Inputs. Your custom Inputs aren't removed."_ — since disclosure is what
+stands in for the confirm. It claims no more than that: the Glyph tier is
+replaced with every other tier, so a custom Input survives the apply while the
+styling given to it does not.
 
 **Nothing a Preset covers is ever unpreviewable.** The pane materialises every
 covered Device — yours where you have it, the Catalog's Default Selection where

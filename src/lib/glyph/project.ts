@@ -4,7 +4,9 @@ import {
   type DeviceCatalog,
 } from "@/lib/glyph/catalog";
 import { createDeviceFromCatalog } from "@/lib/glyph/defaults";
+import type { Preset, PresetDevice } from "@/lib/glyph/presets";
 import {
+  NO_OVERRIDE,
   clearOverrideField,
   mergeOverride,
   resolveStyle,
@@ -38,6 +40,13 @@ export type ProjectAction =
   | { type: "clear-style"; scope: StyleScope; field: StyleField }
   // --- Devices, Catalog selection & custom Inputs (#5, #15) ---
   | { type: "toggle-device"; catalogId: string }
+  // --- Shipped Presets (#83) ---
+  // Land a shipped **Preset**: style onto every covered Device this project has,
+  // plus the Project tier for a Project Preset. `taken` names the Catalogs whose
+  // *presence* the user opted into — the only way this action touches a
+  // selection (ADR-0012 §3/§4). The picker previews by running this very action,
+  // so what is shown and what is committed cannot diverge.
+  | { type: "apply-preset"; preset: Preset; taken: string[] }
   | { type: "toggle-input"; deviceIndex: number; inputId: string }
   | { type: "add-custom-input"; deviceIndex: number; label: string }
   | {
@@ -89,6 +98,9 @@ export function projectReducer(
         ...project,
         devices: toggleDevice(project.devices, action.catalogId),
       };
+
+    case "apply-preset":
+      return applyPreset(project, action.preset, new Set(action.taken));
 
     case "toggle-input":
       return {
@@ -226,6 +238,81 @@ function patchDeviceStyle(
       else delete glyphStyles[scope.glyphId];
       return { ...device, glyphStyles };
     }),
+  };
+}
+
+/**
+ * Land a Preset on a Project (ADR-0012 §3). Style reaches every covered Device
+ * the project has; `taken` governs **presence**, per Catalog:
+ *
+ * - absent + taken — the Device is created from its Catalog's Default Selection.
+ * - absent + untaken — that entry's payload lands nowhere.
+ * - present + taken — the Catalog selection is replaced by the Default Selection,
+ *   while the Device's custom Inputs survive it.
+ * - present + untaken — the selection survives whole; only the style changes.
+ *
+ * A Project Preset additionally replaces the Project tier, which belongs to no
+ * Device and so is never taken or not.
+ */
+function applyPreset(
+  project: Project,
+  preset: Preset,
+  taken: Set<string>,
+): Project {
+  let devices = project.devices;
+
+  for (const entry of preset.devices) {
+    const catalog = getCatalog(entry.catalogId);
+    // A Preset naming an unknown Catalog is a build defect the gate rejects
+    // (ADR-0012 §5); if one ever gets through, that entry simply lands nowhere.
+    if (!catalog) continue;
+
+    const isTaken = taken.has(catalog.id);
+    let at = devices.findIndex((d) => d.catalogId === catalog.id);
+    if (at === -1) {
+      if (!isTaken) continue;
+      devices = insertInCatalogOrder(devices, catalog);
+      at = devices.findIndex((d) => d.catalogId === catalog.id);
+    }
+    devices = patchDevice(devices, at, (device) =>
+      styleDevice(
+        // Taking replaces the *Catalog* selection only. An off-catalog Input is
+        // something the Preset's Catalog cannot express and its author never saw,
+        // so a Default Selection has nothing to say about it and taking one must
+        // not be how it gets deleted.
+        isTaken ? { ...device, enabled: [...catalog.defaultEnabled] } : device,
+        entry,
+      ),
+    );
+  }
+
+  const next = { ...project, devices };
+  if (preset.kind === "device") return next;
+  // `resolveStyle` with no overrides is a detached copy of a full style, which is
+  // exactly what the Project tier is.
+  return { ...next, style: resolveStyle(preset.style) };
+}
+
+/**
+ * Give a Device the Preset's two style tiers. Both **replace** what was there
+ * rather than merging: a Preset is a whole look, and a merge would leave a hybrid
+ * that is neither — with the user's old per-Glyph rules outranking the look they
+ * just chose. The selection is untouched here; only {@link applyPreset} decides
+ * that (ADR-0012 §3).
+ *
+ * Every override is copied off the Preset on the way in, so the shipped set —
+ * module data shared by every project — can never be edited through a Device.
+ */
+function styleDevice(device: DeviceConfig, entry: PresetDevice): DeviceConfig {
+  return {
+    ...device,
+    style: mergeOverride(NO_OVERRIDE, entry.style),
+    glyphStyles: Object.fromEntries(
+      Object.entries(entry.glyphStyles).map(([id, override]) => [
+        id,
+        mergeOverride(NO_OVERRIDE, override),
+      ]),
+    ),
   };
 }
 

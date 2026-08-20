@@ -220,8 +220,10 @@ per-Glyph styles, and font family; a **Project Preset** does the same and also
 writes the Project tier. Neither carries `enabled`, `custom`, `name`, the export
 settings, or any bytes — never font bytes (it may only name a **bundled family**)
 and never an uploaded image. Applying one restyles the Devices you have and never
-touches your selection unless you take a Device explicitly; a Device you lack can
-be created from its Catalog's **Default Selection**.
+touches your selection unless you **take** that Device explicitly, which swaps its
+Catalog selection for the **Default Selection** without removing its custom
+Inputs (their styling goes with every other tier); a Device you lack can be
+created from that same Default Selection.
 
 Because a Preset restyles _your_ selection, the picker card promises nothing —
 **the preview does**. A card is a fixed swatch, a name, and one pill per Device
@@ -233,8 +235,7 @@ The shipped set is **code**: a committed tool export per Preset under
 module that `tsc` checks and CI regenerates. Nothing is parsed at runtime, so a
 broken Preset stops the build instead of reaching a user.
 
-_(ADR-0012. The shipped set and its build gate are built; the picker, the
-preview and the apply path are not.)_
+_(ADR-0012. Built, apart from §7's blocking missing-assets modal.)_
 
 ### Background
 

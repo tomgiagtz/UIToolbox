@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { GlyphCreator } from "./glyph-creator";
+import { PRESETS } from "@/lib/glyph/presets";
 
 /** Expand the Style section so its scope switcher + controls are interactive. */
 function openStyle() {
@@ -45,6 +46,26 @@ describe("GlyphCreator editor shell", () => {
     const picker = screen.getByLabelText("Font") as HTMLSelectElement;
     expect(picker).toHaveValue("Inter");
     expect([...picker.options].map((o) => o.value)).toContain("Titan One");
+  });
+});
+
+describe("GlyphCreator — applying a shipped Preset (#83)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("lands a Device Preset on the project, Device and all", () => {
+    const preset = PRESETS.find((p) => p.kind === "device")!;
+    render(<GlyphCreator />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Presets…" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(preset.label) }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Apply to / }));
+
+    // A fresh project has only the Keyboard, so the Device this Preset covers is
+    // absent — taken by default — and applying creates it. The editor grows the
+    // Device select it only shows for a second Device.
+    expect(screen.getByLabelText("Device to preview")).toBeInTheDocument();
   });
 });
 
