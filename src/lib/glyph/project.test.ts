@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { projectReducer, type ProjectAction } from "@/lib/glyph/project";
 import {
   DEFAULT_FONT_FAMILY,
+  DEFAULT_STYLE,
   createDefaultProject,
 } from "@/lib/glyph/defaults";
+import type { Preset } from "@/lib/glyph/presets";
+import type { StyleOverride } from "@/lib/glyph/style";
 import type { Project } from "@/lib/glyph/types";
 
 function base(): Project {
@@ -548,5 +551,179 @@ describe("projectReducer — sweeping unused images (ADR-0014 §5, #62)", () => 
     );
 
     expect(run(used, { type: "sweep-unused-images" })).toBe(used);
+  });
+});
+
+describe("projectReducer — applying a Preset (ADR-0012 §3/§4)", () => {
+  const KEY_ACCENT: StyleOverride = {
+    background: { fill: "#f59e0b" },
+    foreground: { textColor: "#1c1917" },
+  };
+
+  /** A Device Preset over the Keyboard, sparse and with one inert rule. */
+  function keyboardPreset(): Preset {
+    return {
+      id: "paper",
+      label: "Paper",
+      kind: "device",
+      devices: [
+        {
+          catalogId: "keyboard",
+          style: { foreground: { textColor: "#0f172a" } },
+          // `key-f5` is off the Default Selection on purpose: a rule that lands
+          // on nothing must still be carried, not dropped.
+          glyphStyles: { "key-w": KEY_ACCENT, "key-f5": KEY_ACCENT },
+        },
+      ],
+    };
+  }
+
+  /** A Project Preset covering a Device this project has and one it doesn't. */
+  function twoDevicePreset(): Preset {
+    return {
+      id: "arcade",
+      label: "Arcade",
+      kind: "project",
+      style: {
+        ...DEFAULT_STYLE,
+        foreground: { ...DEFAULT_STYLE.foreground, textColor: "#fde68a" },
+      },
+      devices: [
+        { catalogId: "keyboard", style: {}, glyphStyles: {} },
+        {
+          catalogId: "xbox",
+          style: { background: { shape: "circle" } },
+          glyphStyles: {},
+        },
+      ],
+    };
+  }
+
+  function apply(project: Project, preset: Preset, taken: string[] = []) {
+    return run(project, { type: "apply-preset", preset, taken });
+  }
+
+  it("restyles a Device you have and keeps its selection when untaken", () => {
+    const edited = run(base(), {
+      type: "toggle-input",
+      deviceIndex: 0,
+      inputId: "key-space",
+    });
+    const before = edited.devices[0].enabled;
+
+    const next = apply(edited, keyboardPreset());
+
+    expect(next.devices[0].enabled).toEqual(before);
+    expect(next.devices[0].style).toEqual({
+      foreground: { textColor: "#0f172a" },
+    });
+    expect(Object.keys(next.devices[0].glyphStyles)).toEqual([
+      "key-w",
+      "key-f5",
+    ]);
+  });
+
+  it("replaces the Device's own style rather than merging with what was there", () => {
+    const styled = run(
+      base(),
+      {
+        type: "patch-style",
+        scope: { tier: "device", deviceIndex: 0 },
+        patch: { background: { fill: "#ff0000" } },
+      },
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: "key-a" },
+        patch: { foreground: { textColor: "#ff0000" } },
+      },
+    );
+
+    const next = apply(styled, keyboardPreset());
+
+    // Both style tiers are the Preset's; a look you apply is the look you get.
+    expect(next.devices[0].style.background).toBeUndefined();
+    expect(next.devices[0].glyphStyles["key-a"]).toBeUndefined();
+  });
+
+  it("replaces a taken Device's Catalog selection, keeping its custom Inputs", () => {
+    const edited = run(
+      base(),
+      { type: "toggle-input", deviceIndex: 0, inputId: "key-space" },
+      { type: "add-custom-input", deviceIndex: 0, label: "Any Key" },
+    );
+
+    const next = apply(edited, keyboardPreset(), ["keyboard"]);
+
+    expect(next.devices[0].enabled).toEqual(
+      createDefaultProject().devices[0].enabled,
+    );
+    // A Default Selection is a statement about a Catalog, so it has nothing to
+    // say about an off-catalog Input and can't be what deletes one.
+    expect(next.devices[0].custom).toEqual([
+      { id: "custom-1", label: "Any Key" },
+    ]);
+  });
+
+  it("creates a taken Device you lack, in Catalog order, from its Default Selection", () => {
+    const preset: Preset = {
+      ...keyboardPreset(),
+      devices: [
+        {
+          catalogId: "xbox",
+          style: { background: { shape: "circle" } },
+          glyphStyles: {},
+        },
+      ],
+    };
+
+    const next = apply(base(), preset, ["xbox"]);
+
+    expect(next.devices.map((d) => d.name)).toEqual(["Keyboard", "Xbox"]);
+    expect(next.devices[1].enabled).toContain("xbox-a");
+    expect(next.devices[1].style).toEqual({ background: { shape: "circle" } });
+  });
+
+  it("lands nowhere for a Device you lack and did not take", () => {
+    const preset: Preset = {
+      ...keyboardPreset(),
+      devices: [{ catalogId: "xbox", style: {}, glyphStyles: {} }],
+    };
+
+    expect(apply(base(), preset).devices).toEqual(base().devices);
+  });
+
+  it("writes the Project tier for a Project Preset, and only for that species", () => {
+    const next = apply(base(), twoDevicePreset());
+    expect(next.style.foreground.textColor).toBe("#fde68a");
+
+    const deviceSpecies = apply(base(), keyboardPreset());
+    expect(deviceSpecies.style).toEqual(base().style);
+  });
+
+  it("styles each covered Device it can reach, skipping the ones you lack", () => {
+    const next = apply(base(), twoDevicePreset());
+
+    expect(next.devices).toHaveLength(1);
+    expect(next.devices[0].catalogId).toBe("keyboard");
+  });
+
+  it("touches nothing outside the Style Cascade", () => {
+    const before = base();
+    const next = apply(before, twoDevicePreset(), ["keyboard", "xbox"]);
+
+    expect(next.name).toBe(before.name);
+    expect(next.exportSettings).toEqual(before.exportSettings);
+    expect(next.fonts).toEqual(before.fonts);
+    expect(next.images).toEqual(before.images);
+  });
+
+  it("hands over a detached copy, so the shipped Preset can't be edited through it", () => {
+    const preset = keyboardPreset();
+    const next = apply(base(), preset);
+
+    expect(next.devices[0].style).not.toBe(preset.devices[0].style);
+    expect(next.devices[0].glyphStyles["key-w"]).not.toBe(
+      preset.devices[0].glyphStyles["key-w"],
+    );
   });
 });
