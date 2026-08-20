@@ -46,6 +46,7 @@ export function RenderSourceControls({
   deviceCatalogId,
   images,
   override,
+  onOpenAssets,
 }: {
   dispatch: Dispatch<ProjectAction>;
   /** The Glyph being edited. */
@@ -60,6 +61,8 @@ export function RenderSourceControls({
   images: ImageAsset[];
   /** Raw sparse override at `scope`, for the reset control. */
   override: StyleOverride;
+  /** Open the Assets window, which the grid's trailing tile leads to. */
+  onOpenAssets: () => void;
 }) {
   const isOverridden = isOverrideFieldSet(override, "renderSource");
 
@@ -121,13 +124,8 @@ export function RenderSourceControls({
         items={items}
         selectedKey={selectedKey(source)}
         onSelect={onSelect}
+        onAdd={onOpenAssets}
       />
-
-      {images.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          Upload an image in the Assets window to draw one here.
-        </p>
-      )}
     </div>
   );
 }

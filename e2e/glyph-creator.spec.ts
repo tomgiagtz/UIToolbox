@@ -491,7 +491,7 @@ test.describe("Input Glyph Creator", () => {
 
     // The grid, not the heading beside it: both carry the field's name, and so
     // does the reset control once the source is overridden here.
-    await expectPicked(panel, "Background source", "Shape");
+    await expectPicked(panel, "Background source", "Rounded rect");
 
     const imageName = await uploadImage(page);
     await tile(panel, "Background source", imageName).click();

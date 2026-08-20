@@ -201,12 +201,31 @@ from any Catalog becomes pickable.
 
 ## Consequences
 
-- The picker grids show the two `BackgroundSource` variants that are not art —
-  `none` and `shape` — as fixed tiles at the head of the grid, so one control
-  still presents all four variants as the `<select>` did. The grid itself knows
-  nothing about Assets: tiles arrive already drawn, which is what lets those two
-  sit in it without the grid needing a notion of "an option that is not an
-  Asset".
+- The picker grids show the `BackgroundSource` variants that are not art as
+  fixed tiles at the head of the grid, so one control still presents every
+  variant as the `<select>` did. The grid itself knows nothing about Assets:
+  tiles arrive already drawn, which is what lets them sit in it without the grid
+  needing a notion of "an option that is not an Asset".
+- **Each picker ends with a tile that opens the window.** Separating having from
+  picking costs a trip when the user discovers mid-style that the art they want
+  isn't in the project yet, and "go to the menu bar" is a poor answer from
+  inside the grid. The trailing tile is that trip, taken from where the need is
+  noticed. It does not weaken §1: the tile opens the window and picks nothing,
+  and the window still assigns nothing on the way back. It rides in the grid as
+  an option rather than sitting beside it as a button so there is one keyboard
+  model — arrow past the last upload, press Enter — and its key is intercepted
+  before the selection changes, so the picker still holds only values.
+- **A drawn primitive is a tile, and there are three of them.** `shape` is one
+  variant of the union but three things on screen, so it appears as one tile per
+  `BackgroundShape` rather than a single "Shape" tile beside a radio set naming
+  which. A gallery exists so the user picks art they can see, and the one choice
+  that is already a picture had been the only one still picked blind, in two
+  gestures. That makes a tile the first control here to write two cascade fields
+  — `backgroundSource` and `shape` — with two consequences the panel carries:
+  its reset clears both, and `shape` is written only when the pick changes it,
+  so coming off a tile onto the primitive already in force doesn't pin a value
+  that was still being inherited. Only `none` is left carrying a word rather
+  than a picture, having no picture to carry.
 - **A picker offers only art the scope can actually draw.** `bumper` and
   `trigger` are authored by the pads and by nothing else, with no shared drawing
   behind them, so a Keyboard Glyph asking for one resolves to no art and the

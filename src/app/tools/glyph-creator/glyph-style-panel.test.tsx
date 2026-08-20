@@ -18,6 +18,7 @@ import {
   authoredBackgroundsFor,
 } from "@/lib/glyph/symbols";
 import type {
+  BackgroundShape,
   BackgroundSource,
   FontAsset,
   ImageAsset,
@@ -56,7 +57,9 @@ function renderPanel({
   onClose = vi.fn(),
   dispatch = vi.fn(),
   onUploadFont = vi.fn(async () => uploadedFont),
+  onOpenAssets = vi.fn(),
   source,
+  shape,
   project = createDefaultProject(),
   glyph: target = glyph,
   override = {},
@@ -64,15 +67,26 @@ function renderPanel({
   onClose?: () => void;
   dispatch?: () => void;
   onUploadFont?: (file: File) => Promise<FontAsset>;
+  onOpenAssets?: () => void;
   source?: BackgroundSource;
+  /** The resolved primitive, which decides which shape tile reads as picked. */
+  shape?: BackgroundShape;
   project?: Project;
   glyph?: SelectedGlyph;
   override?: StyleOverride;
 } = {}) {
   const base = project.style;
-  const style = source
-    ? { ...base, background: { ...base.background, source } }
-    : base;
+  const style =
+    source || shape
+      ? {
+          ...base,
+          background: {
+            ...base.background,
+            ...(source ? { source } : {}),
+            ...(shape ? { shape } : {}),
+          },
+        }
+      : base;
   const props = {
     project,
     dispatch,
@@ -81,12 +95,14 @@ function renderPanel({
     override,
     onClose,
     onUploadFont,
+    onOpenAssets,
   };
   const { rerender } = render(<GlyphStylePanel {...props} />);
   return {
     dispatch,
     onClose,
     onUploadFont,
+    onOpenAssets,
     /** Re-render the same panel with a tile applied. */
     withTile: (tile: BackgroundSource) =>
       rerender(
@@ -163,7 +179,9 @@ describe("GlyphStylePanel", () => {
       source: { kind: "authored", backgroundId: "bumper" },
     });
     expect(selectedSource()).toContain("Bumper");
-    await pickSource("Shape");
+    // The primitive already resolved here, so the pick says only "stop using the
+    // tile" — the shape it would name is the one already in force.
+    await pickSource("Rounded rect");
     expect(dispatch).toHaveBeenCalledWith({
       type: "patch-style",
       scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
@@ -171,14 +189,52 @@ describe("GlyphStylePanel", () => {
     });
   });
 
-  it("hides the shape controls while a tile supplies the shape", () => {
+  it("picks the source and the primitive in one gesture", async () => {
+    const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
+      source: { kind: "authored", backgroundId: "bumper" },
+    });
+    await pickSource("Circle");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
+      patch: {
+        background: { source: { kind: "shape" }, shape: "circle" },
+      },
+    });
+  });
+
+  it("leaves the primitive falling up when the pick doesn't change it", async () => {
+    // Coming off a tile onto the primitive already in force: the tier below
+    // says "circle", so pinning it here would freeze a value that was still
+    // inherited — which pressing the already-checked radio never did either.
+    const { dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
+      source: { kind: "authored", backgroundId: "bumper" },
+      shape: "circle",
+    });
+    await pickSource("Circle");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
+      patch: { background: { source: { kind: "shape" } } },
+    });
+  });
+
+  it("lights the tile of the primitive the cascade resolved", () => {
+    renderPanel({ shape: "square" });
+    expect(selectedSource()).toContain("Square");
+  });
+
+  it("hides the corner radius while a tile supplies the shape", () => {
     const { withTile } = renderPanel();
-    expect(screen.getByText("Background shape")).toBeInTheDocument();
+    expect(screen.getByLabelText(/corner radius/i)).toBeInTheDocument();
 
     withTile({ kind: "authored", backgroundId: "bumper" });
-    // The tile carries its own shape and corners, so those controls go away —
-    // but fill and border stay, since they tint the tile's paint roles.
-    expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
+    // The tile carries its own shape and corners, so the radius goes away — but
+    // fill and border stay, since they tint the tile's paint roles.
     expect(screen.queryByLabelText(/corner radius/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Background fill")).toBeInTheDocument();
   });
@@ -275,15 +331,20 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
   const trigger = AUTHORED_BACKGROUNDS.find((a) => a.id === "trigger")!;
   const bumper = AUTHORED_BACKGROUNDS.find((a) => a.id === "bumper")!;
 
-  it("offers the plain shape, none, the Device's Authored Backgrounds, and each upload", () => {
+  it("offers none, each drawn primitive, the Device's Authored Backgrounds, and each upload", () => {
     renderPanel({
       project: { ...xboxProject(), images: [image] },
       glyph: xboxA,
     });
     const names = sourceOptions().map((o) => o.textContent ?? "");
-    // The two "no art" choices lead, in the order the picker declares them.
+    // "None" leads — it is the one choice with no picture — then the primitives,
+    // in the order the picker declares them, then the art.
     expect(names[0]).toContain("None");
-    expect(names[1]).toContain("Shape");
+    expect(names.slice(1, 4)).toEqual([
+      expect.stringContaining("Rounded rect"),
+      expect.stringContaining("Square"),
+      expect.stringContaining("Circle"),
+    ]);
     for (const a of authoredBackgroundsFor(["xbox"]))
       expect(names.some((n) => n.includes(a.label))).toBe(true);
     expect(names.some((n) => n.includes(image.fileName))).toBe(true);
@@ -296,8 +357,9 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     const names = sourceOptions().map((o) => o.textContent ?? "");
     expect(names.some((n) => n.includes("Bumper"))).toBe(false);
     expect(names.some((n) => n.includes("Trigger"))).toBe(false);
+    // The choices that are not art are always offered: they need no Device.
     expect(names[0]).toContain("None");
-    expect(names[1]).toContain("Shape");
+    expect(names[1]).toContain("Rounded rect");
   });
 
   it("points the Background at an uploaded image", async () => {
@@ -353,12 +415,15 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
 
   it("hides every Background control while nothing is drawn", () => {
     const { withTile } = renderPanel();
-    expect(screen.getByText("Background shape")).toBeInTheDocument();
+    expect(screen.getByLabelText(/corner radius/i)).toBeInTheDocument();
 
     withTile({ kind: "none" });
     // Nothing is drawn, so there is nothing left to configure — not even the
-    // paints, which an Authored tile would still use.
-    expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
+    // paints, which an Authored tile would still use. The grid itself stays:
+    // it is the way back.
+    expect(
+      screen.getByRole("listbox", { name: "Background source" }),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText(/corner radius/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Background fill")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/border width/i)).not.toBeInTheDocument();
@@ -370,6 +435,17 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     expect(
       screen.queryByLabelText("Upload tile image"),
     ).not.toBeInTheDocument();
+  });
+
+  it("ends the grid with a tile that opens the Assets window", async () => {
+    const { onOpenAssets, dispatch } = renderPanel();
+    const names = sourceOptions().map((o) => o.textContent ?? "");
+    expect(names.at(-1)).toContain("Add images");
+
+    await pickSource("Add images");
+    expect(onOpenAssets).toHaveBeenCalled();
+    // It is a way out of the grid, not a value: nothing was picked.
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 
@@ -405,11 +481,13 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
   });
 
   it("shows no image tiles until something has been uploaded", () => {
+    // The label, and the way to get some art. The sentence that used to say so
+    // is gone: the tile is the same instruction, in the place it applies.
     renderPanel();
-    expect(renderSourceOptions()).toHaveLength(1);
-    expect(
-      screen.getByText(/upload an image in the assets window/i),
-    ).toBeInTheDocument();
+    expect(renderSourceOptions().map((o) => o.textContent ?? "")).toEqual([
+      expect.stringContaining("Label"),
+      expect.stringContaining("Add images"),
+    ]);
   });
 
   it("points the Glyph at an uploaded image", async () => {
@@ -454,6 +532,20 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     expect(screen.queryByLabelText("Upload image")).not.toBeInTheDocument();
   });
 
+  it("ends the grid with a tile that opens the Assets window", async () => {
+    // The picker with nothing to pick is where the user most needs the way
+    // there: a project with no uploads offers a label, a Symbol, and this.
+    const { onOpenAssets, dispatch } = renderPanel({
+      project: xboxProject(),
+      glyph: xboxA,
+    });
+    expect(renderSourceOptions().at(-1)?.textContent).toContain("Add images");
+
+    await pickRenderSource("Add images");
+    expect(onOpenAssets).toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("offers no reset while the Glyph just inherits its Render Source", () => {
     renderPanel({ project: xboxProject(), glyph: xboxA });
     expect(
@@ -496,6 +588,7 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
         style={style}
         override={{}}
         onUploadFont={vi.fn(async () => uploadedFont)}
+        onOpenAssets={vi.fn()}
       />,
     );
   }
@@ -515,13 +608,51 @@ describe("StyleControls — the Background source at each scope (ADR-0012 §2)",
     ).toBeInTheDocument();
   });
 
-  it("hides the shape controls under a tile at Glyph scope", () => {
+  it("resets both fields one tile can set", async () => {
+    // A shape tile writes the source and the primitive, so its reset undoes
+    // both — otherwise half the pick survives a control that says "reset".
+    const dispatch = vi.fn();
+    const project = xboxProject();
+    const scope: StyleScope = {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "xbox-a",
+    };
+    render(
+      <StyleControls
+        project={project}
+        dispatch={dispatch}
+        scope={scope}
+        style={project.style}
+        override={{
+          background: { source: { kind: "shape" }, shape: "circle" },
+        }}
+        onUploadFont={vi.fn(async () => uploadedFont)}
+        onOpenAssets={vi.fn()}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /reset background source/i }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "clear-style",
+      scope,
+      field: "backgroundSource",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "clear-style",
+      scope,
+      field: "shape",
+    });
+  });
+
+  it("hides the shape's own controls under a tile at Glyph scope", () => {
     // The source shown really is the one drawn, so a tile supplies the shape.
     renderAt(
       { tier: "glyph", deviceIndex: 0, glyphId: "xbox-lb" },
       { kind: "authored", backgroundId: "bumper" },
     );
-    expect(screen.queryByText("Background shape")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/corner radius/i)).not.toBeInTheDocument();
   });
 });
 

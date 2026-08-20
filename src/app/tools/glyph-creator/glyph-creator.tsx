@@ -345,6 +345,15 @@ export function GlyphCreator() {
   }
 
   /**
+   * Open the Assets window. Reached from the menu bar and from the trailing tile
+   * in each picker, which is the way to more art from where the user notices
+   * they need it — the pickers themselves still only pick (ADR-0014 §1).
+   */
+  function openAssets() {
+    assetsWindowRef.current?.showModal();
+  }
+
+  /**
    * Take an uploaded image into the project: register its bytes for drawing, add
    * it to the shared manifest, and persist it so it survives a reload (ADR-0008).
    * Resolves to the manifest entry. Nothing is pointed at it here: an upload
@@ -611,6 +620,7 @@ export function GlyphCreator() {
                       style={scopeStyle}
                       override={scopeOverride}
                       onUploadFont={onUploadFont}
+                      onOpenAssets={openAssets}
                     />
                   </div>
                 </PanelSection>
@@ -627,6 +637,7 @@ export function GlyphCreator() {
               override={overrideAt(project, selectedGlyphScope)}
               onClose={() => setSelectedGlyph(null)}
               onUploadFont={onUploadFont}
+              onOpenAssets={openAssets}
             />
           )}
         </div>
@@ -706,7 +717,7 @@ export function GlyphCreator() {
         onDelete={onDelete}
         onPresets={() => presetPickerRef.current?.showModal()}
         onExport={() => exportDialogRef.current?.showModal()}
-        onOpenAssets={() => assetsWindowRef.current?.showModal()}
+        onOpenAssets={openAssets}
       />
 
       <AssetsWindow

@@ -1,6 +1,7 @@
 "use client";
 
 import { ListBox, ListBoxItem, type Selection } from "react-aria-components";
+import { Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ImageAsset } from "@/lib/glyph/types";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,17 @@ export interface AssetGridItem {
  * terminal default — so the pair lives here rather than once per picker.
  */
 const IMAGE_KEY = "image:";
+
+/**
+ * The trailing tile that opens the Assets window.
+ *
+ * It rides in the grid as an option rather than sitting outside as a button:
+ * that keeps one keyboard model, so arrowing past the last upload lands on it
+ * and Enter opens the window. Pressing it never changes the selection — the
+ * grid is controlled, and this key is intercepted before `onSelect` — so the
+ * picker still holds only values, and uploading still happens in the window.
+ */
+const ADD_KEY = "add-assets";
 
 /** The tiles for the project's uploaded images, in manifest order. */
 export function imageTiles(images: ImageAsset[]): AssetGridItem[] {
@@ -64,6 +76,7 @@ export function AssetGrid({
   items,
   selectedKey,
   onSelect,
+  onAdd,
   className,
 }: {
   /** Accessible name — these grids sit inside a Field with a visible label. */
@@ -72,14 +85,28 @@ export function AssetGrid({
   /** The currently picked tile, or `null` when the value is not in the grid. */
   selectedKey: string | null;
   onSelect: (key: string) => void;
+  /** Open the Assets window. Adds the trailing tile that leads there. */
+  onAdd?: () => void;
   className?: string;
 }) {
+  const tiles = onAdd
+    ? [
+        ...items,
+        {
+          key: ADD_KEY,
+          label: "Add images",
+          art: <Plus aria-hidden className="size-5" />,
+        },
+      ]
+    : items;
+
   function onSelectionChange(keys: Selection) {
     // "all" is unreachable in single-selection mode, and an empty set means the
     // user re-pressed the selected tile. Neither is a new choice, and treating
     // the empty set as one would clear a property that has no empty value.
     if (keys === "all") return;
     const [first] = [...keys];
+    if (first === ADD_KEY) return onAdd?.();
     if (typeof first === "string") onSelect(first);
   }
 
@@ -93,9 +120,9 @@ export function AssetGrid({
       disallowEmptySelection
       selectedKeys={selectedKey === null ? [] : [selectedKey]}
       onSelectionChange={onSelectionChange}
-      items={items}
+      items={tiles}
       className={cn(
-        "grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-2 rounded-md border border-input bg-surface-base p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-2 rounded-md border border-input bg-surface-base p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >
@@ -109,6 +136,10 @@ export function AssetGrid({
               isSelected
                 ? "border-ring bg-surface-hover"
                 : "border-transparent hover:bg-surface-hover",
+              // Dashed, and never lit: it is a way out of the grid, not a value
+              // the grid can hold.
+              item.key === ADD_KEY &&
+                "border-dashed border-input text-muted-foreground",
               isFocusVisible && "ring-2 ring-ring",
             )
           }
