@@ -86,6 +86,18 @@ export function imageReferences(
 }
 
 /**
+ * Just the ids something references — "is this used?" without "used where?".
+ *
+ * The Assets window asks only this, and ADR-0014 §1 has it never learn what a
+ * `StyleScope` is. Handing it the full {@link imageReferences} map would put
+ * scopes in its hands and invite a per-Glyph count, which §5 rejects: a count
+ * means two different things depending on the tier that set the reference.
+ */
+export function usedImageIds(project: Project): Set<string> {
+  return new Set(imageReferences(project).keys());
+}
+
+/**
  * The manifest rows nothing references — exactly what a sweep may drop.
  *
  * Derived from the **manifest** rather than from the references, so a reference

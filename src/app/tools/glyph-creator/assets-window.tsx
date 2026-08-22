@@ -4,12 +4,12 @@ import { useId, type Dispatch } from "react";
 import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { Button } from "@/components/ui/button";
 import { pickableFonts } from "@/lib/glyph/fonts";
-import { imageReferences, unusedImages } from "@/lib/glyph/image-refs";
+import { unusedImages, usedImageIds } from "@/lib/glyph/image-refs";
 import type { ProjectAction } from "@/lib/glyph/project";
 import type { ImageAsset, Project } from "@/lib/glyph/types";
 import { AssetArt } from "./asset-art";
 import { ConfirmButton } from "./confirm-button";
-import { ImageUploadField } from "./image-upload-field";
+import { FONT_ACCEPT, IMAGE_ACCEPT, UploadField } from "./upload-field";
 
 /**
  * The **Assets window**: where the project's art is *had* (ADR-0014).
@@ -136,7 +136,10 @@ function ImagesSection({
   onUploadImage: (file: File) => Promise<ImageAsset>;
   onRemoveImages: (ids: string[]) => void;
 }) {
-  const used = imageReferences(project);
+  const used = usedImageIds(project);
+  // Computed here as well as in the reducer: the button needs the count, and the
+  // bytes need the ids. `sweep-unused-images` recomputes rather than taking this
+  // list, so the config side cannot be talked into dropping a referenced row.
   const unused = unusedImages(project);
 
   function remove(ids: string[], action: ProjectAction) {
@@ -202,9 +205,10 @@ function ImagesSection({
         </ul>
       )}
 
-      <ImageUploadField
+      <UploadField
         label="Upload an image"
-        hint="It joins the project and can then be picked in the Style panel."
+        accept={IMAGE_ACCEPT}
+        hint="PNG, JPEG, WebP, or SVG. Uploads stay in your browser. It joins the project and can then be picked in the Style panel."
         onUpload={(file) => void onUploadImage(file)}
       />
     </div>
@@ -225,7 +229,6 @@ function FontsSection({
   onUploadFont: (file: File) => Promise<{ family: string }>;
 }) {
   const fonts = pickableFonts(project);
-  const uploadId = useId();
 
   return (
     <div className="flex flex-col gap-4">
@@ -252,27 +255,14 @@ function FontsSection({
         ))}
       </ul>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={uploadId} className="text-sm font-medium">
-          Upload a font
-        </label>
-        <input
-          id={uploadId}
-          type="file"
-          accept=".ttf,.otf,.woff,.woff2,font/*"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            // A rejection already shows as a status message in the editor, so it
-            // is swallowed here rather than left unhandled.
-            if (file) void onUploadFont(file).catch(() => undefined);
-            e.target.value = "";
-          }}
-          className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-surface-base file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-surface-hover"
-        />
-        <p className="text-xs text-muted-foreground">
-          TTF, OTF, WOFF, or WOFF2. Uploads stay in your browser.
-        </p>
-      </div>
+      {/* A rejection already shows as a status message in the editor, so it is
+          swallowed here rather than left unhandled. */}
+      <UploadField
+        label="Upload a font"
+        accept={FONT_ACCEPT}
+        hint="TTF, OTF, WOFF, or WOFF2. Uploads stay in your browser."
+        onUpload={(file) => void onUploadFont(file).catch(() => undefined)}
+      />
     </div>
   );
 }

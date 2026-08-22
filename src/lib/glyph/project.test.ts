@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { projectReducer, type ProjectAction } from "@/lib/glyph/project";
 import {
+  DEFAULT_BACKGROUND,
   DEFAULT_FONT_FAMILY,
   DEFAULT_STYLE,
   createDefaultProject,
@@ -156,6 +157,92 @@ describe("projectReducer — devices (#5)", () => {
       { type: "toggle-device", catalogId: "xbox" },
     );
     expect(next.devices.map((d) => d.name)).toEqual(["Keyboard"]);
+  });
+
+  // Adding a Device can strand the Project base: `bumper` is authored by the
+  // pads and by nothing else, so a Keyboard arriving in a pad-only project
+  // leaves a base source it cannot draw (ADR-0014 §4).
+  describe("a Project-tier source the new Device cannot draw", () => {
+    /** A pad-only project whose base Background draws the bumper tile. */
+    function padsWithBumper(): Project {
+      return run(
+        base(),
+        { type: "toggle-device", catalogId: "xbox" },
+        { type: "toggle-device", catalogId: "keyboard" },
+        {
+          type: "patch-style",
+          scope: { tier: "project" },
+          patch: {
+            background: {
+              source: { kind: "authored", backgroundId: "bumper" },
+            },
+          },
+        },
+      );
+    }
+
+    it("copies it down to the Devices already present, and defaults the base", () => {
+      const next = run(padsWithBumper(), {
+        type: "toggle-device",
+        catalogId: "keyboard",
+      });
+
+      // The value moved a tier; it did not disappear and nothing restyled.
+      expect(next.style.background.source).toEqual(DEFAULT_BACKGROUND.source);
+      const xbox = next.devices.find((d) => d.catalogId === "xbox");
+      expect(xbox?.style.background?.source).toEqual({
+        kind: "authored",
+        backgroundId: "bumper",
+      });
+    });
+
+    it("does not hand the arriving Device a source it cannot draw", () => {
+      const next = run(padsWithBumper(), {
+        type: "toggle-device",
+        catalogId: "keyboard",
+      });
+      const keyboard = next.devices.find((d) => d.catalogId === "keyboard");
+      expect(keyboard?.style.background?.source).toBeUndefined();
+    });
+
+    it("leaves a Device that already overrides the field alone", () => {
+      // It was ignoring the base anyway, so writing to it would clobber a
+      // choice the user made.
+      const own = { kind: "shape" } as const;
+      const next = run(
+        padsWithBumper(),
+        {
+          type: "patch-style",
+          scope: { tier: "device", deviceIndex: 0 },
+          patch: { background: { source: own } },
+        },
+        { type: "toggle-device", catalogId: "keyboard" },
+      );
+      const xbox = next.devices.find((d) => d.catalogId === "xbox");
+      expect(xbox?.style.background?.source).toEqual(own);
+    });
+
+    it("leaves the base alone when every Device can draw it", () => {
+      const next = run(padsWithBumper(), {
+        type: "toggle-device",
+        catalogId: "playstation",
+      });
+      expect(next.style.background.source).toEqual({
+        kind: "authored",
+        backgroundId: "bumper",
+      });
+    });
+
+    it("defaults the base when there is no Device to receive it", () => {
+      // Nothing was drawing the source either, so this is still no restyle.
+      const next = run(
+        padsWithBumper(),
+        { type: "toggle-device", catalogId: "xbox" },
+        { type: "toggle-device", catalogId: "keyboard" },
+      );
+      expect(next.devices.map((d) => d.catalogId)).toEqual(["keyboard"]);
+      expect(next.style.background.source).toEqual(DEFAULT_BACKGROUND.source);
+    });
   });
 });
 

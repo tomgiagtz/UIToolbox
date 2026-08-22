@@ -217,7 +217,7 @@ export interface ScopeRenderSource {
    *
    * The id rather than a `hasSymbol` boolean, because the picker both hides the
    * Symbol option when there is none — offering it would silently resolve back
-   * to the label — and has to *draw* the Symbol on its tile (ADR-0014 §5). A
+   * to the label — and has to *draw* the Symbol on its tile (ADR-0014 §7). A
    * boolean answered the first question and left the second needing a second
    * lookup of the same Catalog entry.
    */

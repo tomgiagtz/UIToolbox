@@ -132,6 +132,27 @@ not restyle: a per-Device shape default (a rounded rect on a keyboard, a circle
 on a pad) is a **look**, so it is Preset payload under ADR-0012 and filed
 separately, not a side effect of a delete.
 
+Adding a **Device** raises the same case from the other end. `bumper` and
+`trigger` are authored by the pads and by nothing else, so a Keyboard arriving in
+a pad-only project strands a Project-tier authored source: the pads still draw
+it, but the new Device resolves to no art. The value comes **down** rather than
+away — copied onto every Device that has no source of its own, with the base
+taking the default — so only the tier holding it moves and nothing already on
+screen changes appearance. A Device that already overrides the field keeps its
+own choice, since it was ignoring the base anyway. With no Devices to receive it
+there was nothing drawing it either, so defaulting the base alone is still no
+restyle.
+
+It does not climb back up when that Device is removed again. Re-establishing it
+as a project-wide default is a manual round trip — set the Project tier, then
+reset the Device override — and that is the intended cost: a rise-back-up would
+be a second implicit style write, which is exactly what this section and §5 both
+push against.
+
+Only `background.source` is demoted. It is the one Project-tier field a Device
+can fail to honour; the base carries no `renderSource` at all, and everything
+else it holds is drawable by every Device.
+
 ### 5. Removal is always explicit
 
 Two gestures, both user-driven, deliberately asymmetric:
@@ -183,6 +204,53 @@ entry stays a file an OS recognises.
 ADR-0010 makes this safe to ship: an existing `img-1.png` id still validates as a
 string and still resolves, because nothing parses an id except the allocator.
 
+### 7. The picker is a gallery of what the scope can draw
+
+The artwork `<select>`s become grids of the art itself (#45), which decides three
+things about what a grid contains.
+
+**Every variant of the union is a tile, including the ones that are not art.**
+`none` and the drawn primitives head the grid, so one control still presents
+every choice the `<select>` did. The grid itself knows nothing about Assets:
+tiles arrive already drawn, which is what lets them sit in it without the grid
+needing a notion of "an option that is not an Asset".
+
+**A drawn primitive is a tile, and there are three of them.** `shape` is one
+variant of the union but three things on screen, so it appears as one tile per
+`BackgroundShape` rather than a single "Shape" tile beside a radio set naming
+which. A gallery exists so the user picks art they can see, and the one choice
+that is already a picture would otherwise be the only one still picked blind, in
+two gestures. That makes a tile the first control to write two cascade fields —
+`backgroundSource` and `shape` — with two consequences the panel carries: its
+reset clears both, and `shape` is written only when the pick changes it, so
+coming off a tile onto the primitive already in force doesn't pin a value that
+was still being inherited. Only `none` is left carrying a word rather than a
+picture, having no picture to carry.
+
+**A picker offers only art the scope can actually draw.** `bumper` and `trigger`
+are authored by the pads and by nothing else, with no shared drawing behind them,
+so a Keyboard Glyph asking for one resolves to no art and the renderer quietly
+draws the plain shape. The grid therefore filters to the tiles every Device in
+scope can draw — one Device at the Device and Glyph tiers, all of them at Project
+scope, since a Project-tier source applies to each. This answers a question #45
+left open ("should the gallery filter to the previewed Device's Symbol Set?") and
+it is the gallery's own doing: a text `<option>` merely offered a name, while a
+tile shows a picture, and a picture of art the Glyph will not draw is a promise
+the draw path breaks. §4 keeps the filter and the stored value from drifting
+apart; where they drift anyway — a stale save, a Preset naming art some Device
+lacks — the grid shows nothing picked rather than naming a tile it is not
+showing.
+
+**Each picker ends with a tile that opens the window.** Separating having from
+picking costs a trip when the user discovers mid-style that the art they want
+isn't in the project yet, and "go to the menu bar" is a poor answer from inside
+the grid. The trailing tile is that trip, taken from where the need is noticed.
+It does not weaken §1: the tile opens the window and picks nothing, and the
+window still assigns nothing on the way back. It rides in the grid as an option
+rather than sitting beside it as a button so there is one keyboard model — arrow
+past the last upload, press Enter — and its key is intercepted before the
+selection changes, so the picker still holds only values.
+
 ## What is built now
 
 The window and its **Images** section in full (#62), and the Style panel's
@@ -201,41 +269,6 @@ from any Catalog becomes pickable.
 
 ## Consequences
 
-- The picker grids show the `BackgroundSource` variants that are not art as
-  fixed tiles at the head of the grid, so one control still presents every
-  variant as the `<select>` did. The grid itself knows nothing about Assets:
-  tiles arrive already drawn, which is what lets them sit in it without the grid
-  needing a notion of "an option that is not an Asset".
-- **Each picker ends with a tile that opens the window.** Separating having from
-  picking costs a trip when the user discovers mid-style that the art they want
-  isn't in the project yet, and "go to the menu bar" is a poor answer from
-  inside the grid. The trailing tile is that trip, taken from where the need is
-  noticed. It does not weaken §1: the tile opens the window and picks nothing,
-  and the window still assigns nothing on the way back. It rides in the grid as
-  an option rather than sitting beside it as a button so there is one keyboard
-  model — arrow past the last upload, press Enter — and its key is intercepted
-  before the selection changes, so the picker still holds only values.
-- **A drawn primitive is a tile, and there are three of them.** `shape` is one
-  variant of the union but three things on screen, so it appears as one tile per
-  `BackgroundShape` rather than a single "Shape" tile beside a radio set naming
-  which. A gallery exists so the user picks art they can see, and the one choice
-  that is already a picture had been the only one still picked blind, in two
-  gestures. That makes a tile the first control here to write two cascade fields
-  — `backgroundSource` and `shape` — with two consequences the panel carries:
-  its reset clears both, and `shape` is written only when the pick changes it,
-  so coming off a tile onto the primitive already in force doesn't pin a value
-  that was still being inherited. Only `none` is left carrying a word rather
-  than a picture, having no picture to carry.
-- **A picker offers only art the scope can actually draw.** `bumper` and
-  `trigger` are authored by the pads and by nothing else, with no shared drawing
-  behind them, so a Keyboard Glyph asking for one resolves to no art and the
-  renderer quietly draws the plain shape. The grid therefore filters to the tiles
-  every Device in scope can draw — one Device at the Device and Glyph tiers, all
-  of them at Project scope, since a Project-tier source applies to each. This
-  answers a question #45 left open ("should the gallery filter to the previewed
-  Device's Symbol Set?") and it is the gallery's own doing: a text `<option>`
-  merely offered a name, while a tile shows a picture, and a picture of art the
-  Glyph will not draw is a promise the draw path breaks.
 - An uploaded **font** is an Asset with the same one-way manifest and no removal.
   This ADR says where it belongs; building it is a follow-up issue rather than a
   silent omission.

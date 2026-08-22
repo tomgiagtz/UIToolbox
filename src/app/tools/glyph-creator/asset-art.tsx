@@ -5,18 +5,7 @@ import { getImageBlob } from "@/lib/glyph/images";
 import { recolorSymbolSvg, type RoleColors } from "@/lib/glyph/symbol-render";
 import { getSymbolAsset, getSymbolSvg } from "@/lib/glyph/symbols";
 
-/**
- * One **Asset**'s artwork, drawn small (ADR-0014).
- *
- * The single place a gallery tile's art comes from, shared by the Style panel's
- * pickers and the Assets window so the two cannot draw the same Asset
- * differently.
- *
- * Rendered as **inline SVG or an `<img>`, never a canvas**. A canvas would mean
- * threading the rasterization caches through the picker for art that is never
- * exported, and it would draw nothing under jsdom — where these components are
- * tested — so a tile would be untestable for the same reason `AtlasPreview` is.
- */
+/** Which Asset {@link AssetArt} should draw, and on which Device where it varies. */
 export type AssetArtSpec =
   | { kind: "image"; id: string }
   | { kind: "symbol"; id: string; device?: string }
@@ -63,6 +52,18 @@ const GALLERY_PAINTS: RoleColors = {
   secondary: "#cbd5e1",
 };
 
+/**
+ * One **Asset**'s artwork, drawn small (ADR-0014).
+ *
+ * The single place a gallery tile's art comes from, shared by the Style panel's
+ * pickers and the Assets window so the two cannot draw the same Asset
+ * differently.
+ *
+ * Rendered as **inline SVG or an `<img>`, never a canvas**. A canvas would mean
+ * threading the rasterization caches through the picker for art that is never
+ * exported, and it would draw nothing under jsdom — where these components are
+ * tested — so a tile would be untestable for the same reason `AtlasPreview` is.
+ */
 export function AssetArt({
   spec,
   className = "block size-full",

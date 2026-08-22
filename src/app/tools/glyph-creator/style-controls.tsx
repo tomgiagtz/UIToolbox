@@ -106,7 +106,7 @@ function backgroundFromKey(
  * shape, a shipped **Authored Background**, or one of the project's uploaded
  * tile images (issue #22).
  *
- * A grid of the tiles themselves rather than a list of ids (ADR-0014 §5, #45).
+ * A grid of the tiles themselves rather than a list of ids (ADR-0014 §7, #45).
  * The drawn primitives are tiles in it too — one each, drawn as themselves —
  * because a picker of pictures has no reason to send the user to a second
  * control for the one choice that is already a picture. Only `none` heads the
@@ -169,6 +169,15 @@ function BackgroundSourceField({
     ...imageTiles(images),
   ];
 
+  // `tileKey` always names something, but the grid only carries what this scope
+  // can draw. A Project-tier authored source normally comes down a tier when a
+  // Device that cannot draw it arrives (ADR-0014 §4), so the two only disagree
+  // for a value that reached the project from outside — a stale save, or a
+  // Preset naming art some Device lacks. Saying "nothing here" beats naming a
+  // tile that is not in the grid.
+  const picked = tileKey(source, shape);
+  const selectedKey = items.some((item) => item.key === picked) ? picked : null;
+
   return (
     // Full row: a gallery in one third of the panel truncates every caption.
     <div className="col-span-full flex flex-col gap-1.5">
@@ -181,7 +190,7 @@ function BackgroundSourceField({
       <AssetGrid
         label="Background source"
         items={items}
-        selectedKey={tileKey(source, shape)}
+        selectedKey={selectedKey}
         onSelect={(key) => onChange(backgroundFromKey(key, shape))}
         onAdd={onOpenAssets}
       />

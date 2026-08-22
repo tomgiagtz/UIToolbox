@@ -25,7 +25,7 @@ import { ResetButton } from "./controls-ui";
  * bundled Symbol, or one of the project's custom images.
  *
  * A grid of the art itself rather than radios and a filename dropdown, so the
- * user picks something they can see (ADR-0014 §5, #45). The label has no artwork
+ * user picks something they can see (ADR-0014 §7, #45). The label has no artwork
  * to show, so its tile shows the word — an empty tile would read as art that
  * failed to load.
  *

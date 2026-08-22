@@ -56,15 +56,18 @@ export function imageIdFromKey(key: string): string | null {
 
 /**
  * A single-select grid of picture tiles, replacing the artwork `<select>`s
- * (ADR-0014 §5, #45) so the user picks art they can see.
+ * (ADR-0014 §7, #45) so the user picks art they can see.
  *
  * The component itself knows nothing about **Assets**: tiles are handed in
- * already drawn. That is what lets a Background picker put its two non-art
- * choices — `none` and `shape` — at the head of the same grid without the grid
- * needing a notion of "an option that isn't an Asset", so one control still
- * presents every variant of the union as the `<select>` it replaces did. The
- * tile helpers above are the Asset-aware half, kept beside it because both
- * pickers share them.
+ * already drawn. That is what lets a Background picker head the grid with the
+ * choices that are not uploads — `none`, and one tile per drawn primitive —
+ * without the grid needing a notion of "an option that isn't an Asset". The tile
+ * helpers above are the Asset-aware half, kept beside it because both pickers
+ * share them.
+ *
+ * What the caller offers is the caller's business: a picker filters to the art
+ * its scope can draw, and passes `selectedKey` as `null` when the stored value
+ * is not among the tiles.
  *
  * Built on `react-aria-components`' `ListBox` rather than a grid of buttons: a
  * picker is a listbox, and this way arrow-key navigation, typeahead, and the

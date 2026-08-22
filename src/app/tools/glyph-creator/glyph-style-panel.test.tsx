@@ -392,6 +392,18 @@ describe("GlyphStylePanel — Background source (issue #22)", () => {
     });
   });
 
+  it("shows nothing picked when the value is not in the grid", () => {
+    // A Keyboard cannot draw a bumper, so the tile is filtered out. `tileKey`
+    // still names it, and pointing `selectedKeys` at a tile that isn't there
+    // would leave the grid claiming a selection it cannot show. The state is
+    // only reachable from outside — a stale save, or a Preset naming art some
+    // Device lacks — since a Device toggle demotes it (ADR-0014 §4).
+    renderPanel({ source: { kind: "authored", backgroundId: bumper.id } });
+    expect(
+      sourceOptions().some((o) => o.getAttribute("aria-selected") === "true"),
+    ).toBe(false);
+  });
+
   it('turns the Background off entirely with "none"', async () => {
     const { dispatch } = renderPanel({
       project: xboxProject(),

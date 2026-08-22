@@ -9,6 +9,7 @@ import {
 } from "@/lib/glyph/defaults";
 import { imageReferences, unusedImages } from "@/lib/glyph/image-refs";
 import type { Preset, PresetDevice } from "@/lib/glyph/presets";
+import { authoredBackgroundsFor } from "@/lib/glyph/symbols";
 import {
   NO_OVERRIDE,
   clearOverrideField,
@@ -103,10 +104,13 @@ export function projectReducer(
       return clearStyle(project, action.scope, action.field);
 
     case "toggle-device":
-      return {
-        ...project,
-        devices: toggleDevice(project.devices, action.catalogId),
-      };
+      return demoteUndrawableBackground(
+        {
+          ...project,
+          devices: toggleDevice(project.devices, action.catalogId),
+        },
+        project.devices,
+      );
 
     case "apply-preset":
       return applyPreset(project, action.preset, new Set(action.taken));
@@ -230,6 +234,62 @@ function removeImages(project: Project, ids: string[]): Project {
     }
   }
   return next;
+}
+
+/**
+ * Keep the Project base's Background source drawable by every Device present.
+ *
+ * `bumper` and `trigger` are authored by the pads and by nothing else, so adding
+ * a Keyboard to a pad-only project strands a Project-tier authored source: the
+ * pads still draw it, but the new Device resolves to no art and the picker can no
+ * longer honestly offer it. Rather than restyle — which §4 forbids for the
+ * structurally identical removal case — the source is copied **down** onto every
+ * Device that has none of its own, and the base takes the default. Only the tier
+ * holding the value moves; nothing already on screen changes appearance.
+ *
+ * `recipients` is the Device list from *before* the toggle, so a Device arriving
+ * in this very action never inherits a source it cannot draw.
+ *
+ * With no Devices to receive it there was nothing drawing it either, so
+ * defaulting the base alone is still no restyle and needs no carve-out. The value
+ * does not climb back up if the new Device is later removed: that would be a
+ * second implicit style write, which is what §4 and §5 both push against.
+ */
+function demoteUndrawableBackground(
+  project: Project,
+  recipients: DeviceConfig[],
+): Project {
+  const { source } = project.style.background;
+  if (source.kind !== "authored") return project;
+
+  const present = project.devices.map((device) => device.catalogId);
+  const drawable = authoredBackgroundsFor(present).some(
+    (tile) => tile.id === source.backgroundId,
+  );
+  if (drawable) return project;
+
+  const receiving = new Set(recipients.map((device) => device.catalogId));
+  return {
+    ...project,
+    style: {
+      ...project.style,
+      background: {
+        ...project.style.background,
+        source: DEFAULT_BACKGROUND.source,
+      },
+    },
+    devices: project.devices.map((device) =>
+      // A Device already overriding the field is ignoring the base anyway, so
+      // writing to it would clobber a real choice.
+      receiving.has(device.catalogId) &&
+      device.style.background?.source === undefined
+        ? {
+            ...device,
+            style: mergeOverride(device.style, { background: { source } }),
+          }
+        : device,
+    ),
+  };
 }
 
 /** Patch the export settings block, leaving the rest of the project alone. */
