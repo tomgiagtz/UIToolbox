@@ -43,12 +43,14 @@ import {
   replaceImages,
   saveConfig,
   saveFont,
+  deleteImages,
   saveImage,
   type PersistedImage,
 } from "@/lib/glyph/project-store";
 import {
   clearImages,
   getImageBlob,
+  forgetImage,
   imageAssetFor,
   putImage,
 } from "@/lib/glyph/images";
@@ -60,6 +62,7 @@ import {
 } from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
 import { ExportDialog, type ExportSelection } from "./export-dialog";
+import { AssetsWindow } from "./assets-window";
 import { PresetPicker } from "./preset-picker";
 import { ProjectMenuBar } from "./project-menu-bar";
 import { PanelSection } from "./panel-section";
@@ -136,6 +139,7 @@ export function GlyphCreator() {
   // The Export modal is opened from the menu bar but owned here, since it edits
   // the project's naming alongside the selection.
   const exportDialogRef = useRef<HTMLDialogElement>(null);
+  const assetsWindowRef = useRef<HTMLDialogElement>(null);
   // Likewise the Preset picker: it is opened from the menu bar and dispatches an
   // `apply-preset` against the project this component owns.
   const presetPickerRef = useRef<HTMLDialogElement>(null);
@@ -341,20 +345,41 @@ export function GlyphCreator() {
   }
 
   /**
+   * Open the Assets window. Reached from the menu bar and from the trailing tile
+   * in each picker, which is the way to more art from where the user notices
+   * they need it — the pickers themselves still only pick (ADR-0014 §1).
+   */
+  function openAssets() {
+    assetsWindowRef.current?.showModal();
+  }
+
+  /**
    * Take an uploaded image into the project: register its bytes for drawing, add
    * it to the shared manifest, and persist it so it survives a reload (ADR-0008).
-   * Resolves to the manifest entry, and it's the caller that decides what the
-   * upload is *for* — a Glyph's Render Source or a Background tile (#20, #22) —
-   * since only it knows the scope being edited.
+   * Resolves to the manifest entry. Nothing is pointed at it here: an upload
+   * joins the project, and the Style panel picks it afterwards (ADR-0014).
    */
   async function onUploadImage(file: File): Promise<ImageAsset> {
-    const asset = imageAssetFor(project.images, file);
+    const asset = imageAssetFor(file);
     // Register before dispatching, so the redraw the patch triggers already has
     // bytes to rasterize.
     putImage(asset.id, file);
     dispatch({ type: "add-image", image: asset });
     await saveImage({ ...asset, blob: file });
     return asset;
+  }
+
+  /**
+   * Forget the bytes behind images the reducer has just dropped, in the two
+   * layers it cannot reach: the runtime registry and IndexedDB (ADR-0014 §6).
+   *
+   * The manifest row goes first — the caller has already dispatched it — because
+   * that is the layer the draw path consults, so a Glyph falls back on the next
+   * render rather than after an await.
+   */
+  function onRemoveImages(ids: string[]) {
+    for (const id of ids) forgetImage(id);
+    void deleteImages(ids);
   }
 
   /**
@@ -594,8 +619,8 @@ export function GlyphCreator() {
                       scope={validScope}
                       style={scopeStyle}
                       override={scopeOverride}
-                      onUploadImage={onUploadImage}
                       onUploadFont={onUploadFont}
+                      onOpenAssets={openAssets}
                     />
                   </div>
                 </PanelSection>
@@ -611,8 +636,8 @@ export function GlyphCreator() {
               style={resolveScopeStyle(project, selectedGlyphScope)}
               override={overrideAt(project, selectedGlyphScope)}
               onClose={() => setSelectedGlyph(null)}
-              onUploadImage={onUploadImage}
               onUploadFont={onUploadFont}
+              onOpenAssets={openAssets}
             />
           )}
         </div>
@@ -692,6 +717,16 @@ export function GlyphCreator() {
         onDelete={onDelete}
         onPresets={() => presetPickerRef.current?.showModal()}
         onExport={() => exportDialogRef.current?.showModal()}
+        onOpenAssets={openAssets}
+      />
+
+      <AssetsWindow
+        ref={assetsWindowRef}
+        project={project}
+        dispatch={dispatch}
+        onUploadImage={onUploadImage}
+        onUploadFont={onUploadFont}
+        onRemoveImages={onRemoveImages}
       />
 
       <PresetPicker

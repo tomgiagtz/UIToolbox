@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clearImages,
+  forgetImage,
   ensureImageBitmap,
   getImageBitmap,
   getImageBlob,
@@ -8,32 +9,50 @@ import {
   type ImageAppearance,
   imageAppearanceKey,
   imageAssetFor,
-  nextImageId,
+  mintImageId,
   putImage,
 } from "@/lib/glyph/images";
-import type { ImageAsset } from "@/lib/glyph/types";
 
 afterEach(() => clearImages());
 
-function asset(id: string): ImageAsset {
-  return { id, fileName: `${id}`, type: "image/png" };
-}
-
-describe("nextImageId", () => {
-  it("numbers from 1 and keeps the upload's extension", () => {
-    expect(nextImageId([], "arrow.png")).toBe("img-1.png");
-    expect(nextImageId([], "logo.SVG")).toBe("img-1.svg");
+describe("mintImageId — ids are minted, never counted (ADR-0014 §6)", () => {
+  it("keeps a readable stem from the upload's filename, and its extension", () => {
+    expect(mintImageId("Arrow Up.png")).toMatch(/^arrow_up-[a-z0-9]+\.png$/);
+    expect(mintImageId("logo.SVG")).toMatch(/^logo-[a-z0-9]+\.svg$/);
   });
 
-  it("counts past the highest existing id, not the asset count", () => {
-    // Ids outlive the assets that used them (an image can be removed), so a
-    // reused id would silently repoint some other Glyph's Render Source.
-    const images = [asset("img-1.png"), asset("img-7.svg")];
-    expect(nextImageId(images, "next.png")).toBe("img-8.png");
+  it("reads a hyphen in the filename as a word gap, not as 'minus'", () => {
+    // `slugify` spells punctuation out for Sprite Names, where `-` is an Input
+    // a player presses. In a filename it is only a gap, and `test_minus_image`
+    // is not the name the user recognises.
+    expect(mintImageId("test-image.svg")).toMatch(
+      /^test_image-[a-z0-9]+\.svg$/,
+    );
+  });
+
+  it("never returns the same id twice for the same filename", () => {
+    // The whole point: an id freed by a removal must not come back. Counting
+    // above the manifest did exactly that, because removal shrinks the manifest.
+    const ids = new Set(
+      Array.from({ length: 50 }, () => mintImageId("same.png")),
+    );
+    expect(ids.size).toBe(50);
+  });
+
+  it("takes no manifest, so the manifest cannot influence the id", () => {
+    // Stated as a test because it is the fix: the previous allocator read the
+    // manifest to find the highest number, and removal shrinks the manifest.
+    expect(mintImageId).toHaveLength(1);
   });
 
   it("falls back to a generic extension when the filename has none", () => {
-    expect(nextImageId([], "clipboard")).toBe("img-1.img");
+    expect(mintImageId("clipboard")).toMatch(/^clipboard-[a-z0-9]+\.img$/);
+  });
+
+  // "~" is unmapped punctuation, so it separates tokens and leaves none behind.
+  // ("???" would not do: slugify expands "?" to the word "question".)
+  it("falls back to a generic stem when nothing normalizable is left", () => {
+    expect(mintImageId("~~~.png")).toMatch(/^glyph-[a-z0-9]+\.png$/);
   });
 });
 
@@ -42,8 +61,8 @@ describe("imageAssetFor", () => {
     const file = new File([new Uint8Array([1, 2])], "My Art.PNG", {
       type: "image/png",
     });
-    expect(imageAssetFor([], file)).toEqual({
-      id: "img-1.png",
+    expect(imageAssetFor(file)).toEqual({
+      id: expect.stringMatching(/^my_art-[a-z0-9]+\.png$/),
       fileName: "My Art.PNG",
       type: "image/png",
     });
@@ -61,6 +80,14 @@ describe("the runtime image registry", () => {
   it("reports an unknown id as absent", () => {
     expect(hasImage("img-9.png")).toBe(false);
     expect(getImageBlob("img-9.png")).toBeUndefined();
+  });
+
+  it("forgets one image without touching the others", () => {
+    putImage("a.png", new Blob(["a"]));
+    putImage("b.png", new Blob(["b"]));
+    forgetImage("a.png");
+    expect(hasImage("a.png")).toBe(false);
+    expect(hasImage("b.png")).toBe(true);
   });
 
   it("drops everything on clear", () => {

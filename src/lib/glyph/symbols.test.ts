@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTHORED_BACKGROUNDS,
+  authoredBackgroundsFor,
   SYMBOL_ASSETS,
   SYMBOLS,
   getSymbolAsset,
@@ -140,5 +141,38 @@ describe("shared → device override cascade", () => {
 
   it("returns undefined for an unknown id", () => {
     expect(resolveSymbolSvg(svgs, "nope", "playstation")).toBeUndefined();
+  });
+});
+
+describe("authoredBackgroundsFor — only tiles a Device can draw (#45, #62)", () => {
+  it("offers the pads their shoulder tiles", () => {
+    expect(authoredBackgroundsFor(["xbox"]).map((a) => a.id)).toEqual([
+      "bumper",
+      "trigger",
+    ]);
+    expect(authoredBackgroundsFor(["playstation"]).map((a) => a.id)).toEqual([
+      "bumper",
+      "trigger",
+    ]);
+  });
+
+  it("offers the Keyboard none of them", () => {
+    // `bumper` and `trigger` are authored by the pads and by nothing else, with
+    // no shared drawing to fall back to, so a Keyboard Glyph asking for one
+    // resolves to no art and draws the plain shape.
+    expect(authoredBackgroundsFor(["keyboard"])).toEqual([]);
+  });
+
+  it("offers a mixed selection only what all of them draw", () => {
+    // A Project-tier source applies to every Device, so a tile only the pad can
+    // draw is still a broken promise to the Keyboard.
+    expect(authoredBackgroundsFor(["keyboard", "xbox"])).toEqual([]);
+    expect(
+      authoredBackgroundsFor(["xbox", "playstation"]).map((a) => a.id),
+    ).toEqual(["bumper", "trigger"]);
+  });
+
+  it("constrains nothing when no Device is named", () => {
+    expect(authoredBackgroundsFor([])).toEqual(AUTHORED_BACKGROUNDS);
   });
 });

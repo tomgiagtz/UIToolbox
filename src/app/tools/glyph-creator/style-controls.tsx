@@ -14,7 +14,7 @@ import type {
   StyleOverride,
   StyleScope,
 } from "@/lib/glyph/style";
-import { AUTHORED_BACKGROUNDS } from "@/lib/glyph/symbols";
+import { authoredBackgroundsFor } from "@/lib/glyph/symbols";
 import type {
   BackgroundShape,
   BackgroundSource,
@@ -25,108 +25,174 @@ import type {
 import { CellSizeField } from "./cell-size-field";
 import { ColorField, Field, ResetButton, inputClass } from "./controls-ui";
 import { FontField } from "./font-field";
-import { ImageUploadField } from "./image-upload-field";
+import { AssetArt } from "./asset-art";
+import {
+  AssetGrid,
+  imageIdFromKey,
+  imageKey,
+  imageTiles,
+  type AssetGridItem,
+} from "./asset-grid";
 import { RenderSourceControls } from "./render-source-controls";
 import { TransformField } from "./transform-field";
 
-const SHAPES: { value: BackgroundShape; label: string }[] = [
-  { value: "rounded-rect", label: "Rounded rect" },
-  { value: "square", label: "Square" },
-  { value: "circle", label: "Circle" },
+/** Tile key prefix for a drawn primitive, which pins `shape` as well as a source. */
+const SHAPE_KEY = "shape:";
+
+/**
+ * The drawn primitives, one tile each in the source grid.
+ *
+ * A primitive has a picture — it *is* one — so it earns a tile the way art does,
+ * and picking it is one gesture rather than "Shape", then which shape.
+ */
+const SHAPES: { value: BackgroundShape; label: string; art: string }[] = [
+  { value: "rounded-rect", label: "Rounded rect", art: "rounded-md" },
+  { value: "square", label: "Square", art: "rounded-none" },
+  { value: "circle", label: "Circle", art: "rounded-full" },
 ];
 
-/** Stable option value for a {@link BackgroundSource} in the source picker. */
-function sourceValue(source: BackgroundSource): string {
+/**
+ * Stable tile key for what a Background draws. The shape is half of it, because
+ * the primitives are three tiles rather than one: `{ kind: "shape" }` on its own
+ * doesn't say which of them is lit.
+ */
+function tileKey(source: BackgroundSource, shape: BackgroundShape): string {
   if (source.kind === "authored") return `authored:${source.backgroundId}`;
-  if (source.kind === "image") return `image:${source.imageId}`;
+  if (source.kind === "image") return imageKey(source.imageId);
   if (source.kind === "none") return "none";
-  return "shape";
+  return `${SHAPE_KEY}${shape}`;
+}
+
+/** What picking a tile writes: always a source, plus a shape where one is drawn. */
+interface BackgroundPick {
+  source: BackgroundSource;
+  shape?: BackgroundShape;
 }
 
 /**
- * Read a picked option value back into a {@link BackgroundSource}.
+ * Read a picked tile key back into the Background fields it sets.
  *
- * Nothing is carried over from the current source: a source says only where the
- * art comes from, and orientation left the union for the tile layer's transform
- * (ADR-0012 §2), so replacing one wholesale can't disturb it.
+ * Nothing is carried over from the source it replaces: a source says only where
+ * the art comes from, and orientation left the union for the tile layer's
+ * transform (ADR-0012 §2), so replacing one wholesale can't disturb it.
+ *
+ * `shape` rides along only when the pick changes it — which is what the radio set
+ * this grid replaces did, a radio not firing when you press the one already
+ * checked. It matters at an override tier: writing it regardless would pin a
+ * Glyph's shape to the value it was inheriting, on a click that changed nothing.
  */
-function sourceFromValue(value: string): BackgroundSource {
+function backgroundFromKey(
+  value: string,
+  shape: BackgroundShape,
+): BackgroundPick {
   if (value.startsWith("authored:")) {
-    return { kind: "authored", backgroundId: value.slice("authored:".length) };
+    const backgroundId = value.slice("authored:".length);
+    return { source: { kind: "authored", backgroundId } };
   }
-  if (value.startsWith("image:")) {
-    return { kind: "image", imageId: value.slice("image:".length) };
-  }
-  // Before the fallback: "shape" is what an unrecognized value becomes, so a
-  // missed branch here would round-trip "none" into a drawn shape.
-  if (value === "none") return { kind: "none" };
-  return { kind: "shape" };
+  const imageId = imageIdFromKey(value);
+  if (imageId) return { source: { kind: "image", imageId } };
+  // Before the fallback: a drawn primitive is what an unrecognized key becomes,
+  // so a missed branch here would round-trip "none" into one.
+  if (value === "none") return { source: { kind: "none" } };
+  const picked = SHAPES.find((s) => `${SHAPE_KEY}${s.value}` === value)?.value;
+  return {
+    source: { kind: "shape" },
+    ...(picked && picked !== shape ? { shape: picked } : {}),
+  };
 }
 
 /**
  * Picks where a Glyph's Background tile comes from: nothing at all, the drawn
- * shape, a shipped **Authored Background**, or one of the user's uploaded tile
- * images (issue #22).
+ * shape, a shipped **Authored Background**, or one of the project's uploaded
+ * tile images (issue #22).
  *
- * Picking "Shape" writes an explicit `{ kind: "shape" }` rather than clearing the
- * field: a Catalog **seed** outranks it, so bumpers and triggers would otherwise
- * just fall back to their authored tile.
+ * A grid of the tiles themselves rather than a list of ids (ADR-0014 §7, #45).
+ * The drawn primitives are tiles in it too — one each, drawn as themselves —
+ * because a picker of pictures has no reason to send the user to a second
+ * control for the one choice that is already a picture. Only `none` heads the
+ * grid carrying a word, having no picture to carry.
+ *
+ * Picking a primitive writes an explicit `{ kind: "shape" }` rather than
+ * clearing the field: a Catalog **seed** outranks it, so bumpers and triggers
+ * would otherwise just fall back to their authored tile.
+ *
+ * Uploading is the **Assets window**'s job, not this control's: this picks from
+ * what the project has.
  */
 function BackgroundSourceField({
   source,
+  shape,
   images,
+  devices,
   onChange,
   onReset,
-  onUploadImage,
+  onOpenAssets,
 }: {
   /** The effective source at the current scope. */
   source: BackgroundSource;
+  /** The effective primitive, which says which shape tile reads as picked. */
+  shape: BackgroundShape;
   /** The project's uploaded images, any of which can serve as a tile. */
   images: ImageAsset[];
-  onChange: (source: BackgroundSource) => void;
+  /**
+   * The Catalog ids this scope covers — one Device, or every Device in the
+   * project at Project scope. Both which tiles may be offered and which Set they
+   * are drawn from come from it.
+   */
+  devices: string[];
+  onChange: (pick: BackgroundPick) => void;
   onReset?: () => void;
-  /** Hand an uploaded file to the editor; resolves to its manifest entry. */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
+  onOpenAssets: () => void;
 }) {
+  const items: AssetGridItem[] = [
+    {
+      key: "none",
+      label: "None",
+      art: <span className="text-xs font-medium">None</span>,
+    },
+    ...SHAPES.map((s) => ({
+      key: `${SHAPE_KEY}${s.value}`,
+      label: s.label,
+      art: <span className={`size-8 border-2 border-current ${s.art}`} />,
+    })),
+    // Only tiles every Device in scope can draw: offering the rest would draw a
+    // picture the Glyph then falls back from, silently.
+    ...authoredBackgroundsFor(devices).map((tile) => ({
+      key: `authored:${tile.id}`,
+      label: tile.label,
+      art: (
+        <AssetArt
+          spec={{ kind: "authored", id: tile.id, device: devices[0] }}
+        />
+      ),
+    })),
+    ...imageTiles(images),
+  ];
+
+  // `tileKey` always names something, but the grid only carries what this scope
+  // can draw. A Project-tier authored source normally comes down a tier when a
+  // Device that cannot draw it arrives (ADR-0014 §4), so the two only disagree
+  // for a value that reached the project from outside — a stale save, or a
+  // Preset naming art some Device lacks. Saying "nothing here" beats naming a
+  // tile that is not in the grid.
+  const picked = tileKey(source, shape);
+  const selectedKey = items.some((item) => item.key === picked) ? picked : null;
+
   return (
-    <div className="flex flex-col gap-3">
-      <Field label="Background source" onReset={onReset}>
-        {(id) => (
-          <select
-            id={id}
-            className={inputClass}
-            value={sourceValue(source)}
-            onChange={(e) => onChange(sourceFromValue(e.target.value))}
-          >
-            <option value="none">None (content only)</option>
-            <option value="shape">Shape</option>
-            <optgroup label="Authored">
-              {AUTHORED_BACKGROUNDS.map((a) => (
-                <option key={a.id} value={`authored:${a.id}`}>
-                  {a.label}
-                </option>
-              ))}
-            </optgroup>
-            {images.length > 0 && (
-              <optgroup label="Uploaded">
-                {images.map((image) => (
-                  <option key={image.id} value={`image:${image.id}`}>
-                    {image.fileName}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-        )}
-      </Field>
-      <ImageUploadField
-        label="Upload tile image"
-        hint="The image becomes this scope's tile, fitted to the cell."
-        onUpload={(file) => {
-          void onUploadImage(file).then((asset) =>
-            onChange({ kind: "image", imageId: asset.id }),
-          );
-        }}
+    // Full row: a gallery in one third of the panel truncates every caption.
+    <div className="col-span-full flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">Background source</span>
+        {onReset ? (
+          <ResetButton label="Background source" onReset={onReset} />
+        ) : null}
+      </div>
+      <AssetGrid
+        label="Background source"
+        items={items}
+        selectedKey={selectedKey}
+        onSelect={(key) => onChange(backgroundFromKey(key, shape))}
+        onAdd={onOpenAssets}
       />
     </div>
   );
@@ -239,8 +305,8 @@ export function StyleControls({
   override,
   showCellSize = true,
   showRenderSource = false,
-  onUploadImage,
   onUploadFont,
+  onOpenAssets,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -260,10 +326,10 @@ export function StyleControls({
    * the sidebar addresses whole tiers.
    */
   showRenderSource?: boolean;
-  /** Hand an uploaded tile image to the editor; resolves to its manifest entry. */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
   /** Hand an uploaded font to the editor; resolves to its manifest entry. */
   onUploadFont: (file: File) => Promise<FontAsset>;
+  /** Open the Assets window, which the pickers' trailing tile leads to. */
+  onOpenAssets: () => void;
 }) {
   const bg = style.background;
   const fg = style.foreground;
@@ -271,6 +337,16 @@ export function StyleControls({
     showRenderSource && scope.tier === "glyph"
       ? resolveScopeRenderSource(project, scope)
       : undefined;
+  // Which Device's Set the gallery draws from: a bare cell id resolves through
+  // the shared->device cascade, so a pad's own bumper art shows on its own tiles.
+  // A Project-tier source applies to every Device, so the tiles it may offer are
+  // the ones they can all draw; a Device or Glyph scope answers for one.
+  const devices =
+    scope.tier === "project"
+      ? project.devices.map((d) => d.catalogId)
+      : [project.devices[scope.deviceIndex]?.catalogId].filter(
+          (id) => id !== undefined,
+        );
   const showsShapeFields = bg.source.kind === "shape";
   /**
    * Show the fill and border controls: they paint an Authored tile's sentinel
@@ -289,6 +365,22 @@ export function StyleControls({
   const patch = (styleFields: StyleOverride) =>
     dispatch({ type: "patch-style", scope, patch: styleFields });
 
+  /**
+   * The grid's reset. One tile can set two fields, so resetting it clears both —
+   * but only while a primitive is what it shows: an override on `shape` under a
+   * tile source is invisible here, and a reset that changed nothing on screen
+   * would be worse than one that isn't offered.
+   */
+  const resetSource = resetFor("backgroundSource");
+  const resetShape = showsShapeFields ? resetFor("shape") : undefined;
+  const resetTile =
+    resetSource || resetShape
+      ? () => {
+          resetSource?.();
+          resetShape?.();
+        }
+      : undefined;
+
   return (
     <div className="flex flex-col gap-6">
       {/* One group per drawing layer, in the order they are painted. Every
@@ -297,47 +389,13 @@ export function StyleControls({
       <LayerGroup title="Background">
         <BackgroundSourceField
           source={bg.source}
+          shape={bg.shape}
           images={project.images}
-          onChange={(source) => patch({ background: { source } })}
-          onReset={resetFor("backgroundSource")}
-          onUploadImage={onUploadImage}
+          devices={devices}
+          onChange={(pick) => patch({ background: pick })}
+          onReset={resetTile}
+          onOpenAssets={onOpenAssets}
         />
-
-        {/* A tile carries its own shape and corner treatment, and "none" draws no
-          primitive at all, so the shape and radius controls would be inert under
-          either. Fill and border survive a tile — they tint it through its
-          sentinel paint roles. */}
-        {showsShapeFields && (
-          <fieldset className="flex flex-col gap-1.5">
-            <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-              <span>Background shape</span>
-              {resetFor("shape") && (
-                <ResetButton
-                  label="Background shape"
-                  onReset={resetFor("shape")!}
-                />
-              )}
-            </legend>
-            <div className="flex flex-wrap gap-3">
-              {SHAPES.map((s) => (
-                <label
-                  key={s.value}
-                  className="flex items-center gap-1.5 text-sm"
-                >
-                  <input
-                    type="radio"
-                    name="bg-shape"
-                    value={s.value}
-                    checked={bg.shape === s.value}
-                    onChange={() => patch({ background: { shape: s.value } })}
-                    className="size-4"
-                  />
-                  {s.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
 
         <TransformField
           label="Background transform"
@@ -422,10 +480,11 @@ export function StyleControls({
             dispatch={dispatch}
             scope={scope}
             source={renderSource.source}
-            hasSymbol={renderSource.hasSymbol}
+            symbolId={renderSource.symbolId}
+            deviceCatalogId={devices[0]}
             images={project.images}
             override={override}
-            onUploadImage={onUploadImage}
+            onOpenAssets={onOpenAssets}
           />
         )}
 
@@ -539,8 +598,8 @@ export function GlyphStylePanel({
   style,
   override,
   onClose,
-  onUploadImage,
   onUploadFont,
+  onOpenAssets,
 }: {
   project: Project;
   dispatch: Dispatch<ProjectAction>;
@@ -550,14 +609,10 @@ export function GlyphStylePanel({
   /** Raw sparse override stored on the Glyph. */
   override: StyleOverride;
   onClose: () => void;
-  /**
-   * Hand an uploaded image to the editor, which registers and persists it and
-   * resolves to its manifest entry — the caller then points whatever it is
-   * editing (a Render Source, a Background tile) at that id.
-   */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
   /** Hand an uploaded font to the editor; resolves to its manifest entry. */
   onUploadFont: (file: File) => Promise<FontAsset>;
+  /** Open the Assets window, which the pickers' trailing tile leads to. */
+  onOpenAssets: () => void;
 }) {
   const scope: StyleScope = {
     tier: "glyph",
@@ -603,8 +658,8 @@ export function GlyphStylePanel({
           override={override}
           showCellSize={false}
           showRenderSource
-          onUploadImage={onUploadImage}
           onUploadFont={onUploadFont}
+          onOpenAssets={onOpenAssets}
         />
       </div>
     </section>

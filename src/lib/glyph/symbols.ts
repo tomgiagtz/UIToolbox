@@ -97,6 +97,28 @@ export const AUTHORED_BACKGROUNDS: SymbolAsset[] = SYMBOL_ASSETS.filter(
 );
 
 /**
+ * The Authored Backgrounds that **every** Device in `devices` can actually draw.
+ *
+ * A cell id is bare, and a Set is what scopes it to a Device, so not every
+ * Device draws every tile: `bumper` and `trigger` are authored by the pads and
+ * by nothing else — there is no shared drawing to fall back to — so a Keyboard
+ * Glyph asking for a bumper tile resolves to no art and the renderer quietly
+ * draws the plain shape instead. A picker that offered it anyway would be
+ * promising something the draw path will not deliver, which is the silent
+ * degrade #45 named.
+ *
+ * Every Device rather than any, because the caller may be editing a tier that
+ * covers several: a Project-tier source applies to every Device in the project,
+ * so a tile only some of them can draw is still a broken promise to the rest.
+ * An empty `devices` constrains nothing and everything qualifies.
+ */
+export function authoredBackgroundsFor(devices: string[]): SymbolAsset[] {
+  return AUTHORED_BACKGROUNDS.filter((tile) =>
+    devices.every((device) => getSymbolSvg(tile.id, device) !== undefined),
+  );
+}
+
+/**
  * Whether an asset id's art depicts a whole cluster rather than its own Input
  * (see {@link SymbolAsset.depicts}). Unknown ids are not cluster art.
  */
