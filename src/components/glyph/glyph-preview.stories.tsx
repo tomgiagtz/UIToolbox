@@ -3,10 +3,13 @@ import { GlyphPreview } from "./glyph-preview";
 import type { Foreground } from "@/lib/glyph/style";
 import type { Background } from "@/lib/glyph/types";
 import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_WEIGHT,
   DEFAULT_SYMBOL_PAINTS,
   DEFAULT_TEXT_COLOR,
   identityTransform,
 } from "@/lib/glyph/defaults";
+import { WithGlyphFont } from "@/stories/fixtures";
 
 const roundedRect: Background = {
   source: { kind: "shape" },
@@ -19,9 +22,8 @@ const roundedRect: Background = {
 
 const foreground: Foreground = {
   transform: identityTransform(),
-  // A generic CSS family, so the story draws without registering a FontFace.
-  fontFamily: "sans-serif",
-  fontWeight: 400,
+  fontFamily: DEFAULT_FONT_FAMILY,
+  fontWeight: DEFAULT_FONT_WEIGHT,
   textColor: DEFAULT_TEXT_COLOR,
   symbolPaints: DEFAULT_SYMBOL_PAINTS,
 };
@@ -29,7 +31,15 @@ const foreground: Foreground = {
 const meta = {
   title: "Glyph/GlyphPreview",
   component: GlyphPreview,
+  tags: ["autodocs"],
   parameters: { layout: "centered" },
+  decorators: [
+    (Story) => (
+      <WithGlyphFont>
+        <Story />
+      </WithGlyphFont>
+    ),
+  ],
   args: {
     label: "Space",
     cellSize: 128,
