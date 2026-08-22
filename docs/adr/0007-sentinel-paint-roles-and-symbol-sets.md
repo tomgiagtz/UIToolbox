@@ -9,6 +9,10 @@
   tier is deleted, so "the Device tier may set uniform role defaults; per-Input
   defaults outrank it" loses its middle term), and the brand palette no longer
   ships at a Catalog tier — it is Preset payload.
+- **Amended by:** ADR-0014 — the Symbols sub-tool of §5 gets its home: the Symbol
+  Sets section of the Assets window. The vocabulary is sharpened with it — a Set
+  is the **shipment**, and each of its cells (a Symbol or an Authored Background)
+  is an **Asset**.
 
 ## Context
 

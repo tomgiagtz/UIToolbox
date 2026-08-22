@@ -51,13 +51,34 @@ a Symbol pick on an Input that ships none, or an image whose bytes aren't presen
 The label is retained either way, since it stays the Input's identity and the
 source of its **Sprite Name**.
 
+### Asset
+
+One thing the project can draw with that exists independently of any **Glyph**
+pointing at it: a **custom image**, an uploaded **Font**, a **Symbol**, an
+**Authored Background**. An Asset either **ships** with the tool — code, always
+present, never travels — or is **uploaded**: the user's own bytes, manifested on
+the project and carried in the ZIP. Only an upload can be removed.
+
+A **Symbol Set** is not an Asset but the **shipment** that carries them — one SVG
+holding many cells, each cell one Asset. A **Sprite Atlas** is not one either: it
+is output, not input.
+
+Assets are managed in the **Assets window** and picked in the Style panel. The
+window answers what the project _has_; the panel answers what one Glyph _draws_
+(ADR-0014).
+
+_Avoid:_ "asset bundle" — the shipment is a **Symbol Set**, and **Export Bundle**
+already names what one Export produces.
+
 ### Custom image
 
 A user-uploaded image or SVG drawn as one Glyph's Render Source. Unlike a
 **Symbol** it is never recoloured — it draws as authored — and unlike a Symbol it
 is fitted to its own aspect rather than filling the square content box. The
 project config carries only a **manifest** describing the image; the bytes live
-in IndexedDB and travel inside the ZIP project save file (ADR-0008).
+in IndexedDB and travel inside the ZIP project save file (ADR-0008). It is
+removed explicitly, from the **Assets window**, which drops the manifest row,
+the bytes, and every cascade reference to it at once (ADR-0014).
 
 ### Font
 
@@ -131,7 +152,10 @@ _depicts_, not how it is built.
 ### Symbol Set
 
 A self-contained atlas of Symbols — one SVG whose id'd cells sit on a fixed
-square grid, each painted in **Paint Role** sentinels. Cell ids are **bare**: the
+square grid, each painted in **Paint Role** sentinels. A Set carries both cell
+kinds — foreground **Symbols** and **Authored Backgrounds** — so its name
+under-describes it; each cell is one **Asset**, and the Set is the shipment that
+delivers them. Cell ids are **bare**: the
 Set a cell lives in is what scopes it to a **Device**, so the Xbox and
 PlayStation Sets both author `bumper` and `dpad-right` and each resolves to its
 own art. A Set of genuinely cross-device art is the fallback for any Device that
@@ -387,3 +411,8 @@ See `docs/adr/`:
   promised by a live preview rather than by its picker card. Amends ADR-0006,
   ADR-0007 §3, ADR-0008 and ADR-0009 — the glossary entries above are flagged
   where they run ahead of the code.
+- **ADR-0014** — _Accepted, partly built._ One **Assets window** owns _having_
+  art — upload, removal, Symbol Set import — while the Style panel keeps
+  _picking_ it. Closes ADR-0008's missing per-image delete, mints image ids
+  instead of counting them, and names the home ADR-0007 §5 asked for. Amends
+  ADR-0008, ADR-0011 and ADR-0007 §5.

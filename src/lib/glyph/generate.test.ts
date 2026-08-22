@@ -332,15 +332,17 @@ describe("Render Source per Input (issue #20)", () => {
         deviceIndex: 0,
         glyphId: "xbox-a",
       }),
-      // Rendering its label, but its Symbol is still there to switch back to.
-    ).toEqual({ source: { kind: "label" }, hasSymbol: true });
+      // Rendering its label, but its Symbol is still there to switch back to —
+      // and named, because the picker has to draw it on a tile (ADR-0014 §7).
+    ).toEqual({ source: { kind: "label" }, symbolId: "a" });
     expect(
       resolveScopeRenderSource(proj, {
         tier: "glyph",
         deviceIndex: 0,
         glyphId: "c0",
       }),
-    ).toEqual({ source: { kind: "label" }, hasSymbol: false });
+      // A custom Input has no Catalog entry, so no Symbol is offered at all.
+    ).toEqual({ source: { kind: "label" }, symbolId: undefined });
     // A Device or Project scope has no single Input, so there's nothing to resolve.
     expect(resolveScopeRenderSource(proj, { tier: "project" })).toBeNull();
   });
@@ -838,5 +840,109 @@ describe("the Catalog seed's rank, end to end (ADR-0012 §2)", () => {
     const { lb, a } = resolved(proj);
     expect(a.style.background.source).toEqual({ kind: "none" });
     expect(lb.style.background.source).toEqual(BUMPER);
+  });
+});
+
+describe("a removed image falls back, end to end (ADR-0014, #62)", () => {
+  /** An Xbox project drawing one image as a Symbol-bearing Glyph's source. */
+  function withImageOn(glyphId: string) {
+    const image = {
+      id: "art-a1b2.png",
+      fileName: "art.png",
+      type: "image/png",
+    };
+    return [
+      { type: "add-image", image } as const,
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId },
+        patch: {
+          foreground: { renderSource: { kind: "image", imageId: image.id } },
+        },
+      } as const,
+    ];
+  }
+
+  it("falls back to the Catalog's Symbol", () => {
+    const start = projectReducer(
+      { ...createDefaultProject(), devices: [] },
+      { type: "toggle-device", catalogId: "xbox" },
+    );
+    const scope = {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "xbox-a",
+    } as const;
+
+    const used = withImageOn("xbox-a").reduce(projectReducer, start);
+    expect(resolveScopeRenderSource(used, scope)?.source).toEqual({
+      kind: "image",
+      imageId: "art-a1b2.png",
+    });
+
+    // Dropping the manifest row is what makes it fall back: the resolver checks
+    // the manifest, not the bytes.
+    const removed = projectReducer(used, {
+      type: "remove-image",
+      imageId: "art-a1b2.png",
+    });
+    expect(resolveScopeRenderSource(removed, scope)?.source).toEqual({
+      kind: "symbol",
+      symbolId: "a",
+    });
+  });
+
+  it("falls back to the label where the Catalog ships no Symbol", () => {
+    const start = [
+      { type: "toggle-device", catalogId: "xbox" } as const,
+      { type: "add-custom-input", deviceIndex: 0, label: "Paddle" } as const,
+    ].reduce(projectReducer, { ...createDefaultProject(), devices: [] });
+    const scope = {
+      tier: "glyph",
+      deviceIndex: 0,
+      glyphId: "custom-1",
+    } as const;
+
+    const used = withImageOn("custom-1").reduce(projectReducer, start);
+    const removed = projectReducer(used, {
+      type: "remove-image",
+      imageId: "art-a1b2.png",
+    });
+    expect(resolveScopeRenderSource(removed, scope)?.source).toEqual({
+      kind: "label",
+    });
+  });
+
+  it("falls a Background tile back to the tier below", () => {
+    const start = projectReducer(
+      { ...createDefaultProject(), devices: [] },
+      { type: "toggle-device", catalogId: "xbox" },
+    );
+    const image = {
+      id: "tile-c3d4.png",
+      fileName: "tile.png",
+      type: "image/png",
+    };
+    const used = [
+      { type: "add-image", image } as const,
+      {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-x" },
+        patch: { background: { source: { kind: "image", imageId: image.id } } },
+      } as const,
+    ].reduce(projectReducer, start);
+
+    const removed = projectReducer(used, {
+      type: "remove-image",
+      imageId: image.id,
+    });
+    // The Glyph override is gone, so the tile resolves from the Project base.
+    expect(
+      resolveScopeStyle(removed, {
+        tier: "glyph",
+        deviceIndex: 0,
+        glyphId: "xbox-x",
+      }).background.source,
+    ).toEqual(removed.style.background.source);
   });
 });

@@ -1,7 +1,13 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test, type Download, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Download,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import { unzipSync } from "fflate";
 import { expectNoA11yViolations } from "./axe";
 
@@ -51,6 +57,59 @@ async function exportFrom(
   const downloadPromise = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Export", exact: true }).click();
   return downloadPromise;
+}
+
+/**
+ * Upload a custom image through the Assets window.
+ *
+ * Uploading is *having* art, which is the window's job; the Style panel only
+ * *picks* from what the project already has (ADR-0014). Returns the filename,
+ * which is the caption on the tile the pickers then offer.
+ */
+async function uploadImage(page: Page, file = IMAGE_PATH): Promise<string> {
+  const name = path.basename(file);
+  await page.getByRole("button", { name: /^Assets/ }).click();
+  const assets = page.getByRole("dialog", { name: "Assets" });
+  await expect(assets).toBeVisible();
+  await assets.getByLabel("Upload an image").setInputFiles(file);
+  await expect(assets.getByText(name)).toBeVisible();
+  await assets.getByRole("button", { name: "Close" }).click();
+  await expect(assets).toBeHidden();
+  return name;
+}
+
+/** One tile in a Style panel artwork grid, by the caption under it (#45). */
+function tile(scope: Locator, grid: string, label: string): Locator {
+  return scope
+    .getByRole("listbox", { name: grid })
+    .getByRole("option", { name: label, exact: true });
+}
+
+/** Assert which tile a grid has picked — the grid replaced a `<select>`. */
+async function expectPicked(scope: Locator, grid: string, label: string) {
+  await expect(tile(scope, grid, label)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+}
+
+/**
+ * The one `images/` entry in a save, by its ZIP entry name.
+ *
+ * Ids are minted from the uploaded filename rather than counted, so the tag
+ * after the stem is not predictable — matching the stem is the most an assertion
+ * can honestly say — and that the stem is there at all is the point (ADR-0014
+ * §6). `slugify` joins words on underscores, so `test-image.svg` stems to
+ * `test_image`.
+ */
+function imageEntryName(entries: Record<string, unknown>): string {
+  const names = Object.keys(entries).filter((name) =>
+    /^images\/test_image-.+\.svg$/.test(name),
+  );
+  // Name the entries on failure: "expected 1, got 0" alone would not say
+  // whether the image was missing or merely minted under a name we misread.
+  expect(names, `entries: ${Object.keys(entries).join(" | ")}`).toHaveLength(1);
+  return names[0];
 }
 
 test.describe("Input Glyph Creator", () => {
@@ -246,8 +305,10 @@ test.describe("Input Glyph Creator", () => {
     await expect(
       page.getByRole("region", { name: /edit glyph/i }),
     ).toBeVisible();
-    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
-    await expect(page.getByRole("radio", { name: "Image" })).toBeChecked();
+    const panel = page.getByRole("region", { name: /edit glyph/i });
+    const imageName = await uploadImage(page);
+    await tile(panel, "Render Source", imageName).click();
+    await expectPicked(panel, "Render Source", imageName);
 
     // Empty the images store behind the editor's back — the runtime registry
     // still holds the bytes, exactly as it would had the write never landed.
@@ -280,8 +341,7 @@ test.describe("Input Glyph Creator", () => {
     // never shipped.
     expect(download.suggestedFilename()).toMatch(/\.zip$/);
     const entries = unzipSync(await readDownload(download));
-    expect(Object.keys(entries)).toContain("images/img-1.svg");
-    expect(entries["images/img-1.svg"].length).toBeGreaterThan(0);
+    expect(entries[imageEntryName(entries)].length).toBeGreaterThan(0);
   });
 
   test("a config-only load falls back rather than reusing the last project's image bytes", async ({
@@ -304,7 +364,14 @@ test.describe("Input Glyph Creator", () => {
       page.getByRole("region", { name: /edit glyph/i }),
     ).toBeVisible();
     const plainPixels = await pixels();
-    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+    // Uploading alone changes nothing on screen — the window never picks — so
+    // the Glyph is pointed at the new image afterwards.
+    const imageName = await uploadImage(page);
+    await tile(
+      page.getByRole("region", { name: /edit glyph/i }),
+      "Render Source",
+      imageName,
+    ).click();
     await expect
       .poll(pixels, { message: "preview should redraw with the image" })
       .not.toBe(plainPixels);
@@ -316,7 +383,7 @@ test.describe("Input Glyph Creator", () => {
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     const zipBytes = await readDownload(await downloadPromise);
     const entries = unzipSync(zipBytes);
-    expect(Object.keys(entries)).toContain("images/img-1.svg");
+    expect(entries[imageEntryName(entries)].length).toBeGreaterThan(0);
 
     // The same config as a bare JSON — what sharing a save without its assets
     // produces. Written next to the ZIP so the Load input can pick it up.
@@ -370,11 +437,12 @@ test.describe("Input Glyph Creator", () => {
       preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
     const beforePixels = await pixels();
 
-    await page.getByLabel("Upload image").setInputFiles(IMAGE_PATH);
+    const imageName = await uploadImage(page);
+    const panel = page.getByRole("region", { name: /edit glyph/i });
+    await tile(panel, "Render Source", imageName).click();
 
-    // The Glyph switched to the image, which is now the pick in the manifest.
-    await expect(page.getByRole("radio", { name: "Image" })).toBeChecked();
-    await expect(page.getByLabel("Image file")).toHaveValue(/img-1\.svg/);
+    // The Glyph switched to the image, which is now the pick in the grid.
+    await expectPicked(panel, "Render Source", imageName);
 
     // The live preview redrew with the image on the tile. Rasterization is
     // asynchronous, so poll rather than reading the canvas once.
@@ -421,14 +489,15 @@ test.describe("Input Glyph Creator", () => {
       preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
     const beforePixels = await pixels();
 
-    // Exact: once the source is overridden here, its reset control shares the
-    // field's name ("Reset Background source to inherited").
-    const source = panel.getByLabel("Background source", { exact: true });
-    await expect(source).toHaveValue("shape");
-    await panel.getByLabel("Upload tile image").setInputFiles(IMAGE_PATH);
+    // The grid, not the heading beside it: both carry the field's name, and so
+    // does the reset control once the source is overridden here.
+    await expectPicked(panel, "Background source", "Rounded rect");
+
+    const imageName = await uploadImage(page);
+    await tile(panel, "Background source", imageName).click();
 
     // The upload became this Glyph's tile.
-    await expect(source).toHaveValue(/^image:img-1\.svg$/);
+    await expectPicked(panel, "Background source", imageName);
     // Fill and border tint a shape or an Authored tile; an uploaded one draws
     // as authored, so those controls step aside.
     await expect(panel.getByLabel("Background fill")).toHaveCount(0);
@@ -452,6 +521,22 @@ test.describe("Input Glyph Creator", () => {
     await expect(
       page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
     ).toBeVisible();
+    await expectNoA11yViolations(page, testInfo);
+  });
+
+  test("the Assets window has no WCAG 2.1 AA violations", async ({
+    page,
+  }, testInfo) => {
+    // Scanned with an image in it, since an empty section is the easy case: the
+    // rows carry the art, the Used/Unused state, and the arming Remove button.
+    await page.goto("/tools/glyph-creator");
+    await expect(
+      page.getByRole("img", { name: /Keyboard Sprite Atlas preview/i }),
+    ).toBeVisible();
+    await uploadImage(page);
+
+    await page.getByRole("button", { name: /^Assets/ }).click();
+    await expect(page.getByRole("dialog", { name: "Assets" })).toBeVisible();
     await expectNoA11yViolations(page, testInfo);
   });
 });

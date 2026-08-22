@@ -5,6 +5,10 @@
 - **Amends:** ADR-0008 (custom image persistence) — it settled _where_ image bytes
   live; this settles _who owns the set_ when projects change, and _which layer_ a
   save reads from.
+- **Amended by:** ADR-0014 — the consequence below that unreferenced-image
+  accumulation "within one project is unchanged" no longer holds. Removal is
+  explicit, in the Assets window, and a load collecting garbage as a side effect
+  is now the lesser half of the story rather than the only half.
 
 ## Context
 

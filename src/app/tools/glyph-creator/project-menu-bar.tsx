@@ -24,11 +24,13 @@ interface ProjectMenuBarProps {
   onPresets: () => void;
   /** Open the Export modal; the parent owns it and the download it triggers. */
   onExport: () => void;
+  /** Open the Assets window, where the project's uploads are managed (ADR-0014). */
+  onOpenAssets: () => void;
 }
 
 /**
- * The always-visible bottom toolbar: Save / Load / Delete a project, plus the
- * primary Export action. Sticks to the bottom of the viewport so the developer
+ * The always-visible bottom toolbar: Save / Load / Delete a project, the Assets
+ * window, plus the primary Export action. Sticks to the bottom of the viewport so the developer
  * can act from anywhere in the (long) editor.
  */
 export function ProjectMenuBar({
@@ -41,6 +43,7 @@ export function ProjectMenuBar({
   onDelete,
   onPresets,
   onExport,
+  onOpenAssets,
 }: ProjectMenuBarProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +84,9 @@ export function ProjectMenuBar({
           </Button>
           <Button type="button" variant="outline" onClick={onDelete}>
             Delete
+          </Button>
+          <Button type="button" variant="outline" onClick={onOpenAssets}>
+            Assets…
           </Button>
           <Button type="button" variant="outline" onClick={onPresets}>
             Presets…

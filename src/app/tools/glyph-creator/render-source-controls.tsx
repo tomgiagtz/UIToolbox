@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type Dispatch } from "react";
+import type { Dispatch } from "react";
 import type { ResolvedRenderSource } from "@/lib/glyph/generate";
 import type { ProjectAction } from "@/lib/glyph/project";
 import { isOverrideFieldSet } from "@/lib/glyph/style";
@@ -10,67 +10,90 @@ import type {
   StyleScope,
 } from "@/lib/glyph/style";
 import type { ImageAsset } from "@/lib/glyph/types";
-import { ResetButton, inputClass } from "./controls-ui";
-import { ImageUploadField } from "./image-upload-field";
+import { AssetArt } from "./asset-art";
+import {
+  AssetGrid,
+  imageIdFromKey,
+  imageKey,
+  imageTiles,
+  type AssetGridItem,
+} from "./asset-grid";
+import { ResetButton } from "./controls-ui";
 
 /**
- * Picks a Glyph's **Render Source** (ADR-0004): its font-drawn label, its bundled
- * Symbol, or a custom image the user uploads.
+ * Picks a Glyph's **Render Source** (ADR-0004): its font-drawn label, its
+ * bundled Symbol, or one of the project's custom images.
  *
- * The choice is one more Glyph-tier entry in the Style Cascade, so it is written
- * with the same `patch-style` / `clear-style` actions as any other override and
- * gets the same "fall back up the cascade" reset control.
+ * A grid of the art itself rather than radios and a filename dropdown, so the
+ * user picks something they can see (ADR-0014 §7, #45). The label has no artwork
+ * to show, so its tile shows the word — an empty tile would read as art that
+ * failed to load.
  *
- * The label is never one of the things being replaced in the domain sense — it
- * stays the Input's identity and the source of its Sprite Name — so switching to
+ * Uploading happens in the **Assets window**, not here: this control picks from
+ * what the project has, and having is the window's job. The choice is one more
+ * Glyph-tier entry in the Style Cascade, written with the same `patch-style` /
+ * `clear-style` actions as any other override, with the same reset control.
+ *
+ * The label is never one of the things replaced in the domain sense — it stays
+ * the Input's identity and the source of its Sprite Name — so switching to
  * artwork changes only what is drawn.
  */
 export function RenderSourceControls({
   dispatch,
   scope,
   source,
-  hasSymbol,
+  symbolId,
+  deviceCatalogId,
   images,
   override,
-  onUploadImage,
+  onOpenAssets,
 }: {
   dispatch: Dispatch<ProjectAction>;
   /** The Glyph being edited. */
   scope: StyleScope;
   /** What this Glyph draws today, resolved through the cascade. */
   source: ResolvedRenderSource;
-  /** Whether the Catalog offers this Input a Symbol to switch to. */
-  hasSymbol: boolean;
+  /** The Symbol the Catalog gives this Input, if any — drawn on its tile. */
+  symbolId: string | undefined;
+  /** Which Device's Set the Symbol is drawn from (a Catalog id). */
+  deviceCatalogId: string | undefined;
   /** The project's uploaded images, any of which this Glyph can point at. */
   images: ImageAsset[];
   /** Raw sparse override at `scope`, for the reset control. */
   override: StyleOverride;
-  /**
-   * Hand an uploaded file to the editor, which registers and persists it and
-   * resolves to its manifest entry — this Glyph then draws that image.
-   */
-  onUploadImage: (file: File) => Promise<ImageAsset>;
+  /** Open the Assets window, which the grid's trailing tile leads to. */
+  onOpenAssets: () => void;
 }) {
-  const groupId = useId();
   const isOverridden = isOverrideFieldSet(override, "renderSource");
 
-  function choose(kind: ResolvedRenderSource["kind"]) {
-    if (kind === "image") {
-      // Coming back to Image restores the Glyph's own picture, not the first
-      // upload — the id survives on the override while another source is shown,
-      // so switching away and back mustn't silently repoint it.
-      const previous = override.foreground?.renderSource;
-      const imageId =
-        previous?.kind === "image" &&
-        images.some((i) => i.id === previous.imageId)
-          ? previous.imageId
-          : images[0]?.id;
-      // With an empty manifest there's nothing to point at; the picker below
-      // prompts for a file instead.
-      if (!imageId) return;
-      return patch({ kind: "image", imageId });
-    }
-    patch({ kind });
+  const items: AssetGridItem[] = [
+    {
+      key: "label",
+      label: "Label",
+      art: <span className="text-xs font-medium">Abc</span>,
+    },
+    // An Input the Catalog ships no Symbol for isn't offered one: the choice
+    // would resolve straight back to the label.
+    ...(symbolId
+      ? [
+          {
+            key: "symbol",
+            label: "Symbol",
+            art: (
+              <AssetArt
+                spec={{ kind: "symbol", id: symbolId, device: deviceCatalogId }}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...imageTiles(images),
+  ];
+
+  function onSelect(key: string) {
+    const imageId = imageIdFromKey(key);
+    if (imageId) return patch({ kind: "image", imageId });
+    if (key === "label" || key === "symbol") patch({ kind: key });
   }
 
   function patch(renderSource: RenderSourceOverride) {
@@ -82,9 +105,10 @@ export function RenderSourceControls({
   }
 
   return (
-    <fieldset className="flex flex-col gap-1.5">
-      <legend className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-        <span>Render Source</span>
+    // Full row: a gallery in one third of the panel truncates every caption.
+    <div className="col-span-full flex flex-col gap-1.5">
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="text-sm font-medium">Render Source</span>
         {isOverridden && (
           <ResetButton
             label="Render Source"
@@ -93,78 +117,27 @@ export function RenderSourceControls({
             }
           />
         )}
-      </legend>
-
-      <div className="flex flex-wrap gap-3">
-        <label className="flex items-center gap-1.5 text-sm">
-          <input
-            type="radio"
-            name={groupId}
-            checked={source.kind === "label"}
-            onChange={() => choose("label")}
-            className="size-4"
-          />
-          Label
-        </label>
-        {/* An Input the Catalog ships no Symbol for isn't offered one: the
-            choice would resolve straight back to the label. */}
-        {hasSymbol && (
-          <label className="flex items-center gap-1.5 text-sm">
-            <input
-              type="radio"
-              name={groupId}
-              checked={source.kind === "symbol"}
-              onChange={() => choose("symbol")}
-              className="size-4"
-            />
-            Symbol
-          </label>
-        )}
-        <label className="flex items-center gap-1.5 text-sm">
-          <input
-            type="radio"
-            name={groupId}
-            checked={source.kind === "image"}
-            disabled={images.length === 0}
-            onChange={() => choose("image")}
-            className="size-4"
-          />
-          Image
-        </label>
       </div>
 
-      {source.kind === "image" && images.length > 0 && (
-        <div className="mt-1.5 flex flex-col gap-1.5">
-          <label htmlFor={`${groupId}-image`} className="text-sm font-medium">
-            Image file
-          </label>
-          <select
-            id={`${groupId}-image`}
-            className={inputClass}
-            value={source.imageId}
-            onChange={(e) => patch({ kind: "image", imageId: e.target.value })}
-          >
-            {images.map((image) => (
-              <option key={image.id} value={image.id}>
-                {image.fileName}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="mt-1.5">
-        <ImageUploadField
-          label="Upload image"
-          hint="The image is drawn on this Glyph's tile; size it with Content scale below."
-          // An upload is also a choice: the Glyph draws what was just uploaded.
-          onUpload={(file) => {
-            void onUploadImage(file).then((asset) =>
-              patch({ kind: "image", imageId: asset.id }),
-            );
-          }}
-        />
-      </div>
-    </fieldset>
+      <AssetGrid
+        label="Render Source"
+        items={items}
+        selectedKey={selectedKey(source)}
+        onSelect={onSelect}
+        onAdd={onOpenAssets}
+      />
+    </div>
   );
+}
+
+/**
+ * The grid key for what the Glyph draws today.
+ *
+ * A resolved image whose id has left the manifest cannot appear here — the
+ * resolver falls back to the Symbol or label before this sees it — so the key
+ * always names a tile the grid is showing.
+ */
+function selectedKey(source: ResolvedRenderSource): string {
+  if (source.kind === "image") return imageKey(source.imageId);
+  return source.kind;
 }
