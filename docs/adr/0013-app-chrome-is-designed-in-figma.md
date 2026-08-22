@@ -23,7 +23,8 @@ de-facto second one is `inputClass`, an exported string at
 feature file.
 
 Meanwhile a Figma file already exists and is further along than the code:
-**`GlyphCreator`**, file key `Ooagmqn84uJlF2TwBtcyoD`. It holds a layout
+**[`GlyphCreator`](https://www.figma.com/design/Ooagmqn84uJlF2TwBtcyoD/GlyphCreator)**,
+file key `Ooagmqn84uJlF2TwBtcyoD`. It holds a layout
 wireframe, two `generate_figma_design` captures of the running app, annotated
 explorations of the Style panel's information architecture, six real components
 with component properties and slots, five text styles, and two colour variables.
