@@ -77,6 +77,7 @@ function project(over: Partial<Project> = {}): Project {
     style: BASE_STYLE,
     fonts: [],
     images: [],
+    sets: [],
     devices: [device(["A", "Right Stick", "→"])],
     exportSettings: BASE_EXPORT_SETTINGS,
     ...over,
@@ -276,6 +277,45 @@ describe("Render Source per Input (issue #20)", () => {
     // The bumper has no Symbol of its own — its identity is the tile — so it
     // stays label-rendered rather than borrowing another Input's art.
     expect(lb.symbolId).toBeUndefined();
+  });
+
+  it("draws a Symbol the Glyph was pinned to, not its Catalog's", () => {
+    // ADR-0015: any Glyph may draw any Symbol. Without this an imported Set's
+    // new drawings would be unreachable — nothing else can point a Glyph at one.
+    const device = xbox({
+      "xbox-a": {
+        foreground: {
+          renderSource: { kind: "symbol", symbolId: "paddle-left" },
+        },
+      },
+    });
+    const [a] = resolveDeviceInputs(device, project({ devices: [device] }));
+    expect(a.symbolId).toBe("paddle-left");
+  });
+
+  it("pins a Symbol onto an Input whose Catalog ships none", () => {
+    const device = xbox({
+      "xbox-lb": {
+        foreground: { renderSource: { kind: "symbol", symbolId: "stick" } },
+      },
+    });
+    const [, lb] = resolveDeviceInputs(device, project({ devices: [device] }));
+    expect(lb.symbolId).toBe("stick");
+  });
+
+  it("takes a pinned id at its word rather than checking the Catalog", () => {
+    // The draw path owns whether an id resolves to art: `getSymbolSvg` consults
+    // the imported Sets first, and a project's Sets are not visible from here.
+    // Degrading would make a Glyph silently draw something else instead.
+    const device = xbox({
+      "xbox-a": {
+        foreground: {
+          renderSource: { kind: "symbol", symbolId: "nothing-draws-this" },
+        },
+      },
+    });
+    const [a] = resolveDeviceInputs(device, project({ devices: [device] }));
+    expect(a.symbolId).toBe("nothing-draws-this");
   });
 
   it("carries a custom image id onto the packed placements for the compositor", () => {

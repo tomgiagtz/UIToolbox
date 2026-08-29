@@ -18,14 +18,16 @@
  */
 import { createBitmapCache, decodeToBitmap } from "@/lib/glyph/bitmap-cache";
 import type { GlyphStyle } from "@/lib/glyph/style";
+import type { PaintRole, RoleColors } from "@/lib/glyph/types";
 import { classifyPaint } from "@/lib/glyph/symbols/paint-roles.mjs";
 import { getSymbolSvg } from "@/lib/glyph/symbols";
+import { onSetArtChange } from "@/lib/glyph/symbols/set-art";
 
-/** The three paint roles a Symbol's sentinel shapes encode (ADR-0007). */
-export type PaintRole = "fill" | "border" | "secondary";
-
-/** The concrete colour each paint role resolves to for one Glyph. */
-export type RoleColors = Record<PaintRole, string>;
+// The vocabulary itself lives with the rest of the domain model, since an
+// imported Symbol Set carries roles and flags in its config and cannot depend on
+// the draw path. Re-exported here because this is where the app has always
+// spelled it.
+export type { PaintRole, RoleColors };
 
 /**
  * The colour each paint role resolves to for a Glyph's **Symbol**: the resolved
@@ -120,6 +122,18 @@ export function appearanceKey({
 }
 
 const bitmaps = createBitmapCache(appearanceKey, rasterize);
+
+// Importing, refreshing or removing a Symbol Set changes what an id draws, and a
+// cache key carries the id but not the art behind it. So the whole cache goes
+// when the registry does: the alternative is evicting by id across three
+// namespaces and every warm size, to save a refill that happens on the next
+// draw. Same trade `forgetImage` makes.
+//
+// Dropping is only half of it — the draw path re-warms from the appearance keys
+// it already holds, which have not moved. `useRenderSourceBitmaps` folds the
+// registry's version into its key for exactly that reason; the registry only
+// notifies when the *art* differs, so neither side fires on a no-op load.
+onSetArtChange(() => bitmaps.clear());
 
 /**
  * One kind of asset's draw-path pair, bound to the shared cache: its key

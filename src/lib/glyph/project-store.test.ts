@@ -1,13 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig, parseConfig, saveConfig } from "@/lib/glyph/project-store";
+import {
+  loadConfig,
+  parseConfig,
+  saveConfig,
+  serializeConfig,
+} from "@/lib/glyph/project-store";
 import {
   DEFAULT_FONT_FAMILY,
   createDefaultProject,
 } from "@/lib/glyph/defaults";
 import { projectReducer } from "@/lib/glyph/project";
-import type { Project } from "@/lib/glyph/types";
+import type { Project, SymbolSet } from "@/lib/glyph/types";
 
 const CONFIG_KEY = "uitoolbox.glyph-creator.project";
+
+/** An imported Symbol Set, as `acceptReview` would have produced it (#39). */
+const storedSet: SymbolSet = {
+  id: "set-mypad-x1",
+  name: "mypad.svg",
+  roleColors: { fill: "#2f9e44", border: "#111111", secondary: "#ffffff" },
+  cells: [
+    {
+      id: "paddle-left",
+      label: "Paddle Left",
+      labelEdited: false,
+      col: 0,
+      row: 0,
+      roles: ["fill"],
+      flags: [],
+      svg: '<svg viewBox="0 0 256 256"><circle style="fill:#f00"/></svg>',
+    },
+  ],
+};
 
 function edited(): Project {
   // A project that differs from the default across every persisted axis, so a
@@ -31,6 +55,7 @@ function edited(): Project {
     { type: "set-naming-template", template: "btn_{input}" } as const,
     { type: "set-naming-case", case: "kebab" } as const,
     { type: "set-filename-template", template: "atlas_{device}" } as const,
+    { type: "install-set", set: storedSet } as const,
   ].reduce<Project>(projectReducer, createDefaultProject());
 }
 
@@ -322,5 +347,25 @@ describe("ProjectStore — config validation", () => {
       );
       expect(parsed!.devices[0].glyphStyles).toEqual({ "key-a": {} });
     });
+  });
+});
+
+describe("ProjectStore — imported Symbol Sets (ADR-0015 §1)", () => {
+  it("round-trips a Set's art, since the config is the shipment", () => {
+    const restored = parseConfig(serializeConfig(edited()));
+    expect(restored?.sets[0].cells[0].svg).toBe(edited().sets[0].cells[0].svg);
+    expect(restored?.sets[0].roleColors.fill).toBe("#2f9e44");
+  });
+
+  it("rejects a config whose Set carries no art", () => {
+    const broken = JSON.parse(serializeConfig(edited()));
+    delete broken.sets[0].cells[0].svg;
+    expect(parseConfig(JSON.stringify(broken))).toBeNull();
+  });
+
+  it("rejects a config from before Sets existed (ADR-0010, no migration)", () => {
+    const old = JSON.parse(serializeConfig(edited()));
+    delete old.sets;
+    expect(parseConfig(JSON.stringify(old))).toBeNull();
   });
 });

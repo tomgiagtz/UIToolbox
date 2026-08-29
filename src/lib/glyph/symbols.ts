@@ -9,6 +9,11 @@
  * here, never the atlases or the codegen.
  */
 import {
+  getSetCell,
+  getSetSvg,
+  importedCellIds,
+} from "@/lib/glyph/symbols/set-art";
+import {
   SYMBOL_ASSETS,
   SYMBOL_SVGS,
 } from "@/lib/glyph/symbols/symbols.generated";
@@ -81,9 +86,14 @@ export function resolveSymbolSvg(
  * The standalone SVG markup for an asset id on an optional Device, or `undefined`
  * if not yet authored. Pass the Device's Catalog id to pick up its override of a
  * shared asset (e.g. a PlayStation-specific `dpad-up`).
+ *
+ * An **imported** Symbol Set is consulted first (#39). A user who drew a cell
+ * called `a` meant theirs, on every Device — an imported Set is a project-level
+ * shipment and has no Device to be scoped to, so it outranks the shipped art of
+ * the same name rather than sitting beside it. See `set-art.ts`.
  */
 export function getSymbolSvg(id: string, device?: string): string | undefined {
-  return resolveSymbolSvg(SYMBOL_SVGS, id, device);
+  return getSetSvg(id) ?? resolveSymbolSvg(SYMBOL_SVGS, id, device);
 }
 
 /** Every foreground Symbol (excludes Authored Backgrounds). */
@@ -124,4 +134,53 @@ export function authoredBackgroundsFor(devices: string[]): SymbolAsset[] {
  */
 export function isClusterArt(id: string | undefined): boolean {
   return id != null && byId.get(id)?.depicts === "cluster";
+}
+
+/** One Symbol a Render Source picker can offer, with the caption for its tile. */
+export interface PickableSymbol {
+  id: string;
+  label: string;
+  /** From an imported Symbol Set rather than a shipped atlas (ADR-0015). */
+  imported: boolean;
+}
+
+/**
+ * The Symbols **every** Device in `devices` can actually draw, for the Render
+ * Source picker (ADR-0015: any Glyph may draw any Symbol, not only its own
+ * Catalog's).
+ *
+ * The Device filter is {@link authoredBackgroundsFor}'s, for its reason: a cell
+ * id is bare and the atlas it lives in is what scopes it, so a Symbol only some
+ * Devices author has no shared drawing to fall back to and resolves to nothing
+ * on the rest. Offering it anyway would promise art the draw path will not
+ * deliver. Every Device rather than any, because a picker may be editing a tier
+ * that covers several.
+ *
+ * Imported cells are exempt from that filter and always qualify: an imported
+ * Set is a project-level shipment with no Device to be scoped to, so a cell the
+ * user drew answers for its id everywhere. They are listed first, and an id a
+ * Set draws is listed **once** — as the imported one, since that is the art
+ * `getSymbolSvg` will actually return for it.
+ */
+export function pickableSymbols(devices: string[]): PickableSymbol[] {
+  const imported = importedCellIds();
+  const fromSets = new Set(imported);
+  return [
+    ...imported.map((id) => ({
+      id,
+      label: getSetCell(id)?.label ?? id,
+      imported: true,
+    })),
+    ...SYMBOLS.filter(
+      (symbol) =>
+        !fromSets.has(symbol.id) &&
+        devices.every(
+          (device) => getSymbolSvg(symbol.id, device) !== undefined,
+        ),
+    ).map((symbol) => ({
+      id: symbol.id,
+      label: symbol.label,
+      imported: false,
+    })),
+  ];
 }

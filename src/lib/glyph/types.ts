@@ -206,6 +206,91 @@ export interface FontAsset {
 }
 
 /**
+ * The three **Paint Roles** an authored SVG's sentinel colours encode
+ * (ADR-0007): red is the primary ink, blue the outline, green the highlight.
+ *
+ * Vocabulary rather than draw code, so it lives here beside the rest of the
+ * domain model; `symbol-render.ts` re-exports it for the draw path that has
+ * always spelled it.
+ */
+export type PaintRole = "fill" | "border" | "secondary";
+
+/** The concrete colour each Paint Role resolves to for one drawing. */
+export type RoleColors = Record<PaintRole, string>;
+
+/**
+ * A paint that is visible but is **not** a sentinel, kept as authored and
+ * reported (ADR-0007's literal pass-through).
+ *
+ * The usual cause is an off-primary export — `#fe0000` where `#ff0000` was
+ * meant — which recolours as nothing and would otherwise fail silently, so a
+ * flag is carried on the cell rather than logged and lost.
+ */
+export interface PaintFlag {
+  /** The shape's own id, or its tag name. Only ever shown in the flag itself. */
+  shape: string;
+  prop: string;
+  value: string;
+}
+
+/**
+ * One cell of an imported **Symbol Set**: a standalone Symbol or Authored
+ * Background, cut out of the author's atlas.
+ *
+ * The art is carried in the config as sentinel-painted markup, not as a
+ * reference to bytes elsewhere. Unlike an image or a font — whose bytes are
+ * opaque, large, and belong in IndexedDB — a windowed cell is a few hundred
+ * characters of text that the renderer recolours on every draw, and the file it
+ * came from is the author's source rather than the project's copy: a refresh
+ * re-reads that path (ADR-0015).
+ *
+ * No binding to Catalog Inputs is stored. Which Inputs a cell answers for is a
+ * fact about the Catalog, re-derived by `bindCell`, so storing it would let a
+ * saved project disagree with the Catalog it is opened against.
+ */
+export interface SetCell {
+  /** The author's `<g id>`, and the Symbol id a Glyph references. */
+  id: string;
+  /** Shown in pickers and the review. Derived from the Catalog until typed. */
+  label: string;
+  /** Whether {@link label} was typed. A typed label survives a refresh. */
+  labelEdited: boolean;
+  /** Grid position in the source atlas, in cells. Reading order for the UI. */
+  col: number;
+  row: number;
+  /** Which Paint Roles the art actually uses, in canonical palette order. */
+  roles: PaintRole[];
+  /** Every non-sentinel paint the cell draws with (see {@link PaintFlag}). */
+  flags: PaintFlag[];
+  /** Standalone square-viewBox SVG, still painted in sentinels. */
+  svg: string;
+}
+
+/**
+ * A **Symbol Set** the user imported: one authored SVG's worth of cells, plus
+ * the default Paint Role colours configured for it (ADR-0014 §3, #39).
+ *
+ * A Set is not an Asset — it is the shipment that carries them (ADR-0014). It
+ * holds exactly what its file draws and nothing else, which is why there is no
+ * per-cell removal: the only way to drop a Symbol is to stop drawing it and
+ * refresh, so a Set can never drift from its atlas.
+ *
+ * {@link roleColors} is the Set's own configuration and never travels in the
+ * SVG (the structure-only invariant: the file carries ids and sentinels, the
+ * project carries colour). A refresh never touches it.
+ */
+export interface SymbolSet {
+  /** Stable id, minted at import from the filename; a Glyph never sees it. */
+  id: string;
+  /** What to call the Set in the Assets window — the filename by default. */
+  name: string;
+  /** This Set's default Paint Role colours (ADR-0014 §4). */
+  roleColors: RoleColors;
+  /** Every cell the source file draws, in reading order. */
+  cells: SetCell[];
+}
+
+/**
  * One Input resolved for generation: its stable id, effective label, and the
  * effective {@link GlyphStyle} the Style Cascade produced for it.
  *
@@ -256,6 +341,12 @@ export interface Project {
    * Inputs.
    */
   images: ImageAsset[];
+  /**
+   * The **Symbol Sets** the user imported (#39). Shipped Sets are code and are
+   * never listed here, for the reason {@link fonts} gives: writing them into the
+   * config would put the shipped set in two places.
+   */
+  sets: SymbolSet[];
   devices: DeviceConfig[];
   exportSettings: ExportSettings;
 }

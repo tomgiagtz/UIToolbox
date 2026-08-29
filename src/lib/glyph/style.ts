@@ -43,16 +43,25 @@ export interface SymbolPaints {
 
 /**
  * A Glyph's chosen **Render Source**, overriding the Catalog's default for that
- * Input (ADR-0004). `symbol` on an Input the Catalog ships no Symbol for, and
- * `image` naming an asset the project doesn't carry, both fall back to the
- * default — see `resolveRenderSource`.
+ * Input (ADR-0004). `image` naming an asset the project doesn't carry, and
+ * `symbol` resolving to no Symbol at all, both fall back to the default — see
+ * `resolveRenderSource`.
+ *
+ * `symbol` is the one variant whose id is **optional**, and the two spellings
+ * mean different things (ADR-0015). Omitted is "whatever Symbol the Catalog
+ * gives this Input", so the Glyph keeps tracking the Catalog and a Catalog fix
+ * reaches it; a `symbolId` **pins** one Symbol — shipped or imported — which is
+ * what lets any Glyph draw any Symbol rather than only its own Catalog's, and
+ * so what makes an imported Set's new drawings reachable at all.
  *
  * Sizing and orientation are deliberately **not** part of this union: the
  * foreground's {@link LayerTransform} paints whichever source is drawn, so
  * switching an Input from its Symbol to its label can't silently discard either.
  */
 export type RenderSourceOverride =
-  { kind: "label" } | { kind: "symbol" } | { kind: "image"; imageId: string };
+  | { kind: "label" }
+  | { kind: "symbol"; symbolId?: string }
+  | { kind: "image"; imageId: string };
 
 /**
  * The **foreground layer** of a Glyph: whichever Render Source is drawn, and how

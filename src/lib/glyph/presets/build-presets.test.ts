@@ -35,6 +35,7 @@ function exportedProject(overrides: Partial<Project> = {}): Project {
     style: structuredClone(DEFAULT_STYLE),
     fonts: [],
     images: [],
+    sets: [],
     devices: [device()],
     exportSettings: {
       cellSize: 256,

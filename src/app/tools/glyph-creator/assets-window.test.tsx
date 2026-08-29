@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { createDefaultProject } from "@/lib/glyph/defaults";
 import { projectReducer, type ProjectAction } from "@/lib/glyph/project";
-import type { ImageAsset, Project } from "@/lib/glyph/types";
+import type { ImageAsset, Project, SymbolSet } from "@/lib/glyph/types";
 import { AssetsWindow } from "./assets-window";
 
 const metal: ImageAsset = {
@@ -16,6 +16,35 @@ const paper: ImageAsset = {
   id: "paper-c3d4.png",
   fileName: "paper.png",
   type: "image/png",
+};
+
+/** An imported Set, as `acceptReview` would have produced it. */
+const mypad: SymbolSet = {
+  id: "set-mypad-x1",
+  name: "mypad.svg",
+  roleColors: { fill: "#2f9e44", border: "#111111", secondary: "#ffffff" },
+  cells: [
+    {
+      id: "a",
+      label: "Jump",
+      labelEdited: true,
+      col: 0,
+      row: 0,
+      roles: ["fill"],
+      flags: [],
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><circle cx="128" cy="128" r="90" style="fill:#f00"/></svg>',
+    },
+    {
+      id: "b",
+      label: "B",
+      labelEdited: false,
+      col: 1,
+      row: 0,
+      roles: ["fill"],
+      flags: [],
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="256 0 256 256"><circle cx="384" cy="128" r="90" style="fill:#f00"/></svg>',
+    },
+  ],
 };
 
 function run(project: Project, ...actions: ProjectAction[]): Project {
@@ -60,6 +89,7 @@ function renderWindow({
           ref={ref}
           project={project}
           dispatch={dispatch}
+          activeDeviceIndex={0}
           onUploadImage={onUploadImage}
           onUploadFont={onUploadFont}
           onRemoveImages={onRemoveImages}
@@ -219,9 +249,100 @@ describe("AssetsWindow — the other Asset kinds (ADR-0014 §3)", () => {
     expect(onUploadFont).toHaveBeenCalledWith(file);
   });
 
-  it("stands the Symbol Sets section up empty, as #39's home", async () => {
+  it("offers an import and says the project holds no Sets yet", async () => {
     renderWindow();
     await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
-    expect(screen.getByText(/importing and configuring/i)).toBeInTheDocument();
+    expect(screen.getByText(/no sets imported yet/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/import a symbol set/i)).toBeInTheDocument();
+  });
+
+  it("lists an imported Set, its cells, and its preview colours", async () => {
+    renderWindow({ project: { ...base(), sets: [mypad] } });
+    await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
+
+    expect(screen.getByText("mypad.svg")).toBeInTheDocument();
+    expect(screen.getByText("2 cells")).toBeInTheDocument();
+    expect(screen.getByText("Jump")).toBeInTheDocument();
+    // The Set's own colours, not the cascade's — this control may never write
+    // a style (ADR-0014 §4).
+    expect(screen.getByLabelText("fill")).toHaveValue("#2f9e44");
+  });
+
+  it("removes a Set behind a confirm, and takes its cells with it", async () => {
+    const { dispatch } = renderWindow({
+      project: { ...base(), sets: [mypad] },
+    });
+    await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove mypad.svg" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "remove-set",
+      setId: mypad.id,
+    });
+  });
+
+  it("names the cells drawing a colour that is not a Paint Role", async () => {
+    const flagged: SymbolSet = {
+      ...mypad,
+      cells: [
+        {
+          ...mypad.cells[0],
+          flags: [{ shape: "circle", prop: "fill", value: "#fe0000" }],
+        },
+        mypad.cells[1],
+      ],
+    };
+    renderWindow({ project: { ...base(), sets: [flagged] } });
+    await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
+    expect(screen.getByText(/can’t be recoloured: a/i)).toBeInTheDocument();
+  });
+
+  it("adds a cell as an Input on the Device the user was looking at", async () => {
+    // Importing never creates Inputs (ADR-0015) — a Set is a shipment of art
+    // and an Input is a Device's sprite — so this button is how a drawing with
+    // no Input to live on gets one, pressed while looking at the art.
+    const { dispatch } = renderWindow({
+      project: { ...base(), sets: [mypad] },
+    });
+    await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Add Jump as an Input on/ }),
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "add-symbol-input",
+      deviceIndex: 0,
+      label: "Jump",
+      symbolId: "a",
+    });
+  });
+
+  it("won’t add a second Input for a cell the Device already draws", async () => {
+    const project = { ...base(), sets: [mypad] };
+    const withInput = run(project, {
+      type: "add-symbol-input",
+      deviceIndex: 0,
+      label: "Jump",
+      symbolId: "a",
+    });
+    renderWindow({ project: withInput });
+    await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
+    // Nothing links an Input back to its cell but the Symbol it points at, so
+    // without this the second press mints a duplicate sprite under a near-
+    // identical name and nothing reports it.
+    expect(
+      screen.getByRole("button", { name: /Add Jump as an Input on/ }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Add B as an Input on/ }),
+    ).toBeEnabled();
+  });
+
+  it("shows no per-cell removal: a Set holds what its file draws", async () => {
+    renderWindow({ project: { ...base(), sets: [mypad] } });
+    await userEvent.click(screen.getByRole("tab", { name: "Symbol Sets" }));
+    // The only Remove in the section is the Set's own.
+    expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(1);
   });
 });

@@ -9,13 +9,14 @@ import type { ProjectAction } from "@/lib/glyph/project";
 import type { ImageAsset, Project } from "@/lib/glyph/types";
 import { AssetArt } from "./asset-art";
 import { ConfirmButton } from "./confirm-button";
+import { SetsSection } from "./sets-section";
 import { FONT_ACCEPT, IMAGE_ACCEPT, UploadField } from "./upload-field";
 
 /**
  * The **Assets window**: where the project's art is *had* (ADR-0014).
  *
- * It answers "what does this project have?" — upload, remove, and (later)
- * import a Symbol Set. It never answers "what does this Glyph draw?", which is
+ * It answers "what does this project have?" — upload, remove, and import a
+ * Symbol Set. It never answers "what does this Glyph draw?", which is
  * the Style panel's job, so it deliberately knows nothing about `StyleScope`.
  * The two want opposite groupings — management by Asset **kind**, picking by
  * **role** — and one surface serving both would have to be organised two ways at
@@ -32,6 +33,7 @@ export function AssetsWindow({
   ref,
   project,
   dispatch,
+  activeDeviceIndex,
   onUploadImage,
   onUploadFont,
   onRemoveImages,
@@ -39,6 +41,12 @@ export function AssetsWindow({
   ref: React.RefObject<HTMLDialogElement | null>;
   project: Project;
   dispatch: Dispatch<ProjectAction>;
+  /**
+   * Which Device "Add as Input" lands on. The window is project-level and most
+   * of it needs no Device, but an Input belongs to exactly one — so the one the
+   * user was looking at when they opened this is the one they meant.
+   */
+  activeDeviceIndex: number;
   onUploadImage: (file: File) => Promise<ImageAsset>;
   onUploadFont: (file: File) => Promise<{ family: string }>;
   /** Forget the bytes behind ids the reducer has just dropped from the manifest. */
@@ -89,7 +97,11 @@ export function AssetsWindow({
             <FontsSection project={project} onUploadFont={onUploadFont} />
           </TabPanel>
           <TabPanel id="sets" className="min-h-0 flex-1 overflow-y-auto p-5">
-            <SetsSection />
+            <SetsSection
+              project={project}
+              dispatch={dispatch}
+              activeDeviceIndex={activeDeviceIndex}
+            />
           </TabPanel>
         </Tabs>
       </div>
@@ -263,29 +275,6 @@ function FontsSection({
         hint="TTF, OTF, WOFF, or WOFF2. Uploads stay in your browser."
         onUpload={(file) => void onUploadFont(file).catch(() => undefined)}
       />
-    </div>
-  );
-}
-
-/**
- * **Symbol Sets** — the home ADR-0007 §5 asked for, standing empty until #39
- * fills it with import, cell-mapping review, and per-set default role colours.
- *
- * Present rather than hidden because the section model is the decision
- * (ADR-0014 §3): a Set is the shipment that carries Symbols and Authored
- * Backgrounds, and this is where acquiring one will happen.
- */
-function SetsSection() {
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        A Symbol Set is one SVG whose cells are the Symbols and Authored
-        Backgrounds you can draw with. Every Set currently ships with the tool
-        and is compiled in at build time.
-      </p>
-      <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-        Importing and configuring your own Sets isn&rsquo;t built yet.
-      </p>
     </div>
   );
 }

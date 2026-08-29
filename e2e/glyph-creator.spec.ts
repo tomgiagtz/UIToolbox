@@ -540,3 +540,241 @@ test.describe("Input Glyph Creator", () => {
     await expectNoA11yViolations(page, testInfo);
   });
 });
+
+/**
+ * Importing a **Symbol Set** (#39, ADR-0015).
+ *
+ * These live in the browser suite rather than the unit one because the step
+ * being proved cannot run anywhere else. Windowing an atlas needs `getBBox()`,
+ * which needs layout, which jsdom does not have — so the pure half of the import
+ * is unit-tested and *this* is the only coverage of the measurement port.
+ *
+ * The picker is stubbed rather than driven: `showOpenFilePicker` opens native
+ * chrome Playwright cannot reach. Stubbing it hands the app the same
+ * `FileSystemFileHandle` shape the real API does, so everything downstream —
+ * measuring, windowing, reviewing, accepting, and refreshing from the retained
+ * handle — is the code that ships.
+ */
+test.describe("Symbol Set import", () => {
+  const SET_PATH = path.join(__dirname, "fixtures", "test-symbol-set.svg");
+
+  /**
+   * Stub `showOpenFilePicker` so it hands back a handle over whatever text is
+   * currently "on disk".
+   *
+   * The handle reads that text at `getFile()` time rather than closing over a
+   * snapshot, which is the point: a real `FileSystemFileHandle` re-reads the
+   * *path*, so re-exporting is {@link writeDisk} and Refresh is the app calling
+   * the handle it already holds.
+   */
+  async function stubPicker(page: Page) {
+    await page.evaluate(() => {
+      const disk = window as unknown as { __setSvg?: string };
+      (window as unknown as Record<string, unknown>).showOpenFilePicker =
+        async () => [
+          {
+            kind: "file",
+            name: "mypad.svg",
+            getFile: async () =>
+              new File([disk.__setSvg ?? ""], "mypad.svg", {
+                type: "image/svg+xml",
+              }),
+          },
+        ];
+    });
+  }
+
+  /** Put (or replace) the file the stubbed handle re-reads. */
+  async function writeDisk(page: Page, svg: string) {
+    await page.evaluate((text) => {
+      (window as unknown as { __setSvg?: string }).__setSvg = text;
+    }, svg);
+  }
+
+  async function openSets(page: Page) {
+    await page.getByRole("button", { name: /^Assets/ }).click();
+    const assets = page.getByRole("dialog", { name: "Assets" });
+    await expect(assets).toBeVisible();
+    await assets.getByRole("tab", { name: "Symbol Sets" }).click();
+    return assets;
+  }
+
+  test("windows an authored atlas, states what it skipped, and installs it", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    await stubPicker(page);
+    await writeDisk(page, await readFile(SET_PATH, "utf8"));
+    const assets = await openSets(page);
+
+    await assets.getByRole("button", { name: "Import a Symbol Set" }).click();
+
+    // Both drawn cells are found. `paddle-left` is placed with a transform, the
+    // way every shipped atlas places its cells, so finding it at all is the
+    // measurement port mapping bounds into the root's coordinate system. Its
+    // label is a field, not text: the review is where labels get fixed.
+    await expect(assets.getByLabel("Label for paddle-left")).toHaveValue(
+      "Paddle Left",
+    );
+    // A fresh project is a Keyboard, whose Catalog claims neither id — so both
+    // arrive as new Inputs rather than as errors. The Catalog extends; it isn't
+    // a ceiling (ADR-0015).
+    await expect(assets.getByText("a · not in the Catalog")).toBeVisible();
+
+    // Nothing is a Symbol just for having an id: the frame rect and the
+    // invisible guide box are rejected, each with its reason.
+    await assets.getByRole("group").filter({ hasText: "Skipped" }).click();
+    await expect(assets.getByText(/frame.*not a symbol/)).toBeVisible();
+    await expect(
+      assets.getByText(/guides.*draws nothing visible/),
+    ).toBeVisible();
+
+    // The off-primary red passes through as authored and is flagged by id.
+    await expect(assets.getByText(/non-role paint/)).toBeVisible();
+
+    await assets.getByRole("button", { name: "Add to project" }).click();
+    await expect(assets.getByText("mypad.svg")).toBeVisible();
+    await expect(assets.getByText("2 cells")).toBeVisible();
+    await expect(
+      assets.getByText(/can’t be recoloured: paddle-left/),
+    ).toBeVisible();
+  });
+
+  test("a refresh takes art away only after naming what it costs", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    const original = await readFile(SET_PATH, "utf8");
+    await stubPicker(page);
+    await writeDisk(page, original);
+    const assets = await openSets(page);
+
+    await assets.getByRole("button", { name: "Import a Symbol Set" }).click();
+    await assets.getByRole("button", { name: "Add to project" }).click();
+    await expect(assets.getByText("2 cells")).toBeVisible();
+
+    // The author re-exports having deleted a cell — the case the whole review
+    // exists for (ADR-0015 §2).
+    const withoutPaddle = original.replace(
+      /<g id="paddle-left"[\s\S]*?<\/g>/,
+      "",
+    );
+    await writeDisk(page, withoutPaddle);
+    await assets.getByRole("button", { name: /^Refresh/ }).click();
+
+    // Shown as a row that is leaving, not summarised away.
+    await expect(assets.getByText("Removed")).toBeVisible();
+    await assets.getByRole("button", { name: "Accept changes" }).click();
+    await expect(assets.getByText("1 cell")).toBeVisible();
+
+    // Replaced in place: a refresh is the same shipment re-read, not a new one.
+    await expect(assets.getByText("mypad.svg")).toHaveCount(1);
+  });
+
+  test("a typed label survives the next refresh; an untouched one re-derives", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    const original = await readFile(SET_PATH, "utf8");
+    await stubPicker(page);
+    await writeDisk(page, original);
+    const assets = await openSets(page);
+
+    await assets.getByRole("button", { name: "Import a Symbol Set" }).click();
+    await assets.getByLabel("Label for a").fill("Jump");
+    await assets.getByRole("button", { name: "Add to project" }).click();
+    await expect(assets.getByText("Jump")).toBeVisible();
+
+    // Re-exported unchanged: the art is identical, so only the labels are in
+    // question — and the typed one is the one the project keeps (rule 2).
+    await assets.getByRole("button", { name: /^Refresh/ }).click();
+    await expect(assets.getByLabel("Label for a")).toHaveValue("Jump");
+    await expect(assets.getByLabel("Label for paddle-left")).toHaveValue(
+      "Paddle Left",
+    );
+    await assets.getByRole("button", { name: "Accept changes" }).click();
+    await expect(assets.getByText("Jump")).toBeVisible();
+  });
+
+  test("any Glyph can be pointed at an imported Symbol", async ({ page }) => {
+    // The claim ADR-0015 §7 rests on. Without it an imported cell only ever
+    // draws when its id happens to collide with a shipped Catalog entry's, and
+    // a Set of new drawings is decoration — imported, listed, and unreachable.
+    await page.goto("/tools/glyph-creator");
+    await stubPicker(page);
+    await writeDisk(page, await readFile(SET_PATH, "utf8"));
+    const assets = await openSets(page);
+    await assets.getByRole("button", { name: "Import a Symbol Set" }).click();
+    await assets.getByRole("button", { name: "Add to project" }).click();
+    await assets.getByRole("button", { name: "Close" }).click();
+
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await preview.click();
+    const panel = page.getByRole("region", { name: /edit glyph/i });
+    await expect(panel).toBeVisible();
+
+    const pixels = () =>
+      preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
+    const before = await pixels();
+
+    // A Keyboard key whose Catalog names no Symbol at all, pointed at art the
+    // Catalog has never heard of.
+    await tile(panel, "Render Source", "Paddle Left").click();
+    await expectPicked(panel, "Render Source", "Paddle Left");
+    await expect
+      .poll(pixels, { message: "preview should redraw with the imported art" })
+      .not.toBe(before);
+  });
+
+  test("adds a cell as an Input on the active Device, once", async ({
+    page,
+  }) => {
+    await page.goto("/tools/glyph-creator");
+    await stubPicker(page);
+    await writeDisk(page, await readFile(SET_PATH, "utf8"));
+    const assets = await openSets(page);
+    await assets.getByRole("button", { name: "Import a Symbol Set" }).click();
+    await assets.getByRole("button", { name: "Add to project" }).click();
+
+    await assets.getByRole("button", { name: "Close" }).click();
+    const preview = page.getByRole("img", {
+      name: /Keyboard Sprite Atlas preview/i,
+    });
+    await expect(preview).toBeVisible();
+    const pixels = () =>
+      preview.evaluate((c) => (c as HTMLCanvasElement).toDataURL());
+    // Importing alone changes nothing about what the Device exports: a Set is a
+    // shipment of art, and an Input is the Device's sprite (ADR-0015 §7).
+    const beforeAdding = await pixels();
+
+    await page.getByRole("button", { name: /^Assets/ }).click();
+    await assets.getByRole("tab", { name: "Symbol Sets" }).click();
+    const add = assets.getByRole("button", {
+      name: /Add Paddle Left as an Input on/,
+    });
+    await add.click();
+    // Nothing links an Input back to its cell but the Symbol it points at, so a
+    // second press would mint a duplicate sprite and nothing would report it.
+    await expect(add).toBeDisabled();
+    await assets.getByRole("button", { name: "Close" }).click();
+
+    // The Keyboard's atlas grew a cell, drawing the imported art.
+    await expect
+      .poll(pixels, { message: "atlas should gain the new Input" })
+      .not.toBe(beforeAdding);
+  });
+
+  test("cancelling a review leaves the project untouched", async ({ page }) => {
+    await page.goto("/tools/glyph-creator");
+    await stubPicker(page);
+    await writeDisk(page, await readFile(SET_PATH, "utf8"));
+    const assets = await openSets(page);
+
+    await assets.getByRole("button", { name: "Import a Symbol Set" }).click();
+    await expect(assets.getByLabel("Label for paddle-left")).toBeVisible();
+    await assets.getByRole("button", { name: "Cancel" }).click();
+    await expect(assets.getByText(/no sets imported yet/i)).toBeVisible();
+  });
+});

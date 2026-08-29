@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   AUTHORED_BACKGROUNDS,
   authoredBackgroundsFor,
@@ -6,8 +6,11 @@ import {
   SYMBOLS,
   getSymbolAsset,
   getSymbolSvg,
+  pickableSymbols,
   resolveSymbolSvg,
 } from "@/lib/glyph/symbols";
+import { clearSets, registerSets } from "@/lib/glyph/symbols/set-art";
+import type { SymbolSet } from "@/lib/glyph/types";
 
 /**
  * The manifest is the shipped contract (issue #14): these pin its shape and the
@@ -174,5 +177,62 @@ describe("authoredBackgroundsFor — only tiles a Device can draw (#45, #62)", (
 
   it("constrains nothing when no Device is named", () => {
     expect(authoredBackgroundsFor([])).toEqual(AUTHORED_BACKGROUNDS);
+  });
+});
+
+describe("pickableSymbols (ADR-0015)", () => {
+  afterEach(() => clearSets());
+
+  function importing(...ids: string[]): SymbolSet {
+    return {
+      id: "mypad",
+      name: "mypad.svg",
+      roleColors: { fill: "#000", border: "#000", secondary: "#fff" },
+      cells: ids.map((id, i) => ({
+        id,
+        label: `Cell ${id}`,
+        labelEdited: false,
+        col: i,
+        row: 0,
+        roles: ["fill" as const],
+        flags: [],
+        svg: `<svg id='${id}'/>`,
+      })),
+    };
+  }
+
+  it("offers only Symbols every named Device can actually draw", () => {
+    // The reason `authoredBackgroundsFor` filters: a bare id is scoped by the
+    // atlas it lives in, so a Symbol only the pads author resolves to nothing on
+    // a Keyboard and the picker would be promising art that never arrives.
+    for (const symbol of pickableSymbols(["keyboard"]))
+      expect(getSymbolSvg(symbol.id, "keyboard")).toBeDefined();
+  });
+
+  it("drops a Symbol only one of several Devices draws", () => {
+    const both = pickableSymbols(["keyboard", "xbox"]).map((s) => s.id);
+    const xboxOnly = pickableSymbols(["xbox"]).map((s) => s.id);
+    // A tier covering several Devices can only offer their intersection.
+    expect(both.every((id) => xboxOnly.includes(id))).toBe(true);
+  });
+
+  it("offers an imported cell on every Device, having none of its own", () => {
+    registerSets([importing("paddle-left")]);
+    for (const device of ["keyboard", "xbox", "playstation"])
+      expect(pickableSymbols([device])).toContainEqual({
+        id: "paddle-left",
+        label: "Cell paddle-left",
+        imported: true,
+      });
+  });
+
+  it("lists an id a Set redraws once, as the imported one", () => {
+    registerSets([importing("stick")]);
+    const stick = pickableSymbols(["xbox"]).filter((s) => s.id === "stick");
+    // `getSymbolSvg` returns the imported art for this id, so listing the
+    // shipped entry beside it would offer two tiles that draw the same thing.
+    expect(stick).toEqual([
+      { id: "stick", label: "Cell stick", imported: true },
+    ]);
   });
 });

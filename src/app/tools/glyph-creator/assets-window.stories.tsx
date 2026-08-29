@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { fn } from "storybook/test";
 import { Button } from "@/components/ui/button";
 import type { Project } from "@/lib/glyph/types";
-import { storyImages, storyProject } from "@/stories/fixtures";
+import { storyImages, storyProject, storySet } from "@/stories/fixtures";
 import { AssetsWindow } from "./assets-window";
 
 /**
@@ -25,6 +25,7 @@ function AssetsWindowHarness({ project }: { project: Project }) {
         ref={ref}
         project={project}
         dispatch={fn()}
+        activeDeviceIndex={0}
         onUploadImage={fn(async () => storyImages[0])}
         onUploadFont={fn(async () => ({ family: "UITBFont-1-a" }))}
         onRemoveImages={fn()}
@@ -46,8 +47,8 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * A fresh project. Images is empty, Fonts lists the bundled families that ship
- * with the tool and never travel in a save, and Symbol Sets stands as the home
- * ADR-0007 §5 asked for with nothing in it yet.
+ * with the tool and never travel in a save, and Symbol Sets offers an import
+ * with nothing yet to list.
  */
 export const Empty: Story = {};
 
@@ -75,4 +76,20 @@ export const WithImages: Story = {
 /** Nothing references either upload, so the sweep offers to take both at once. */
 export const AllUnused: Story = {
   args: { project: { ...storyProject, images: storyImages } },
+};
+
+/**
+ * A project carrying an imported **Symbol Set** (#39).
+ *
+ * Its cells are drawn in the Set's own **preview colours**, not the cascade's:
+ * authored art is painted in sentinels, which are legible as data and illegible
+ * as a drawing. Changing those colours changes how the Set is *looked at* and
+ * never what a Glyph draws (ADR-0015 §3).
+ *
+ * The third cell exports an off-primary red, so it is flagged by id: it will
+ * pass through as authored and cannot be recoloured, which is the failure the
+ * flag exists to make loud.
+ */
+export const WithSymbolSet: Story = {
+  args: { project: { ...storyProject, sets: [storySet] } },
 };

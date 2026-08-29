@@ -3,7 +3,7 @@ import type { PreviewGlyph } from "@/components/glyph/atlas-preview";
 import { DEFAULT_STYLE, createDefaultProject } from "@/lib/glyph/defaults";
 import { loadDefaultFont } from "@/lib/glyph/font";
 import { putImage } from "@/lib/glyph/images";
-import type { ImageAsset, Project } from "@/lib/glyph/types";
+import type { ImageAsset, Project, SymbolSet } from "@/lib/glyph/types";
 
 /**
  * Fixtures shared by the stories.
@@ -71,3 +71,49 @@ storyImages.forEach((image, i) => {
     new Blob([STORY_IMAGE_SVGS[i]], { type: "image/svg+xml" }),
   );
 });
+
+/**
+ * An imported **Symbol Set**, as `acceptReview` would have produced one (#39).
+ *
+ * Painted in the Paint Role sentinels, exactly as an authored file is — the
+ * stories recolour it through the Set's own preview palette, which is the whole
+ * point of that palette existing (ADR-0015 §3). One cell carries an off-primary
+ * red so the flagged-paint path has something to show.
+ */
+export const storySet: SymbolSet = {
+  id: "set-mypad-x1",
+  name: "mypad.svg",
+  roleColors: { fill: "#2f9e44", border: "#111111", secondary: "#ffffff" },
+  cells: [
+    {
+      id: "a",
+      label: "Jump",
+      labelEdited: true,
+      col: 0,
+      row: 0,
+      roles: ["fill", "border"],
+      flags: [],
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><circle cx="128" cy="128" r="92" style="fill:#f00;stroke:#00f;stroke-width:12"/></svg>',
+    },
+    {
+      id: "paddle-left",
+      label: "Paddle Left",
+      labelEdited: false,
+      col: 1,
+      row: 0,
+      roles: ["fill", "border"],
+      flags: [],
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="256 0 256 256"><polygon points="326,50 442,108 326,206" style="fill:#f00;stroke:#00f;stroke-width:12"/></svg>',
+    },
+    {
+      id: "paddle-right",
+      label: "Paddle Right",
+      labelEdited: false,
+      col: 0,
+      row: 1,
+      roles: ["border"],
+      flags: [{ shape: "polygon", prop: "fill", value: "#fe0000" }],
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 256 256 256"><polygon points="186,306 70,364 186,462" style="fill:#fe0000;stroke:#00f;stroke-width:12"/></svg>',
+    },
+  ],
+};

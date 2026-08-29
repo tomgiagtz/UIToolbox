@@ -8,7 +8,7 @@ import {
 } from "@/lib/glyph/defaults";
 import type { Preset } from "@/lib/glyph/presets";
 import type { StyleOverride } from "@/lib/glyph/style";
-import type { Project } from "@/lib/glyph/types";
+import type { Project, SymbolSet } from "@/lib/glyph/types";
 
 function base(): Project {
   return createDefaultProject();
@@ -812,5 +812,139 @@ describe("projectReducer — applying a Preset (ADR-0012 §3/§4)", () => {
     expect(next.devices[0].glyphStyles["key-w"]).not.toBe(
       preset.devices[0].glyphStyles["key-w"],
     );
+  });
+});
+
+describe("projectReducer — imported Symbol Sets (ADR-0015, #39)", () => {
+  function set(id: string, ...cellIds: string[]): SymbolSet {
+    return {
+      id,
+      name: `${id}.svg`,
+      roleColors: { fill: "#2f9e44", border: "#111111", secondary: "#ffffff" },
+      cells: cellIds.map((cellId, i) => ({
+        id: cellId,
+        label: cellId.toUpperCase(),
+        labelEdited: false,
+        col: i,
+        row: 0,
+        roles: ["fill" as const],
+        flags: [],
+        svg: `<svg viewBox="0 0 256 256"><circle style="fill:#f00"/></svg>`,
+      })),
+    };
+  }
+
+  it("adds a Set the project doesn't have", () => {
+    const next = run(base(), { type: "install-set", set: set("mypad", "a") });
+    expect(next.sets.map((s) => s.id)).toEqual(["mypad"]);
+  });
+
+  it("replaces a Set of the same id in place, which is what a refresh is", () => {
+    const before = run(
+      base(),
+      { type: "install-set", set: set("mypad", "a") },
+      { type: "install-set", set: set("other", "z") },
+    );
+    const next = run(before, {
+      type: "install-set",
+      set: set("mypad", "a", "b"),
+    });
+    // Replaced, not appended — the window must not reorder under the importer
+    // who just accepted it.
+    expect(next.sets.map((s) => s.id)).toEqual(["mypad", "other"]);
+    expect(next.sets[0].cells.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+
+  it("removes a Set and takes every cell with it", () => {
+    const before = run(base(), { type: "install-set", set: set("mypad", "a") });
+    expect(run(before, { type: "remove-set", setId: "mypad" }).sets).toEqual(
+      [],
+    );
+  });
+
+  it("leaves a Glyph's Symbol id alone when its Set is removed", () => {
+    // The Glyph falls back to its label and comes back if the Set does — the
+    // same degrade a refresh that stops drawing a cell leaves behind.
+    const before = run(base(), { type: "install-set", set: set("mypad", "a") });
+    const next = run(before, { type: "remove-set", setId: "mypad" });
+    expect(next.devices).toEqual(before.devices);
+    expect(next.style).toEqual(before.style);
+  });
+
+  it("writes preview colours onto the Set and never onto a style", () => {
+    const before = run(base(), { type: "install-set", set: set("mypad", "a") });
+    const roleColors = {
+      fill: "#123456",
+      border: "#000000",
+      secondary: "#ffffff",
+    };
+    const next = run(before, {
+      type: "set-role-colors",
+      setId: "mypad",
+      roleColors,
+    });
+    expect(next.sets[0].roleColors).toEqual(roleColors);
+    // ADR-0014 §4: this surface owns Assets and may never own style.
+    expect(next.style).toEqual(before.style);
+    expect(next.devices).toEqual(before.devices);
+  });
+
+  it("ignores preview colours aimed at a Set the project doesn't have", () => {
+    const before = run(base(), { type: "install-set", set: set("mypad", "a") });
+    const next = run(before, {
+      type: "set-role-colors",
+      setId: "ghost",
+      roleColors: { fill: "#fff", border: "#fff", secondary: "#fff" },
+    });
+    expect(next.sets).toEqual(before.sets);
+  });
+});
+
+describe("add-symbol-input (ADR-0015)", () => {
+  /** The Assets window's "Add as Input" on an imported cell. */
+  const add = (label: string, symbolId: string) =>
+    ({ type: "add-symbol-input", deviceIndex: 0, label, symbolId }) as const;
+
+  it("mints the Input and points it at the Symbol in one go", () => {
+    const next = projectReducer(
+      createDefaultProject(),
+      add("Paddle Left", "paddle-left"),
+    );
+    const [device] = next.devices;
+    const input = device.custom.at(-1)!;
+    expect(input.label).toBe("Paddle Left");
+    // One action rather than two, because the id is minted in the reducer and
+    // the caller never learns it — a follow-up `patch-style` has nothing to key.
+    expect(device.glyphStyles[input.id]?.foreground?.renderSource).toEqual({
+      kind: "symbol",
+      symbolId: "paddle-left",
+    });
+  });
+
+  it("mints ids the same way a hand-added Input does", () => {
+    const next = [
+      { type: "add-custom-input", deviceIndex: 0, label: "F5" } as const,
+      add("Paddle Left", "paddle-left"),
+    ].reduce(projectReducer, createDefaultProject());
+    expect(next.devices[0].custom.map((c) => c.id)).toEqual([
+      "custom-1",
+      "custom-2",
+    ]);
+  });
+
+  it("ignores a blank label, as the hand-added path does", () => {
+    const base = createDefaultProject();
+    expect(projectReducer(base, add("   ", "paddle-left"))).toBe(base);
+  });
+
+  it("leaves the other Devices alone", () => {
+    const base = projectReducer(createDefaultProject(), {
+      type: "toggle-device",
+      catalogId: "xbox",
+    });
+    const next = projectReducer(base, add("Paddle Left", "paddle-left"));
+    // An Input belongs to one Device and yields one sprite in its atlas, so a
+    // press while looking at one Device must not reach the rest (ADR-0015).
+    expect(next.devices[1].custom).toEqual([]);
   });
 });
