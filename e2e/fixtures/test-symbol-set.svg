@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 256" data-cell="256">
+  <!--
+    A Symbol Set fixture for the import e2e (#39). Deliberately shaped like a
+    real authored atlas rather than like the import's happy path:
+
+    - `frame` is a full-bleed rect, which the import must reject as a frame
+      rather than window as art.
+    - `guides` draws in a real colour at `fill-opacity:0`, so it is invisible and
+      must be skipped without being flagged as a non-role paint.
+    - `paddle-left` is placed with `transform="translate(256,0)"`, the way the
+      shipped atlases place every cell. Its own `getBBox()` reports the untrans-
+      formed box, so a naive measurer puts it in column 0 — this is the cell that
+      catches that.
+    - `a` is painted in the fill and border sentinels; `paddle-left` adds an
+      off-primary red that must come back as a flag.
+  -->
+  <rect id="frame" x="0" y="0" width="512" height="256" style="fill:none;stroke:none"/>
+  <rect id="guides" x="10" y="10" width="60" height="60" style="fill:#123456;fill-opacity:0"/>
+  <g id="a">
+    <circle cx="128" cy="128" r="92" style="fill:#f00;stroke:#00f;stroke-width:12"/>
+  </g>
+  <g id="paddle-left" transform="translate(256,0)">
+    <polygon points="70,50 186,108 70,206" style="fill:#fe0000;stroke:#00f;stroke-width:12"/>
+  </g>
+</svg>

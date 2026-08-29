@@ -61,6 +61,7 @@ import {
   type SelectedGlyph,
 } from "./style-controls";
 import { DeviceControls, InputEditor } from "./device-controls";
+import { registerSets } from "@/lib/glyph/symbols/set-art";
 import { ExportDialog, type ExportSelection } from "./export-dialog";
 import { AssetsWindow } from "./assets-window";
 import { PresetPicker } from "./preset-picker";
@@ -159,6 +160,16 @@ export function GlyphCreator() {
   // Whether any saved ZIP needs a `fonts/` folder: bundled families never
   // travel, since the tool on the other end already has them.
   const hasUploadedFont = project.fonts.length > 0;
+
+  // Keep the imported Symbol Set art in step with the config that carries it
+  // (#39). One effect covers mount, load, reset and every import, because a
+  // Set's cells live *in* the config rather than in a byte store beside it —
+  // unlike an image, whose registry has to be restored from IndexedDB before
+  // the config that names it arrives. `registerSets` replaces outright, so the
+  // project on screen owns its Set art the way ADR-0011 has it own its images.
+  useEffect(() => {
+    registerSets(project.sets);
+  }, [project.sets]);
 
   // Restore persisted state on mount: config from localStorage, font blobs from
   // IndexedDB (re-registered under the families the config names).
@@ -724,6 +735,7 @@ export function GlyphCreator() {
         ref={assetsWindowRef}
         project={project}
         dispatch={dispatch}
+        activeDeviceIndex={activeIndex}
         onUploadImage={onUploadImage}
         onUploadFont={onUploadFont}
         onRemoveImages={onRemoveImages}

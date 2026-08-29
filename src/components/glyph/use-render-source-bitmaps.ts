@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ensureTileBitmap } from "@/lib/glyph/background-render";
 import { ensureImageBitmap } from "@/lib/glyph/images";
 import type { GlyphStyle } from "@/lib/glyph/style";
 import { ensureSymbolBitmap } from "@/lib/glyph/symbol-render";
+import { getSetArtVersion, onSetArtChange } from "@/lib/glyph/symbols/set-art";
 
 /**
  * A stable key for one spec's **Background tile** art — which art, recoloured
@@ -52,6 +53,15 @@ export function useRenderSourceBitmaps(
   // so the one switch in `tileKey` decides both which specs need a bitmap and
   // what to key it on.
   const withTiles = specs.filter((s) => tileKey(s.style) !== "");
+  // Read through React so a change re-renders the caller as well as re-keying:
+  // the registry is module state the draw path reads on every rasterization.
+  const setArtVersion = useSyncExternalStore(
+    onSetArtChange,
+    getSetArtVersion,
+    // Server-rendered, there is no registry and no art — one stable value, or
+    // hydration would see a mismatch it cannot resolve.
+    () => 0,
+  );
   const key =
     withSymbols
       .map((s) => {
@@ -65,7 +75,13 @@ export function useRenderSourceBitmaps(
     // any resolved colour, and not its transform (applied at draw time).
     "~" +
     withImages.map((s) => s.imageId).join("|") +
-    `@${size}#${device ?? ""}`;
+    `@${size}#${device ?? ""}` +
+    // Importing, refreshing or removing a Symbol Set changes what an id draws
+    // without changing any appearance above: the key carries the id, not the
+    // drawing behind it. Dropping the stale bitmaps is `symbol-render`'s job;
+    // asking for the new ones is this key's, and without it the Glyph would sit
+    // on its label until an unrelated edit moved something else (ADR-0015 §4).
+    `!${setArtVersion}`;
 
   const [version, setVersion] = useState(0);
   useEffect(() => {

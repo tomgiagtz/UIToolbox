@@ -124,7 +124,8 @@ export const DEFAULT_PROJECT_NAME = "my-glyphs";
  * Devices, and naming are all changed from here by the user.
  *
  * `fonts` starts empty while the style names the bundled default: the manifest
- * lists uploads, and the default was never one (ADR-0012 §6).
+ * lists uploads, and the default was never one (ADR-0012 §6). `sets` starts
+ * empty for the same reason — the shipped Symbol Sets are code (#39).
  */
 export function createDefaultProject(): Project {
   return {
@@ -132,6 +133,7 @@ export function createDefaultProject(): Project {
     style: DEFAULT_STYLE,
     fonts: [],
     images: [],
+    sets: [],
     devices: [createDeviceFromCatalog(DEVICE_CATALOGS[0])],
     exportSettings: DEFAULT_EXPORT_SETTINGS,
   };

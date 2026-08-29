@@ -43,9 +43,17 @@ export type ResolvedRenderSource =
  * With no override, a well-known Input draws its Catalog Symbol and everything
  * else draws its label — exactly the behaviour that predates the per-Input
  * choice. Every unsatisfiable choice degrades to that default rather than
- * failing: a `symbol` pick on an Input the Catalog ships no Symbol for, and an
- * `image` pick whose asset the project no longer carries (ADR-0004 — a config
- * can outlive its image bytes).
+ * failing: an `image` pick whose asset the project no longer carries (ADR-0004
+ * — a config can outlive its image bytes), and a `symbol` pick that names no
+ * Symbol at all on an Input the Catalog ships none for either.
+ *
+ * A `symbol` pick **carrying an id** is taken at its word and never checked
+ * against the Catalog: pinning one is how a Glyph draws a Symbol other than its
+ * own Catalog's, which is the only way an imported Set's new drawings are ever
+ * reachable (ADR-0015). Whether that id resolves to art is the draw path's
+ * question — `getSymbolSvg` consults the imported Sets before the shipped
+ * atlases, and an id neither draws renders as nothing rather than as a lie
+ * about which Symbol the Glyph is pointed at.
  */
 export function resolveRenderSource(
   entry: CatalogInput | undefined,
@@ -67,6 +75,8 @@ export function resolveRenderSource(
     case "label":
       return { kind: "label" };
     case "symbol":
+      // An id pins a Symbol; without one the Glyph keeps tracking its Catalog.
+      if (chosen.symbolId) return { kind: "symbol", symbolId: chosen.symbolId };
       return fallback.kind === "symbol" ? fallback : { kind: "label" };
     case "image":
       return images.some((i) => i.id === chosen.imageId)

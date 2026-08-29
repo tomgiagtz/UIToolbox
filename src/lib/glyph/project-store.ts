@@ -34,6 +34,9 @@ import type {
   NamingConfig,
   Project,
   LayerTransform,
+  RoleColors,
+  SetCell,
+  SymbolSet,
 } from "@/lib/glyph/types";
 
 const CONFIG_KEY = "uitoolbox.glyph-creator.project";
@@ -542,6 +545,50 @@ function isImageAsset(value: unknown): value is ImageAsset {
   );
 }
 
+/** One imported Symbol Set cell: its art, its name, and where it was drawn. */
+function isSetCell(value: unknown): value is SetCell {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.label === "string" &&
+    typeof value.labelEdited === "boolean" &&
+    typeof value.col === "number" &&
+    typeof value.row === "number" &&
+    typeof value.svg === "string" &&
+    Array.isArray(value.roles) &&
+    Array.isArray(value.flags)
+  );
+}
+
+/**
+ * An imported Symbol Set (#39).
+ *
+ * The cells are checked as thoroughly as the Set itself because they carry the
+ * art: a Set whose cells are unreadable is a Set that draws nothing, and the
+ * point of validating at all is that a config which cannot draw is rejected
+ * rather than half-loaded.
+ */
+function isSymbolSet(value: unknown): value is SymbolSet {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    isRoleColors(value.roleColors) &&
+    Array.isArray(value.cells) &&
+    value.cells.every(isSetCell)
+  );
+}
+
+/** A Set's default Paint Role colours: all three, each a string (ADR-0015). */
+function isRoleColors(value: unknown): value is RoleColors {
+  return (
+    isRecord(value) &&
+    typeof value.fill === "string" &&
+    typeof value.border === "string" &&
+    typeof value.secondary === "string"
+  );
+}
+
 /**
  * One flat structural check over the current {@link Project}.
  *
@@ -558,6 +605,8 @@ function isProject(value: unknown): value is Project {
     value.fonts.every(isFontAsset) &&
     Array.isArray(value.images) &&
     value.images.every(isImageAsset) &&
+    Array.isArray(value.sets) &&
+    value.sets.every(isSymbolSet) &&
     Array.isArray(value.devices) &&
     value.devices.every(isDevice) &&
     isExportSettings(value.exportSettings)

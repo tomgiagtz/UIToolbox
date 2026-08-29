@@ -5,6 +5,10 @@
 - **Date:** 2026-08-12
 - **Amended:** 2026-08-14 — §7 adds motion to the token set, and §8 names the
   surfaces and the accent
+- **Amended:** 2026-08-24 — §4 is rewritten. `ColorPicker` and `TextInput` were
+  renamed to their code names during #100, which the original §4 argued against;
+  the rule is now "one name when it is one thing" and the select box is the
+  single remaining exception
 - **Amends:** ADR-0001 (its "restyle without fighting a dependency" gets a place
   where the restyle is decided, and Storybook stops being the only visual surface)
 
@@ -106,31 +110,44 @@ Nothing about the decision is structural. A second theme becomes a collection
 mode the day the plan is upgraded, and the semantic layer in §5 is the thing
 that makes that a mode addition rather than a rewrite.
 
-### 4. Figma names the primitive; code keeps the domain name
+### 4. Figma tracks the code name, except where Figma holds the primitive
 
-The two sides have named the same things differently, and the reflex — pick one
-vocabulary — is wrong here, because the names are not competing. They sit at
-different layers.
+The reflex — pick one vocabulary — is right more often than this ADR first
+assumed. Where a Figma component and a code component are the same thing, one
+name is cheaper than two, because the mapping #117 records in both directions is
+then a fact rather than a translation someone has to remember.
 
-| Figma component                | Code today                                    | Relationship                          |
-| ------------------------------ | --------------------------------------------- | ------------------------------------- |
-| `HorizontalSelectBox` + `Item` | `StyleScopeSwitcher` (`style-controls.tsx`)   | primitive / a use of it               |
-| `SettingsGroup`                | `PanelSection` (`panel-section.tsx`)          | primitive / a use of it               |
-| `TextInput`                    | `Field` + `inputClass` (`controls-ui.tsx:26`) | primitive / a use of it               |
-| `ColorPicker`                  | `ColorField` (`controls-ui.tsx`)              | primitive / a use of it               |
-| `SettingsSubGroup`             | —                                             | primitive with no code equivalent yet |
+| Figma component                                   | Code                                          | Why the name is what it is   |
+| ------------------------------------------------- | --------------------------------------------- | ---------------------------- |
+| `ColorField`                                      | `ColorField` (`controls-ui.tsx`)              | was `ColorPicker`; renamed   |
+| `LabeledField`                                    | `Field` + `inputClass` (`controls-ui.tsx:26`) | was `TextInput`; renamed     |
+| `PanelSection`                                    | `PanelSection` (`panel-section.tsx`)          | was `SettingsGroup`; renamed |
+| `SubSection`                                      | — none yet                                    | was `SettingsSubGroup`       |
+| `HorizontalSelectBox` + `HorizontalSelectBoxItem` | `StyleScopeSwitcher` (`style-controls.tsx`)   | **different layers** — below |
 
-A **Style Scope** is a CONTEXT.md term (ADR-0006's cascade); a horizontal select
-box is not. `StyleScopeSwitcher` is the right name for the composition that
-knows about the Style Cascade, and the wrong name for the segmented control
-underneath it. So both names stay, at their own layer, and
-`src/components/ui/` takes the primitive names.
+**The `Settings*` rename was never optional.** `SettingsGroup` /
+`SettingsSubGroup` were named for a screen this app does not have — there are no
+Settings, there is an **Editor** rail holding Devices / Inputs / Style. The word
+had to go before it got instanced, because the fastest way to grow a wrong
+concept is to name twenty things after it.
 
-**One exception, and it is a real rename.** `SettingsGroup` / `SettingsSubGroup`
-are named for a screen this app does not have — there are no Settings, there is
-an **Editor** rail holding Devices / Inputs / Style. The word has to go before it
-gets instanced, because the fastest way to grow a wrong concept is to name
-twenty things after it.
+**`ColorPicker` and `TextInput` were renamed for a different reason**, and this
+ADR originally argued against it. The case that won: those two Figma components
+are not primitives that code happens to use — they are the same component,
+drawn once and built once, and the code name is the one a reviewer can grep. A
+Figma name that exists only in Figma is a name nobody can check.
+
+**The exception is real and it is the select box.** A **Style Scope** is a
+CONTEXT.md term (ADR-0006's cascade); a horizontal select box is not.
+`StyleScopeSwitcher` is the right name for the composition that knows about the
+Style Cascade, and the wrong name for the segmented control underneath it —
+which is why the code component with no Figma counterpart is the _use_, not the
+primitive. Here the names stay different because the things are different, and
+`src/components/ui/` takes the primitive name when that primitive gets built.
+
+So the rule is: **one name when it is one thing, two names when the Figma
+component is a primitive and the code name describes a use of it.** Today that
+second case has exactly one member.
 
 ### 5. Two collections: primitives, then semantics
 

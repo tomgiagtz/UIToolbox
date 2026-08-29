@@ -9,6 +9,7 @@ import type {
   StyleOverride,
   StyleScope,
 } from "@/lib/glyph/style";
+import { pickableSymbols } from "@/lib/glyph/symbols";
 import type { ImageAsset } from "@/lib/glyph/types";
 import { AssetArt } from "./asset-art";
 import {
@@ -33,6 +34,12 @@ import { ResetButton } from "./controls-ui";
  * what the project has, and having is the window's job. The choice is one more
  * Glyph-tier entry in the Style Cascade, written with the same `patch-style` /
  * `clear-style` actions as any other override, with the same reset control.
+ *
+ * **Every** Symbol the Device can draw is offered, not just the Catalog's own
+ * (ADR-0015). The Catalog's keeps the id-less `symbol` key so that Glyph goes
+ * on tracking its Catalog and a Catalog fix reaches it; every other tile pins
+ * its id. Without the pinned tiles an imported Set's new drawings would be
+ * unreachable — nothing else in the tool can point a Glyph at one.
  *
  * The label is never one of the things replaced in the domain sense — it stays
  * the Input's identity and the source of its Sprite Name — so switching to
@@ -66,34 +73,39 @@ export function RenderSourceControls({
 }) {
   const isOverridden = isOverrideFieldSet(override, "renderSource");
 
+  const symbolArt = (id: string) => (
+    <AssetArt spec={{ kind: "symbol", id, device: deviceCatalogId }} />
+  );
+
   const items: AssetGridItem[] = [
     {
       key: "label",
       label: "Label",
       art: <span className="text-xs font-medium">Abc</span>,
     },
-    // An Input the Catalog ships no Symbol for isn't offered one: the choice
-    // would resolve straight back to the label.
+    // The Catalog's own Symbol, id-less so it keeps tracking the Catalog. Listed
+    // first and under the plain name, because for a well-known Input this is
+    // simply "its Symbol" — the pinned tiles below are the deliberate choice.
     ...(symbolId
-      ? [
-          {
-            key: "symbol",
-            label: "Symbol",
-            art: (
-              <AssetArt
-                spec={{ kind: "symbol", id: symbolId, device: deviceCatalogId }}
-              />
-            ),
-          },
-        ]
+      ? [{ key: SYMBOL_KEY, label: "Symbol", art: symbolArt(symbolId) }]
       : []),
+    // Deduped against the Catalog's, so a Glyph never sees its own Symbol twice.
+    ...pickableSymbols(deviceCatalogId ? [deviceCatalogId] : [])
+      .filter((symbol) => symbol.id !== symbolId)
+      .map((symbol) => ({
+        key: symbolKey(symbol.id),
+        label: symbol.label,
+        art: symbolArt(symbol.id),
+      })),
     ...imageTiles(images),
   ];
 
   function onSelect(key: string) {
     const imageId = imageIdFromKey(key);
     if (imageId) return patch({ kind: "image", imageId });
-    if (key === "label" || key === "symbol") patch({ kind: key });
+    const pinned = symbolIdFromKey(key);
+    if (pinned) return patch({ kind: "symbol", symbolId: pinned });
+    if (key === "label" || key === SYMBOL_KEY) patch({ kind: key });
   }
 
   function patch(renderSource: RenderSourceOverride) {
@@ -122,22 +134,56 @@ export function RenderSourceControls({
       <AssetGrid
         label="Render Source"
         items={items}
-        selectedKey={selectedKey(source)}
+        selectedKey={selectedKey(source, symbolId, items)}
         onSelect={onSelect}
         onAdd={onOpenAssets}
+        // Every Symbol is on offer now, so this grid runs to dozens of tiles
+        // where it used to hold three. Capped and scrolled rather than left to
+        // push the rest of the Style panel off the screen.
+        className="max-h-64 overflow-y-auto"
       />
     </div>
   );
+}
+
+/** Tile key for the Catalog's own Symbol — the one Symbol tile carrying no id. */
+const SYMBOL_KEY = "symbol";
+
+/** Tile key prefix for a Symbol pinned by id. */
+const SYMBOL_PIN = "symbol:";
+
+/** The tile key pinning `id`. */
+function symbolKey(id: string): string {
+  return `${SYMBOL_PIN}${id}`;
+}
+
+/** The Symbol id a tile key pins, or `null` if the key pins none. */
+function symbolIdFromKey(key: string): string | null {
+  return key.startsWith(SYMBOL_PIN) ? key.slice(SYMBOL_PIN.length) : null;
 }
 
 /**
  * The grid key for what the Glyph draws today.
  *
  * A resolved image whose id has left the manifest cannot appear here — the
- * resolver falls back to the Symbol or label before this sees it — so the key
- * always names a tile the grid is showing.
+ * resolver falls back to the Symbol or label before this sees it. A resolved
+ * *Symbol* can: a pin outlives the Set that drew it, and unlike an image the
+ * resolver deliberately takes a pinned id at its word rather than degrading
+ * (see `resolveRenderSource`). So the key is checked against the tiles and
+ * comes back `null` when the pinned Symbol is no longer among them — the grid's
+ * documented spelling for "the stored value is not on offer", which shows
+ * nothing selected instead of lighting the wrong tile.
  */
-function selectedKey(source: ResolvedRenderSource): string {
+function selectedKey(
+  source: ResolvedRenderSource,
+  catalogSymbolId: string | undefined,
+  items: AssetGridItem[],
+): string | null {
   if (source.kind === "image") return imageKey(source.imageId);
-  return source.kind;
+  if (source.kind === "label") return "label";
+  const key =
+    source.symbolId === catalogSymbolId
+      ? SYMBOL_KEY
+      : symbolKey(source.symbolId);
+  return items.some((item) => item.key === key) ? key : null;
 }

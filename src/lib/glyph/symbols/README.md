@@ -79,3 +79,23 @@ same authored-SVG → codegen pattern as `../layouts/`.
   you can preview colorization from the authored state. Writes to the OS temp dir;
   nothing lands in the repo.
 - `symbols.generated.ts` — generated output. **Do not edit by hand.**
+- `set-import.ts` — the pure half of **importing** a Symbol Set at runtime (#39):
+  windowing, binding a cell id to Catalog Inputs, and the refresh reconciliation
+  rules. No DOM, so it is unit-tested in node.
+- `measure-atlas.ts` — the browser half of the same. `getBBox()` replaces the
+  bounding-box maths `build-symbols.mjs` needs only because jsdom has no layout,
+  and bounds are mapped into the root's coordinate system so a cell placed with
+  `transform="translate(col, row)"` — which is how _every_ atlas here places its
+  cells — lands in the right grid square.
+- `set-art.ts` — the runtime registry of imported cells. `getSymbolSvg` consults
+  it before the generated art, so an imported cell wins for its id on every
+  Device.
+
+## The two ways a Set gets here
+
+The atlases in this folder are **shipped** Sets: authored by hand, compiled in.
+A user can also **import** their own at runtime through the Assets window — the
+same authoring convention above, read in the browser instead of at build time,
+and carried in the project config rather than in `symbols.generated.ts`. The
+convention is shared deliberately: `paint-roles.mjs` classifies both, and an
+atlas authored for `npm run symbols` imports unchanged. See ADR-0015.

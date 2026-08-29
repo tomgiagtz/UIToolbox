@@ -473,13 +473,57 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
     expect(selectedRenderSource()).toContain("Symbol");
   });
 
-  it("offers no Symbol tile for an Input the Catalog ships none for", () => {
-    // Offering it would only resolve straight back to the label.
+  it("still draws its label for an Input the Catalog ships no Symbol for", () => {
+    // No id-less "Symbol" tile, because there is no Catalog Symbol to track.
     renderPanel();
     expect(
-      renderSourceOptions().some((o) => o.textContent?.includes("Symbol")),
+      renderSourceOptions().some((o) => o.textContent?.trim() === "Symbol"),
     ).toBe(false);
     expect(selectedRenderSource()).toContain("Label");
+  });
+
+  it("offers every Symbol the Device can draw, not only the Catalog's", () => {
+    // ADR-0015: an imported Set's drawings are reachable from any Glyph, and
+    // the picker is the only thing in the tool that can point one at them. A
+    // Keyboard letter has no Catalog Symbol, and still gets the whole list.
+    renderPanel();
+    const names = renderSourceOptions().map((o) => o.textContent ?? "");
+    expect(names.some((n) => n.includes("Space"))).toBe(true);
+    expect(names.some((n) => n.includes("Arrow Up"))).toBe(true);
+  });
+
+  it("pins the Symbol it was pointed at, so it stops tracking the Catalog", async () => {
+    const { dispatch } = renderPanel();
+    await pickRenderSource("Arrow Up");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: expect.objectContaining({ tier: "glyph" }),
+      patch: {
+        foreground: {
+          renderSource: { kind: "symbol", symbolId: "key-arrow-up" },
+        },
+      },
+    });
+  });
+
+  it("leaves the Catalog's own Symbol unpinned, so a Catalog fix reaches it", async () => {
+    // Starting from an explicit label override, so the Symbol tile is not
+    // already the selected one — a controlled grid won't re-fire for that.
+    const base = xboxProject();
+    const { dispatch } = renderPanel({
+      project: projectReducer(base, {
+        type: "patch-style",
+        scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
+        patch: { foreground: { renderSource: { kind: "label" } } },
+      }),
+      glyph: xboxA,
+    });
+    await pickRenderSource("Symbol");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patch-style",
+      scope: { tier: "glyph", deviceIndex: 0, glyphId: "xbox-a" },
+      patch: { foreground: { renderSource: { kind: "symbol" } } },
+    });
   });
 
   it("switches a Symbol-rendered Glyph back to its label", async () => {
@@ -493,13 +537,16 @@ describe("GlyphStylePanel — Render Source (issue #20)", () => {
   });
 
   it("shows no image tiles until something has been uploaded", () => {
-    // The label, and the way to get some art. The sentence that used to say so
-    // is gone: the tile is the same instruction, in the place it applies.
+    // The label, the Symbols, and the way to get some art. The sentence that
+    // used to say so is gone: the tile is the same instruction, in the place it
+    // applies. Asserted as an absence rather than an exact list, because the
+    // Symbol tiles beside them are the shipped atlas's business, not this
+    // test's (ADR-0015).
     renderPanel();
-    expect(renderSourceOptions().map((o) => o.textContent ?? "")).toEqual([
-      expect.stringContaining("Label"),
-      expect.stringContaining("Add images"),
-    ]);
+    const names = renderSourceOptions().map((o) => o.textContent ?? "");
+    expect(names.some((n) => n.includes(image.fileName))).toBe(false);
+    expect(names.some((n) => n.includes("Label"))).toBe(true);
+    expect(names.at(-1)).toContain("Add images");
   });
 
   it("points the Glyph at an uploaded image", async () => {

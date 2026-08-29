@@ -27,6 +27,8 @@ import type {
   ImageAsset,
   NamingConfig,
   Project,
+  RoleColors,
+  SymbolSet,
 } from "@/lib/glyph/types";
 
 /**
@@ -54,6 +56,17 @@ export type ProjectAction =
   | { type: "apply-preset"; preset: Preset; taken: string[] }
   | { type: "toggle-input"; deviceIndex: number; inputId: string }
   | { type: "add-custom-input"; deviceIndex: number; label: string }
+  // Add a custom Input already pointed at a Symbol — the Assets window's "Add as
+  // Input" on an imported cell (ADR-0015). One action rather than
+  // `add-custom-input` then `patch-style`, because the id is minted in here and
+  // the caller never learns it; splitting them would mean either leaking the
+  // minting rule or landing an Input that draws its label for a beat.
+  | {
+      type: "add-symbol-input";
+      deviceIndex: number;
+      label: string;
+      symbolId: string;
+    }
   | {
       type: "edit-custom-input";
       deviceIndex: number;
@@ -74,6 +87,16 @@ export type ProjectAction =
   // construction it only drops rows nothing references.
   | { type: "remove-image"; imageId: string }
   | { type: "sweep-unused-images" }
+  // --- Imported Symbol Sets (#39) ---
+  // A Set arrives whole, from an accepted import review, and replaces any Set of
+  // the same id — which is what a refresh is. There is deliberately no action to
+  // drop a single cell: a Set holds exactly what its file draws (ADR-0015), so
+  // the only way to remove a Symbol is to stop drawing it and refresh.
+  | { type: "install-set"; set: SymbolSet }
+  | { type: "remove-set"; setId: string }
+  // A Set's default Paint Role colours are how its art is *viewed*, not a
+  // cascade tier, so this writes to the Set and never to a style (ADR-0015 §3).
+  | { type: "set-role-colors"; setId: string; roleColors: RoleColors }
   // --- Export settings: cell size + naming (#6, #21) ---
   // All Project-global. `cellSize` is an atlas output value rather than a cascade
   // tier (ADR-0006), which is why it sits beside naming (ADR-0012 §6).
@@ -135,6 +158,34 @@ export function projectReducer(
       };
     }
 
+    case "add-symbol-input": {
+      const label = action.label.trim();
+      if (!label) return project;
+      return {
+        ...project,
+        devices: patchDevice(project.devices, action.deviceIndex, (d) => {
+          const id = nextCustomId(d);
+          return {
+            ...d,
+            custom: [...d.custom, { id, label }],
+            // The Glyph tier, not a seed: a custom Input has no Catalog entry to
+            // seed from, and this is exactly the override the Render Source
+            // picker would have written had the user pointed the Input by hand.
+            glyphStyles: {
+              ...d.glyphStyles,
+              [id]: {
+                ...d.glyphStyles[id],
+                foreground: {
+                  ...d.glyphStyles[id]?.foreground,
+                  renderSource: { kind: "symbol", symbolId: action.symbolId },
+                },
+              },
+            },
+          };
+        }),
+      };
+    }
+
     case "edit-custom-input":
       return {
         ...project,
@@ -171,6 +222,40 @@ export function projectReducer(
         project,
         unusedImages(project).map((image) => image.id),
       );
+
+    case "install-set": {
+      const replacing = project.sets.some((set) => set.id === action.set.id);
+      return {
+        ...project,
+        // Replaced in place rather than appended, so a refresh doesn't reorder
+        // the Assets window under the importer who just accepted it.
+        sets: replacing
+          ? project.sets.map((set) =>
+              set.id === action.set.id ? action.set : set,
+            )
+          : [...project.sets, action.set],
+      };
+    }
+
+    // A Glyph pointing at a removed Set's cell keeps its Symbol id and draws its
+    // label, exactly as a refresh that stops drawing a cell leaves it — so the
+    // art comes back if the Set does, with no repair. That is `resolveRenderSource`
+    // degrading, not something this action has to sweep.
+    case "remove-set":
+      return {
+        ...project,
+        sets: project.sets.filter((set) => set.id !== action.setId),
+      };
+
+    case "set-role-colors":
+      return {
+        ...project,
+        sets: project.sets.map((set) =>
+          set.id === action.setId
+            ? { ...set, roleColors: action.roleColors }
+            : set,
+        ),
+      };
 
     case "set-cell-size":
       return patchExportSettings(project, { cellSize: action.size });

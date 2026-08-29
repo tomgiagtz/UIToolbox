@@ -45,9 +45,14 @@ user-uploaded **custom image**. Whichever source is chosen is composited onto th
 same Background tile, sized and oriented by its **foreground transform**.
 
 The default comes from the Catalog — a well-known Input draws its Symbol, anything
-else its label — and any Glyph can override it through the **Style Cascade**. An
-override the project can't satisfy falls back to that default rather than failing:
-a Symbol pick on an Input that ships none, or an image whose bytes aren't present.
+else its label — and any Glyph can override it through the **Style Cascade**. A
+Symbol override has two spellings: unnamed, it means "this Input's Catalog Symbol"
+and keeps tracking the Catalog; naming one **pins** that Symbol, which is how a
+Glyph draws art its Catalog never knew about. An override the project can't
+satisfy falls back to the default rather than failing: an unnamed Symbol pick on
+an Input that ships none, or an image whose bytes aren't present. A pinned Symbol
+is taken at its word — art that doesn't resolve draws nothing, rather than the
+Glyph quietly drawing something else.
 The label is retained either way, since it stays the Input's identity and the
 source of its **Sprite Name**.
 
@@ -129,8 +134,10 @@ Shift…). A Symbol is an **SVG** keyed by a stable `id`, drawn from a **Symbol
 Set**. Its shapes are painted in **Paint Role** sentinels, not real colours, so
 the tool recolours each role (fill / border / secondary) through the Style
 Cascade; a Symbol's appearance is never baked into its art. Well-known Inputs
-default to their Symbol; the user can toggle back to the label. Distinct from a
-**custom image**, which the user supplies as a single per-Glyph graphic.
+default to their Symbol and can be toggled back to the label, and **any** Glyph
+can be pointed at any Symbol its Device can draw — the Catalog supplies the
+default, not the ceiling. Distinct from a **custom image**, which the user
+supplies as a single per-Glyph graphic.
 
 _Avoid:_ "icon", "default image" — use Symbol for artwork; "tintable" /
 "fixed-color" (the retired ADR-0004 model — see ADR-0007).
@@ -159,14 +166,18 @@ delivers them. Cell ids are **bare**: the
 Set a cell lives in is what scopes it to a **Device**, so the Xbox and
 PlayStation Sets both author `bumper` and `dpad-right` and each resolves to its
 own art. A Set of genuinely cross-device art is the fallback for any Device that
-ships none of its own. Today every Set is authored in the repo
-(`src/lib/glyph/symbols/`) and compiled in at build time by `npm run symbols`, so
-there is no Set to pick or add at runtime. By the _structure-only invariant_, the
+ships none of its own. By the _structure-only invariant_, the
 SVG carries only ids + role sentinels — never labels, kind, rotation, or
 appearance; all of those are configuration.
 
-_(Authoring and importing your own Set, and a Set carrying its own default role
-colours in the project save file, are ADR-0007 §4–§5, decided and not yet built.)_
+A Set either **ships** — authored in the repo (`src/lib/glyph/symbols/`) and
+compiled in by `npm run symbols` — or is **imported**: the user's own SVG,
+windowed in the browser and carried whole in the project config (ADR-0015). An
+imported Set belongs to the project rather than to a Device, so its cells answer
+for their ids on every Device and win over shipped art of the same name. A Set
+holds **exactly what its file draws**, which is why there is no way to remove one
+cell: stop drawing it and refresh. It also carries its own default **Paint Role**
+colours — a palette for _viewing_ sentinel-painted art, never a cascade tier.
 
 _Avoid:_ "sprite sheet" (that's the exported **Sprite Atlas**), "icon pack".
 
@@ -388,10 +399,9 @@ See `docs/adr/`:
 - **ADR-0006** — Glyph style resolves through a Project → Device → Glyph cascade
   (extended by ADR-0007; amended by ADR-0012, which cuts it to three tiers and
   brings the font in).
-- **ADR-0007** — _Accepted, partly built._ Sentinel paint roles and importable
-  Symbol Sets (§3's tier count and its brand-palette tier amended by ADR-0012).
-  §4–§5 — import, review, refresh-from-path, and the Symbols sub-tool — are not
-  built.
+- **ADR-0007** — Sentinel paint roles and importable Symbol Sets (§3's tier
+  count and its brand-palette tier amended by ADR-0012; §4–§5's import, review
+  and refresh-from-path built and narrowed by ADR-0015).
 - **ADR-0008** — Custom image bytes persist in IndexedDB (amends ADR-0004), and
   content scale joins the Style Cascade (content scale replaced by a Transform in
   ADR-0012).
@@ -411,6 +421,12 @@ See `docs/adr/`:
   promised by a live preview rather than by its picker card. Amends ADR-0006,
   ADR-0007 §3, ADR-0008 and ADR-0009 — the glossary entries above are flagged
   where they run ahead of the code.
+- **ADR-0015** — An imported **Symbol Set** is carried in the project config
+  rather than as bytes beside it, holds exactly what its file draws (so a
+  refresh removes art, loudly and by id, and no cell can be dropped by hand),
+  and its default Paint Role colours are a viewing palette rather than a cascade
+  tier. Imported art outranks shipped art of the same id, on every Device.
+  Amends ADR-0007 §3 and fills ADR-0014 §3.
 - **ADR-0014** — _Accepted, partly built._ One **Assets window** owns _having_
   art — upload, removal, Symbol Set import — while the Style panel keeps
   _picking_ it. Closes ADR-0008's missing per-image delete, mints image ids

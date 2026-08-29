@@ -267,6 +267,12 @@ Presets. The grid ships showing the one Symbol the Catalog gives an Input; the
 free picker stays #45's to carry, and the intended destination is that any Symbol
 from any Catalog becomes pickable.
 
+**Since decided, in ADR-0015 §7: yes.** Importing a Symbol Set forced it — an
+imported cell the Catalog has never heard of is unreachable otherwise, so the
+gallery had to become a free picker for the Set to be worth anything. The
+`symbol` variant now carries an optional id; omitting it still means "the
+Catalog's".
+
 ## Consequences
 
 - An uploaded **font** is an Asset with the same one-way manifest and no removal.
