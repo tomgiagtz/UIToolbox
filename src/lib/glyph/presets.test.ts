@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProject } from "@/lib/glyph/defaults";
+import { DEFAULT_STYLE, createDefaultProject } from "@/lib/glyph/defaults";
 import {
   PRESETS,
   defaultTakenDevices,
@@ -8,6 +8,7 @@ import {
   type Preset,
 } from "@/lib/glyph/presets";
 import { projectReducer } from "@/lib/glyph/project";
+import { resolveDeviceInputs } from "@/lib/glyph/generate";
 
 /**
  * The shipped set is validated by the build gate (`presets/build-presets.mts`)
@@ -36,7 +37,7 @@ describe("shipped Presets", () => {
   });
 
   it("finds a Preset by id", () => {
-    expect(getPreset("xbox-neon")?.label).toBe("Neon");
+    expect(getPreset("xbox-brand")?.label).toBe("Brand");
     expect(getPreset("nope")).toBeUndefined();
   });
 });
@@ -96,6 +97,62 @@ describe("the preview project the pane draws (ADR-0012 §4)", () => {
     const preview = previewPreset(edited, twoDevicePreset(), ["keyboard"]);
     expect(preview.devices[0].enabled).toEqual(
       createDefaultProject().devices[0].enabled,
+    );
+  });
+});
+
+/**
+ * The one shipped Preset whose *values* are the point (#75): A green, B red, X
+ * cyan, Y yellow on black letters, and nothing above would notice those turning
+ * into four greys. Read through the cascade rather than off the payload,
+ * because the look is a resolution and not a literal.
+ */
+describe("the Xbox brand palette", () => {
+  const FACE_BUTTONS: Record<string, { disc: string; letter: string }> = {
+    "xbox-a": { disc: "#3cdb4e", letter: "#000000" },
+    "xbox-b": { disc: "#d04242", letter: "#000000" },
+    "xbox-x": { disc: "#40ccd0", letter: "#000000" },
+    "xbox-y": { disc: "#ecdb33", letter: "#000000" },
+  };
+
+  /** The Preset applied to a fresh project, resolved Input by Input. */
+  function resolvedInputsById() {
+    const preset = getPreset("xbox-brand")!;
+    const project = previewPreset(createDefaultProject(), preset, ["xbox"]);
+    const device = project.devices.find((d) => d.catalogId === "xbox")!;
+    return new Map(
+      resolveDeviceInputs(device, project).map((input) => [input.id, input]),
+    );
+  }
+
+  it("paints every face button its brand colour, on a bare circle", () => {
+    const inputs = resolvedInputsById();
+    for (const [id, { disc, letter }] of Object.entries(FACE_BUTTONS)) {
+      const { background, foreground } = inputs.get(id)!.style;
+      // A face button has no Catalog backer, so it takes the device-wide circle.
+      expect(background.source, id).toEqual({ kind: "shape" });
+      expect(background.shape, id).toBe("circle");
+      expect(background.fill, id).toBe(disc);
+      expect(background.border.width, id).toBe(0);
+      expect(foreground.symbolPaints.fill, id).toBe(letter);
+    }
+  });
+
+  it("leaves every shoulder its authored backer, which outranks the circle", () => {
+    const inputs = resolvedInputsById();
+    for (const id of ["xbox-lb", "xbox-rb", "xbox-lt", "xbox-rt"]) {
+      expect(inputs.get(id)!.style.background.source, id).toMatchObject({
+        kind: "authored",
+      });
+    }
+  });
+
+  it("repaints nothing it doesn't name, so a project's own look survives", () => {
+    const inputs = resolvedInputsById();
+    const dpad = inputs.get("xbox-dpad-up")!.style;
+    expect(dpad.background.fill).toBe(DEFAULT_STYLE.background.fill);
+    expect(dpad.foreground.symbolPaints).toEqual(
+      DEFAULT_STYLE.foreground.symbolPaints,
     );
   });
 });

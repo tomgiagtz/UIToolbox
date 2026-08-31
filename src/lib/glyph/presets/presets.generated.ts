@@ -7,92 +7,58 @@ import type { Preset } from "@/lib/glyph/presets";
 /** Every shipped Preset, in manifest order — which is picker order. */
 export const PRESETS: Preset[] = [
   {
-    "id": "xbox-neon",
-    "label": "Neon",
+    "id": "xbox-brand",
+    "label": "Brand",
     "kind": "device",
     "devices": [
       {
         "catalogId": "xbox",
         "style": {
           "background": {
-            "fill": "#0b1020",
-            "cornerRadius": 30,
+            "shape": "circle",
             "border": {
-              "width": 6,
-              "color": "#22d3ee"
-            }
-          },
-          "foreground": {
-            "fontFamily": "JetBrains Mono",
-            "fontWeight": 700,
-            "textColor": "#22d3ee",
-            "symbolPaints": {
-              "fill": "#22d3ee",
-              "border": "#0b1020",
-              "secondary": "#f0abfc"
+              "width": 0
             }
           }
         },
         "glyphStyles": {
           "xbox-a": {
             "background": {
-              "border": {
-                "color": "#4ade80"
-              }
+              "fill": "#3cdb4e"
             },
             "foreground": {
               "symbolPaints": {
-                "fill": "#4ade80"
+                "fill": "#000000"
               }
             }
           },
           "xbox-b": {
             "background": {
-              "border": {
-                "color": "#fb7185"
-              }
+              "fill": "#d04242"
             },
             "foreground": {
               "symbolPaints": {
-                "fill": "#fb7185"
+                "fill": "#000000"
               }
             }
           },
           "xbox-x": {
             "background": {
-              "border": {
-                "color": "#60a5fa"
-              }
+              "fill": "#40ccd0"
             },
             "foreground": {
               "symbolPaints": {
-                "fill": "#60a5fa"
+                "fill": "#000000"
               }
             }
           },
           "xbox-y": {
             "background": {
-              "border": {
-                "color": "#fde047"
-              }
+              "fill": "#ecdb33"
             },
             "foreground": {
               "symbolPaints": {
-                "fill": "#fde047"
-              }
-            }
-          },
-          "xbox-left-stick": {
-            "foreground": {
-              "symbolPaints": {
-                "secondary": "#22d3ee"
-              }
-            }
-          },
-          "xbox-right-stick": {
-            "foreground": {
-              "symbolPaints": {
-                "secondary": "#f0abfc"
+                "fill": "#000000"
               }
             }
           }

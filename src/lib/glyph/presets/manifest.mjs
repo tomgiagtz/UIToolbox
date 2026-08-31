@@ -28,10 +28,10 @@
 /** @type {PresetEntry[]} */
 export const PRESET_MANIFEST = [
   {
-    id: "xbox-neon",
-    label: "Neon",
+    id: "xbox-brand",
+    label: "Brand",
     kind: "device",
-    source: "xbox-neon.json",
+    source: "xbox-brand.json",
     catalogId: "xbox",
   },
   { id: "arcade", label: "Arcade", kind: "project", source: "arcade.json" },

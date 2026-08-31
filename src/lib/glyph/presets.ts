@@ -46,7 +46,7 @@ export interface PresetDevice {
 interface PresetBase {
   /** Stable id, and the key the picker selects by. */
   id: string;
-  /** Picker label, e.g. "Neon". The species is said by the action, not a chip. */
+  /** Picker label, e.g. "Brand". The species is said by the action, not a chip. */
   label: string;
   /**
    * Every Device this Preset covers, in the order its source export listed
