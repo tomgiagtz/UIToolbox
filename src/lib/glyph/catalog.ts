@@ -80,6 +80,15 @@ function glyphKey(name: string, label: string): CatalogInput {
   return { ...key(name, label), symbolId: `key-${name}` };
 }
 
+/**
+ * A mouse Input. Its id carries no `key-` prefix — a mouse button is not one —
+ * and its Symbol draws the whole silhouette, so like a stick it seeds *no*
+ * Background rather than letting the Project base's tile fall through.
+ */
+function mouse(id: string, label: string): CatalogInput {
+  return { id, label, symbolId: id, backgroundId: null };
+}
+
 /** Letters A–Z as individual keys (id `key-a`, label "A", …). */
 const LETTERS: CatalogInput[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   .split("")
@@ -141,12 +150,12 @@ const KEYBOARD_INPUTS: CatalogInput[] = [
   // Symbol draws the same silhouette and emphasises one part, so the blank body
   // is an Input in its own right rather than Layout decoration — an asset no
   // Input can reach could never be exported.
-  { id: "mouse", label: "Mouse", symbolId: "mouse" },
-  { id: "mouse-left", label: "LMB", symbolId: "mouse-left" },
-  { id: "mouse-right", label: "RMB", symbolId: "mouse-right" },
-  { id: "mouse-middle", label: "MMB", symbolId: "mouse-middle" },
-  { id: "mouse-4", label: "Mouse 4", symbolId: "mouse-4" },
-  { id: "mouse-5", label: "Mouse 5", symbolId: "mouse-5" },
+  mouse("mouse", "Mouse"),
+  mouse("mouse-left", "LMB"),
+  mouse("mouse-right", "RMB"),
+  mouse("mouse-middle", "MMB"),
+  mouse("mouse-4", "Mouse 4"),
+  mouse("mouse-5", "Mouse 5"),
   ...LETTERS,
 ];
 
@@ -232,11 +241,17 @@ function shoulder(
 }
 
 /**
- * A stick Input: its Symbol draws its own ring, so it seeds *no* Background
- * rather than leaving one to fall through from the Project base.
+ * An Input whose Symbol draws its own silhouette — a stick's ring, a d-pad's
+ * cross — so it seeds *no* Background rather than leaving one to fall through
+ * from the Project base.
  */
+function selfDrawn(symbolId: string): PadEntry {
+  return { symbolId, backgroundId: null };
+}
+
+/** A stick Input, which draws its own ring. */
 function stick(): PadEntry {
-  return { symbolId: "stick", backgroundId: null };
+  return selfDrawn("stick");
 }
 
 // Asset ids are bare: the Device supplies the scope at resolve time, so both pads
@@ -254,10 +269,10 @@ const XBOX_INPUTS = pad("xbox", [
   ["menu", "Menu", { symbolId: "menu" }],
   ["left-stick", "Left Stick", stick()],
   ["right-stick", "Right Stick", stick()],
-  ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
-  ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
-  ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
-  ["dpad-right", "D-Pad Right", { symbolId: "dpad-right" }],
+  ["dpad-up", "D-Pad Up", selfDrawn("dpad-up")],
+  ["dpad-down", "D-Pad Down", selfDrawn("dpad-down")],
+  ["dpad-left", "D-Pad Left", selfDrawn("dpad-left")],
+  ["dpad-right", "D-Pad Right", selfDrawn("dpad-right")],
 ]);
 
 const PLAYSTATION_INPUTS = pad("ps", [
@@ -273,10 +288,10 @@ const PLAYSTATION_INPUTS = pad("ps", [
   ["options", "Options", { symbolId: "options" }],
   ["left-stick", "Left Stick", stick()],
   ["right-stick", "Right Stick", stick()],
-  ["dpad-up", "D-Pad Up", { symbolId: "dpad-up" }],
-  ["dpad-down", "D-Pad Down", { symbolId: "dpad-down" }],
-  ["dpad-left", "D-Pad Left", { symbolId: "dpad-left" }],
-  ["dpad-right", "D-Pad Right", { symbolId: "dpad-right" }],
+  ["dpad-up", "D-Pad Up", selfDrawn("dpad-up")],
+  ["dpad-down", "D-Pad Down", selfDrawn("dpad-down")],
+  ["dpad-left", "D-Pad Left", selfDrawn("dpad-left")],
+  ["dpad-right", "D-Pad Right", selfDrawn("dpad-right")],
 ]);
 
 /** The Catalogs the tool ships, in picker order. */

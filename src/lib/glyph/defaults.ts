@@ -43,15 +43,21 @@ export const DEFAULT_CELL_SIZE = 128;
 /** Default label color. */
 export const DEFAULT_TEXT_COLOR = "#f8fafc";
 
+/** The colour a fresh project's Background shape is drawn in. */
+export const DEFAULT_BACKGROUND_FILL = "#1e293b";
+
 /**
  * Default Symbol Paint Role colours. `fill` (a Symbol's primary ink) follows the
- * label colour so face buttons read like their legend; `border` is a dark grey
- * outline and `secondary` a light grey highlight, giving multi-part symbols depth
- * out of the box. The user can re-split any role through the cascade (ADR-0007).
+ * label colour so face buttons read like their legend; `border` follows the
+ * Background shape's own colour, so a Symbol that draws its own silhouette — a
+ * stick's ring, a d-pad's cross — reads as a gap cut out of the ink rather than
+ * a second outline over it; `secondary` is a dark grey highlight, giving
+ * multi-part Symbols depth out of the box. The user can re-split any role
+ * through the cascade (ADR-0007).
  */
 export const DEFAULT_SYMBOL_PAINTS: SymbolPaints = {
   fill: DEFAULT_TEXT_COLOR,
-  border: "#cbd5e1",
+  border: DEFAULT_BACKGROUND_FILL,
   secondary: "#334155",
 };
 
@@ -72,7 +78,7 @@ export const DEFAULT_BACKGROUND: Background = {
   source: { kind: "shape" },
   transform: identityTransform(),
   shape: "rounded-rect",
-  fill: "#1e293b",
+  fill: DEFAULT_BACKGROUND_FILL,
   cornerRadius: 18,
   border: { width: 4, color: "#475569" },
 };

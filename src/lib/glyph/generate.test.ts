@@ -562,14 +562,25 @@ describe("parity — the Style Cascade is a no-op at defaults", () => {
     expect(kb.placements.map((p) => p.label)).toEqual(LEGACY_KEYBOARD);
   });
 
-  it("resolves every Glyph to the untouched Project style", () => {
+  /** The Default Selection's two mouse Inputs, which the Catalog seeds. */
+  const MOUSE_LABELS = new Set(["LMB", "RMB"]);
+
+  it("resolves every Glyph to the untouched Project style, bar a seeded tile", () => {
     const proj = createDefaultProject();
     const base = proj.style;
     const [kb] = generateTilesets(proj);
     for (const placement of kb.placements) {
-      // Empty Device / Catalog / Glyph tiers ⇒ effective style === Project style,
-      // so pixels are byte-identical to the pre-cascade output.
-      expect(placement.style).toEqual(base);
+      // Empty Device / Glyph tiers ⇒ effective style === Project style, so
+      // pixels are byte-identical to the pre-cascade output. The mouse Inputs
+      // are the exception the Catalog itself makes: their Symbol draws the
+      // whole silhouette, so it seeds them no Background to draw it on.
+      const source = MOUSE_LABELS.has(placement.label)
+        ? { kind: "none" }
+        : base.background.source;
+      expect(placement.style, placement.label).toEqual({
+        ...base,
+        background: { ...base.background, source },
+      });
     }
   });
 });
