@@ -137,12 +137,29 @@ describe("projectReducer — devices (#5)", () => {
     expect(next.devices[1].custom).toEqual([]);
   });
 
-  it("opens an Xbox Device on the circle its controls actually are", () => {
-    const next = run(base(), { type: "toggle-device", catalogId: "xbox" });
+  it("opens a pad Device on the circle its controls actually are", () => {
+    const next = run(
+      base(),
+      { type: "toggle-device", catalogId: "xbox" },
+      { type: "toggle-device", catalogId: "playstation" },
+    );
     // A Device-tier value, not a seed: the user and a Preset both write over it.
-    expect(next.devices[1].style).toEqual({ background: { shape: "circle" } });
+    const circle = { background: { shape: "circle" } };
+    expect(next.devices[1].style).toEqual(circle);
+    expect(next.devices[2].style).toEqual(circle);
     // The Keyboard's keys are the base's rounded rect, so it opens on nothing.
     expect(next.devices[0].style).toEqual({});
+  });
+
+  it("opens View and Menu on an outlined tile, since their art is line work", () => {
+    const next = run(base(), { type: "toggle-device", catalogId: "xbox" });
+    const outlined = {
+      foreground: { symbolPaints: { fill: "transparent", border: "#f8fafc" } },
+    };
+    expect(next.devices[1].glyphStyles).toEqual({
+      "xbox-view": outlined,
+      "xbox-menu": outlined,
+    });
   });
 
   it("keeps Devices in Catalog order regardless of toggle sequence", () => {

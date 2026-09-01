@@ -35,15 +35,18 @@ import type {
  */
 const CATALOG_DEFAULT_STYLE: Record<string, StyleOverride> = {
   xbox: { background: { shape: "circle" } },
+  playstation: { background: { shape: "circle" } },
 };
 
 /**
  * Build a fresh Device from a Catalog: its **Default Selection** becomes the
  * enabled selection, with no custom Inputs and the Device tier its Catalog opens
- * on ({@link CATALOG_DEFAULT_STYLE}, `{}` for most). The enabled array and that
- * style are copied so edits never mutate shared data.
+ * on ({@link CATALOG_DEFAULT_STYLE}, `{}` for most), plus any per-Input opening
+ * overrides ({@link CATALOG_DEFAULT_GLYPH_STYLES}). All three are copied so
+ * edits never mutate shared data.
  *
- * `glyphStyles` stays empty — seeds are read at resolve time, never pre-filled.
+ * Those Glyph-tier entries are the *only* thing pre-filled there: a Catalog
+ * **seed** is still read at resolve time and never written into a project.
  */
 export function createDeviceFromCatalog(catalog: DeviceCatalog): DeviceConfig {
   return {
@@ -52,7 +55,9 @@ export function createDeviceFromCatalog(catalog: DeviceCatalog): DeviceConfig {
     enabled: [...catalog.defaultEnabled],
     custom: [],
     style: structuredClone(CATALOG_DEFAULT_STYLE[catalog.id] ?? {}),
-    glyphStyles: {},
+    glyphStyles: structuredClone(
+      CATALOG_DEFAULT_GLYPH_STYLES[catalog.id] ?? {},
+    ),
   };
 }
 
@@ -61,6 +66,35 @@ export const DEFAULT_CELL_SIZE = 128;
 
 /** Default label color. */
 export const DEFAULT_TEXT_COLOR = "#f8fafc";
+
+/**
+ * A Symbol drawn as pure line work: its outline in the ink's white, and nothing
+ * filled behind it. The art decides which roles those are — a stroke on the
+ * border sentinel, a body on the fill one — so this says both.
+ */
+const OUTLINE_ONLY: StyleOverride = {
+  foreground: {
+    symbolPaints: { fill: "transparent", border: DEFAULT_TEXT_COLOR },
+  },
+};
+
+/**
+ * The Glyph tier a fresh Device opens on, keyed by Input id — for the Inputs
+ * whose tile is a fact about the control rather than a choice.
+ *
+ * View and Menu are line drawings, so they are painted as line work: without
+ * this their outline takes the border role, which follows the tile's own
+ * colour, and the drawing disappears into the disc it sits on. Same argument as
+ * {@link CATALOG_DEFAULT_STYLE} for living here and being an ordinary override —
+ * it is where the tier opens, and the user resets or repaints it like anything
+ * else.
+ */
+const CATALOG_DEFAULT_GLYPH_STYLES: Record<
+  string,
+  Record<string, StyleOverride>
+> = {
+  xbox: { "xbox-view": OUTLINE_ONLY, "xbox-menu": OUTLINE_ONLY },
+};
 
 /** The colour a fresh project's Background shape is drawn in. */
 export const DEFAULT_BACKGROUND_FILL = "#1e293b";

@@ -61,6 +61,22 @@ export const PRESETS: Preset[] = [
                 "fill": "#000000"
               }
             }
+          },
+          "xbox-view": {
+            "foreground": {
+              "symbolPaints": {
+                "fill": "transparent",
+                "border": "#f8fafc"
+              }
+            }
+          },
+          "xbox-menu": {
+            "foreground": {
+              "symbolPaints": {
+                "fill": "transparent",
+                "border": "#f8fafc"
+              }
+            }
           }
         }
       }
