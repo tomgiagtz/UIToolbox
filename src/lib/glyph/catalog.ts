@@ -242,8 +242,8 @@ function shoulder(
 
 /**
  * An Input whose Symbol draws its own silhouette — a stick's ring, a d-pad's
- * cross — so it seeds *no* Background rather than leaving one to fall through
- * from the Project base.
+ * cross, a View button's outlined body — so it seeds *no* Background rather
+ * than leaving one to fall through from the Project base.
  */
 function selfDrawn(symbolId: string): PadEntry {
   return { symbolId, backgroundId: null };
@@ -265,8 +265,8 @@ const XBOX_INPUTS = pad("xbox", [
   ["rb", "RB", shoulder("bumper", "right", "R1", "Right Bumper")],
   ["lt", "LT", shoulder("trigger", "left", "L2", "Left Trigger")],
   ["rt", "RT", shoulder("trigger", "right", "R2", "Right Trigger")],
-  ["view", "View", { symbolId: "view" }],
-  ["menu", "Menu", { symbolId: "menu" }],
+  ["view", "View", selfDrawn("view")],
+  ["menu", "Menu", selfDrawn("menu")],
   ["left-stick", "Left Stick", stick()],
   ["right-stick", "Right Stick", stick()],
   ["dpad-up", "D-Pad Up", selfDrawn("dpad-up")],
@@ -284,8 +284,8 @@ const PLAYSTATION_INPUTS = pad("ps", [
   ["r1", "R1", shoulder("bumper", "right", "RB", "Right Bumper")],
   ["l2", "L2", shoulder("trigger", "left", "LT", "Left Trigger")],
   ["r2", "R2", shoulder("trigger", "right", "RT", "Right Trigger")],
-  ["share", "Share", { symbolId: "share" }],
-  ["options", "Options", { symbolId: "options" }],
+  ["share", "Share", selfDrawn("share")],
+  ["options", "Options", selfDrawn("options")],
   ["left-stick", "Left Stick", stick()],
   ["right-stick", "Right Stick", stick()],
   ["dpad-up", "D-Pad Up", selfDrawn("dpad-up")],
