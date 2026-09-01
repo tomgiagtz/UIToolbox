@@ -137,6 +137,14 @@ describe("projectReducer — devices (#5)", () => {
     expect(next.devices[1].custom).toEqual([]);
   });
 
+  it("opens an Xbox Device on the circle its controls actually are", () => {
+    const next = run(base(), { type: "toggle-device", catalogId: "xbox" });
+    // A Device-tier value, not a seed: the user and a Preset both write over it.
+    expect(next.devices[1].style).toEqual({ background: { shape: "circle" } });
+    // The Keyboard's keys are the base's rounded rect, so it opens on nothing.
+    expect(next.devices[0].style).toEqual({});
+  });
+
   it("keeps Devices in Catalog order regardless of toggle sequence", () => {
     const next = run(
       base(),

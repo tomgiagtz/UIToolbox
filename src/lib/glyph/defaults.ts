@@ -9,7 +9,11 @@ import {
   DEFAULT_FONT_WEIGHT,
 } from "@/lib/glyph/bundled-fonts";
 import { DEVICE_CATALOGS, type DeviceCatalog } from "@/lib/glyph/catalog";
-import type { GlyphStyle, SymbolPaints } from "@/lib/glyph/style";
+import type {
+  GlyphStyle,
+  StyleOverride,
+  SymbolPaints,
+} from "@/lib/glyph/style";
 import type {
   Background,
   DeviceConfig,
@@ -20,9 +24,24 @@ import type {
 } from "@/lib/glyph/types";
 
 /**
+ * The Device tier a fresh Device of a given Catalog starts on — the one shape
+ * its controls actually are, where that isn't the Project base's rounded rect.
+ *
+ * Here rather than in `catalog.ts`, which says only what is *present* and
+ * carries no style (ADR-0005). It is an ordinary Device-tier override and not a
+ * seed for the same reason: a seed outranks the Device tier and could not then
+ * be restyled, while this is just the value the tier opens on, and the user (or
+ * a Preset) writes over it like any other.
+ */
+const CATALOG_DEFAULT_STYLE: Record<string, StyleOverride> = {
+  xbox: { background: { shape: "circle" } },
+};
+
+/**
  * Build a fresh Device from a Catalog: its **Default Selection** becomes the
- * enabled selection, with no custom Inputs and empty (pass-through) Style Cascade
- * overrides. The enabled array is copied so edits never mutate the shared Catalog.
+ * enabled selection, with no custom Inputs and the Device tier its Catalog opens
+ * on ({@link CATALOG_DEFAULT_STYLE}, `{}` for most). The enabled array and that
+ * style are copied so edits never mutate shared data.
  *
  * `glyphStyles` stays empty — seeds are read at resolve time, never pre-filled.
  */
@@ -32,7 +51,7 @@ export function createDeviceFromCatalog(catalog: DeviceCatalog): DeviceConfig {
     catalogId: catalog.id,
     enabled: [...catalog.defaultEnabled],
     custom: [],
-    style: {},
+    style: structuredClone(CATALOG_DEFAULT_STYLE[catalog.id] ?? {}),
     glyphStyles: {},
   };
 }
