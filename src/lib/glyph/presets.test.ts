@@ -101,45 +101,47 @@ describe("the preview project the pane draws (ADR-0012 §4)", () => {
   });
 });
 
+/** `presetId` applied to a fresh project, resolved Input by Input. */
+function resolvedInputsById(presetId: string, catalogId: string) {
+  const preset = getPreset(presetId)!;
+  const project = previewPreset(createDefaultProject(), preset, [catalogId]);
+  const device = project.devices.find((d) => d.catalogId === catalogId)!;
+  return new Map(
+    resolveDeviceInputs(device, project).map((input) => [input.id, input]),
+  );
+}
+
 /**
- * The one shipped Preset whose *values* are the point (#75): A green, B red, X
- * cyan, Y yellow on black letters, and nothing above would notice those turning
- * into four greys. Read through the cascade rather than off the payload,
- * because the look is a resolution and not a literal.
+ * The shipped Presets whose *values* are the point (#75): the pad palettes,
+ * which nothing above would notice turning into a set of greys. Read through
+ * the cascade rather than off the payload, because the look is a resolution and
+ * not a literal — a face button has no Catalog backer, so the disc it lands on
+ * is the Device tier's circle, while a shoulder's authored tile outranks that
+ * tier and stays.
  */
 describe("the Xbox brand palette", () => {
-  const FACE_BUTTONS: Record<string, { disc: string; letter: string }> = {
-    "xbox-a": { disc: "#3cdb4e", letter: "#000000" },
-    "xbox-b": { disc: "#d04242", letter: "#000000" },
-    "xbox-x": { disc: "#40ccd0", letter: "#000000" },
-    "xbox-y": { disc: "#ecdb33", letter: "#000000" },
+  /** Each face button's disc colour; the letter over it is always black. */
+  const DISCS: Record<string, string> = {
+    "xbox-a": "#3cdb4e",
+    "xbox-b": "#d04242",
+    "xbox-x": "#40ccd0",
+    "xbox-y": "#ecdb33",
   };
 
-  /** The Preset applied to a fresh project, resolved Input by Input. */
-  function resolvedInputsById() {
-    const preset = getPreset("xbox-brand")!;
-    const project = previewPreset(createDefaultProject(), preset, ["xbox"]);
-    const device = project.devices.find((d) => d.catalogId === "xbox")!;
-    return new Map(
-      resolveDeviceInputs(device, project).map((input) => [input.id, input]),
-    );
-  }
-
   it("paints every face button its brand colour, on a bare circle", () => {
-    const inputs = resolvedInputsById();
-    for (const [id, { disc, letter }] of Object.entries(FACE_BUTTONS)) {
+    const inputs = resolvedInputsById("xbox-brand", "xbox");
+    for (const [id, disc] of Object.entries(DISCS)) {
       const { background, foreground } = inputs.get(id)!.style;
-      // A face button has no Catalog backer, so it takes the device-wide circle.
       expect(background.source, id).toEqual({ kind: "shape" });
       expect(background.shape, id).toBe("circle");
       expect(background.fill, id).toBe(disc);
       expect(background.border.width, id).toBe(0);
-      expect(foreground.symbolPaints.fill, id).toBe(letter);
+      expect(foreground.symbolPaints.fill, id).toBe("#000000");
     }
   });
 
   it("leaves every shoulder its authored backer, which outranks the circle", () => {
-    const inputs = resolvedInputsById();
+    const inputs = resolvedInputsById("xbox-brand", "xbox");
     for (const id of ["xbox-lb", "xbox-rb", "xbox-lt", "xbox-rt"]) {
       expect(inputs.get(id)!.style.background.source, id).toMatchObject({
         kind: "authored",
@@ -148,10 +150,53 @@ describe("the Xbox brand palette", () => {
   });
 
   it("repaints nothing it doesn't name, so a project's own look survives", () => {
-    const inputs = resolvedInputsById();
-    const dpad = inputs.get("xbox-dpad-up")!.style;
-    expect(dpad.background.fill).toBe(DEFAULT_STYLE.background.fill);
-    expect(dpad.foreground.symbolPaints).toEqual(
+    const dpad = resolvedInputsById("xbox-brand", "xbox").get("xbox-dpad-up")!;
+    expect(dpad.style.background.fill).toBe(DEFAULT_STYLE.background.fill);
+    expect(dpad.style.foreground.symbolPaints).toEqual(
+      DEFAULT_STYLE.foreground.symbolPaints,
+    );
+  });
+});
+
+/**
+ * PlayStation is the same recipe read the other way round: the shapes *are* the
+ * brand, so the colour lands on the Symbol and the disc keeps whatever fill the
+ * project had — which is why this palette names no disc colour at all.
+ */
+describe("the PlayStation shape palette", () => {
+  /** Each face button's Symbol colour, drawn on the project's own disc. */
+  const SHAPES: Record<string, string> = {
+    "ps-triangle": "#3ee3a1",
+    "ps-circle": "#ff6666",
+    "ps-cross": "#7db3e9",
+    "ps-square": "#ff69f8",
+  };
+
+  it("paints every shape its brand colour, on a bare circle", () => {
+    const inputs = resolvedInputsById("ps-brand", "playstation");
+    for (const [id, shape] of Object.entries(SHAPES)) {
+      const { background, foreground } = inputs.get(id)!.style;
+      expect(background.shape, id).toBe("circle");
+      expect(background.border.width, id).toBe(0);
+      expect(background.fill, id).toBe(DEFAULT_STYLE.background.fill);
+      expect(foreground.symbolPaints.fill, id).toBe(shape);
+    }
+  });
+
+  it("leaves every shoulder its authored backer, which outranks the circle", () => {
+    const inputs = resolvedInputsById("ps-brand", "playstation");
+    for (const id of ["ps-l1", "ps-r1", "ps-l2", "ps-r2"]) {
+      expect(inputs.get(id)!.style.background.source, id).toMatchObject({
+        kind: "authored",
+      });
+    }
+  });
+
+  it("repaints nothing it doesn't name, so a project's own look survives", () => {
+    const dpad = resolvedInputsById("ps-brand", "playstation").get(
+      "ps-dpad-up",
+    )!;
+    expect(dpad.style.foreground.symbolPaints).toEqual(
       DEFAULT_STYLE.foreground.symbolPaints,
     );
   });

@@ -94,6 +94,7 @@ describe("PresetPicker — the list", () => {
   const SWATCHES_BY_CATALOG: Record<string, string[]> = {
     keyboard: ["key-w", "key-a", "key-s", "key-d"],
     xbox: ["xbox-a", "xbox-b", "xbox-x", "xbox-y"],
+    playstation: ["ps-cross", "ps-circle", "ps-square", "ps-triangle"],
   };
 
   it.each(PRESETS.map((p) => [p.label, p] as const))(

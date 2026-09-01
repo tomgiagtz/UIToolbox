@@ -67,6 +67,54 @@ export const PRESETS: Preset[] = [
     ]
   },
   {
+    "id": "ps-brand",
+    "label": "Shapes",
+    "kind": "device",
+    "devices": [
+      {
+        "catalogId": "playstation",
+        "style": {
+          "background": {
+            "shape": "circle",
+            "border": {
+              "width": 0
+            }
+          }
+        },
+        "glyphStyles": {
+          "ps-triangle": {
+            "foreground": {
+              "symbolPaints": {
+                "fill": "#3ee3a1"
+              }
+            }
+          },
+          "ps-circle": {
+            "foreground": {
+              "symbolPaints": {
+                "fill": "#ff6666"
+              }
+            }
+          },
+          "ps-cross": {
+            "foreground": {
+              "symbolPaints": {
+                "fill": "#7db3e9"
+              }
+            }
+          },
+          "ps-square": {
+            "foreground": {
+              "symbolPaints": {
+                "fill": "#ff69f8"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "arcade",
     "label": "Arcade",
     "kind": "project",

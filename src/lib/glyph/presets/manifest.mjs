@@ -34,5 +34,12 @@ export const PRESET_MANIFEST = [
     source: "xbox-brand.json",
     catalogId: "xbox",
   },
+  {
+    id: "ps-brand",
+    label: "Shapes",
+    kind: "device",
+    source: "ps-brand.json",
+    catalogId: "playstation",
+  },
   { id: "arcade", label: "Arcade", kind: "project", source: "arcade.json" },
 ];
