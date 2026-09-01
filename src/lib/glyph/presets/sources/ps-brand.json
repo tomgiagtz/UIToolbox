@@ -1,0 +1,115 @@
+{
+  "name": "ps-brand",
+  "style": {
+    "background": {
+      "source": {
+        "kind": "shape"
+      },
+      "transform": {
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      "shape": "rounded-rect",
+      "fill": "#1e293b",
+      "cornerRadius": 18,
+      "border": {
+        "width": 4,
+        "color": "#475569"
+      }
+    },
+    "foreground": {
+      "transform": {
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        }
+      },
+      "fontFamily": "Inter",
+      "fontWeight": 400,
+      "textColor": "#f8fafc",
+      "symbolPaints": {
+        "fill": "#f8fafc",
+        "border": "#cbd5e1",
+        "secondary": "#334155"
+      }
+    }
+  },
+  "fonts": [],
+  "images": [],
+  "sets": [],
+  "devices": [
+    {
+      "name": "PlayStation",
+      "catalogId": "playstation",
+      "enabled": [
+        "ps-cross",
+        "ps-circle",
+        "ps-square",
+        "ps-triangle",
+        "ps-l1",
+        "ps-r1",
+        "ps-l2",
+        "ps-r2",
+        "ps-share",
+        "ps-options",
+        "ps-left-stick",
+        "ps-right-stick",
+        "ps-dpad-up",
+        "ps-dpad-down",
+        "ps-dpad-left",
+        "ps-dpad-right"
+      ],
+      "custom": [],
+      "style": {
+        "background": {
+          "shape": "circle",
+          "border": {
+            "width": 0
+          }
+        }
+      },
+      "glyphStyles": {
+        "ps-triangle": {
+          "foreground": {
+            "symbolPaints": {
+              "fill": "#3ee3a1"
+            }
+          }
+        },
+        "ps-circle": {
+          "foreground": {
+            "symbolPaints": {
+              "fill": "#ff6666"
+            }
+          }
+        },
+        "ps-cross": {
+          "foreground": {
+            "symbolPaints": {
+              "fill": "#7db3e9"
+            }
+          }
+        },
+        "ps-square": {
+          "foreground": {
+            "symbolPaints": {
+              "fill": "#ff69f8"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "exportSettings": {
+    "cellSize": 128,
+    "naming": {
+      "template": "{device}_{input}",
+      "filenameTemplate": "{device}_atlas",
+      "case": "snake"
+    }
+  }
+}

@@ -120,10 +120,47 @@ function boundsInRoot(el: SVGGraphicsElement, root: SVGGraphicsElement) {
 }
 
 /**
+ * The elements a drawing can be made of — what a candidate has to be one of.
+ *
+ * A positive list rather than a list of what to reject: `<clipPath>`, `<defs>`
+ * and the gradients are named in every design-tool export and drawn by none of
+ * them, and asking whether an element *renders* is a question only a browser can
+ * answer — while asking whether it is a shape is the same answer everywhere.
+ */
+const DRAWABLE_SELECTOR =
+  "g,path,circle,ellipse,rect,line,polygon,polyline,text,image,use,svg,foreignObject";
+
+/**
+ * Which id'd elements are **candidates**: the outermost naming of each drawing.
+ *
+ * Outermost rather than the root's own children, because that is not where a
+ * design tool puts the art. Every shipped atlas is exported with its whole page
+ * inside one unnamed `<g clip-path>`, so the root's id'd children are the frame
+ * rect and a `<clipPath>` and nothing else — the cells sit one level down, and
+ * asking for `:scope > [id]` finds none of them.
+ *
+ * Outermost rather than *every* `[id]`, because a cell's own parts are often
+ * named too — `dpad-right` holds a `DPad_Right` — and each would otherwise
+ * import as a rival cell claiming the same grid square.
+ *
+ * A non-{@link DRAWABLE_SELECTOR} element is not a candidate at all rather than
+ * a skip with a reason: a review lists what might have been art, and a
+ * `<clipPath>` could not have been.
+ */
+export function candidateElements(root: Element): SVGGraphicsElement[] {
+  return [...root.querySelectorAll("[id]")].filter(
+    (el): el is SVGGraphicsElement => {
+      const owner = el.parentElement?.closest("[id]");
+      return (!owner || owner === root) && el.matches(DRAWABLE_SELECTOR);
+    },
+  );
+}
+
+/**
  * Parse and measure an atlas SVG into the shape {@link windowAtlas} expects.
  *
- * Every top-level `<g id>` (or any id'd top-level element) is a **candidate**;
- * deciding which are art is `windowCell`'s job, because that decision has to be
+ * Which elements are candidates is {@link candidateElements}; deciding which of
+ * those are art is `windowCell`'s job, because that decision has to be
  * explainable and this function only reports what the engine saw.
  *
  * Requires a DOM. The `host` is mounted, measured, and emptied again — pass an
@@ -159,13 +196,11 @@ export function measureAtlas(svgText: string, host: Element): MeasuredAtlas {
       DEFAULT_CELL_SIZE;
 
     const candidates: MeasuredCandidate[] = [];
-    for (const el of root.querySelectorAll(":scope > [id]")) {
-      const id = el.getAttribute("id");
-      if (!id) continue;
+    for (const el of candidateElements(root)) {
       candidates.push({
-        id,
+        id: el.getAttribute("id")!,
         markup: new XMLSerializer().serializeToString(el),
-        bbox: boundsInRoot(el as SVGGraphicsElement, root),
+        bbox: boundsInRoot(el, root),
         paints: paintsOf(el),
       });
     }
